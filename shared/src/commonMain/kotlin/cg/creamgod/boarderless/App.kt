@@ -6,11 +6,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.tooling.preview.Preview
 import cg.creamgod.boarderless.data.persistence.UiPreferences
 import cg.creamgod.boarderless.designsystem.BoarderLessTheme
 import cg.creamgod.boarderless.feature.canvas.WorkspaceScreen
+import cg.creamgod.boarderless.feature.qa.QaRuntime
+import cg.creamgod.boarderless.feature.qa.QaWorkbenchHost
 import cg.creamgod.boarderless.i18n.Localization
 import cg.creamgod.boarderless.i18n.activateLanguage
 import cg.creamgod.boarderless.i18n.loadAvailableLanguages
@@ -18,7 +23,7 @@ import cg.creamgod.boarderless.i18n.resolveLanguage
 
 @Composable
 @Preview
-fun App() {
+fun App(qaRuntime: QaRuntime = QaRuntime.Disabled) {
     val uiPreferences = remember { UiPreferences() }
     var reduceTransparency by remember { mutableStateOf(uiPreferences.reduceTransparency) }
     var reduceMotion by remember { mutableStateOf(uiPreferences.reduceMotion) }
@@ -33,22 +38,25 @@ fun App() {
     // Wait for the first catalog so the UI never flashes English before switching language.
     if (!languageReady) return
     BoarderLessTheme(reduceTransparency = reduceTransparency) {
-        WorkspaceScreen(
-            reduceTransparency = reduceTransparency,
-            onReduceTransparencyChange = { enabled ->
-                reduceTransparency = enabled
-                uiPreferences.reduceTransparency = enabled
-            },
-            reduceMotion = reduceMotion,
-            onReduceMotionChange = { enabled ->
-                reduceMotion = enabled
-                uiPreferences.reduceMotion = enabled
-            },
-            languagePreference = languagePreference,
-            onLanguagePreferenceChange = { preference ->
-                languagePreference = preference
-                uiPreferences.language = preference
-            },
-        )
+        Box(modifier = Modifier.fillMaxSize()) {
+            WorkspaceScreen(
+                reduceTransparency = reduceTransparency,
+                onReduceTransparencyChange = { enabled ->
+                    reduceTransparency = enabled
+                    uiPreferences.reduceTransparency = enabled
+                },
+                reduceMotion = reduceMotion,
+                onReduceMotionChange = { enabled ->
+                    reduceMotion = enabled
+                    uiPreferences.reduceMotion = enabled
+                },
+                languagePreference = languagePreference,
+                onLanguagePreferenceChange = { preference ->
+                    languagePreference = preference
+                    uiPreferences.language = preference
+                },
+            )
+            QaWorkbenchHost(qaRuntime)
+        }
     }
 }

@@ -1,6 +1,16 @@
 # Backend / App Integration Issues
 
-更新日期：2026-09-27
+更新日期：2026-09-30
+
+## 目前交付優先順序
+
+1. `BAI-003`：圖片、GIF、影片的 asset upload／download、完成確認與 object storage 合約。
+2. `BAI-009`：WebSocket operation fan-out、Presence、Cursor、Selection 與 reconnect catch-up。REST polling 只保留為過渡橋接。
+3. `BAI-006`：Quick Scheme 使用者層級跨裝置同步 API。
+4. `BAI-005`：共享 `canvasStyle` projection 與可 Undo 的更新 operation。
+5. `BAI-004`：OpenAI-compatible、Anthropic-compatible 與 Local AI server transport。
+
+效能測試在上述功能與整合穩定、主要回歸及產品視覺／遮擋簽核完成後才進入最後階段。流程見 [`產品 QA 品質檢驗 SOP.md`](產品%20QA%20品質檢驗%20SOP.md)。
 
 ## BAI-001：soft-delete 物件無法以穩定 ID 還原
 
@@ -50,25 +60,44 @@ JS / Wasm client 目前以 `http://localhost:3000` 呼叫 REST API。後端未�
 
 在這個合約完成前，App 不會建立看似成功但實際無內容的 Image Node。
 
-## BAI-004：AI Cowork provider 與串流合約尚未交付
+App 端已先完成可安全推進的部分：`MediaNode` projection／operation mapping、asset metadata 唯讀 client、狀態 placeholder、transform／lock／layer／history，以及 clipboard v4／Quick Scheme 可攜格式。`ready` 資產在沒有授權 download URL 時仍會明確顯示「等待下載端點」，不會嘗試由 `storageKey` 猜測或直接存取 object storage。
 
-狀態：Decision required / Blocking（M6 AI Cowork runtime）
+## BAI-004：AI Cowork provider adapters 與串流合約尚未交付
 
-App 已具備不依賴供應商的 context snapshot、stream event、proposal preview、部分接受、拒絕、版本衝突與 undo transaction 模型，但後端目前沒有 AI job／stream endpoint，也尚未決定金鑰與內容由誰傳送。
+狀態：Protocol families decided / Blocking（M6 AI Cowork runtime）
 
-需要先選定一種產品邊界：
+App 已具備不依賴供應商的 context snapshot、stream event、proposal preview、部分接受、拒絕、版本衝突與 undo transaction 模型。產品方向已確認支援 OpenAI-compatible API server、Anthropic-compatible API server 與 Local AI server，但後端目前尚無統一 AI job／stream endpoint、provider profile 或 secret reference 合約。
 
-- 後端代管 provider（建議）：App 只把使用者確認的 prompt 與可視 context 送到 BoarderLess API；後端保管 provider secret、執行串流與取消。
-- Client BYOK：各平台安全保存使用者金鑰並直接呼叫 provider；需要逐平台 secure storage、CORS 與供應商相容層。
-- Hybrid：同時支援代管與 BYOK，但首版合約及測試面會明顯增加。
+採用下列產品邊界：
 
-若採後端代管，App 至少需要：
+- 遠端 OpenAI-compatible／Anthropic-compatible 端點預設經 BoarderLess backend gateway；明文 secret 不進 App Workspace、operation、日誌或同步偏好。
+- Provider profile 包含 protocol family、base URL、model、能力與 secret reference；不得把 secret 回傳給 client。
+- Local AI server endpoint 是明確 opt-in 的裝置層設定，可不帶金鑰或使用平台 secure storage，且不得隨 Workspace 分享給協作者。
+- 三類 adapter 都轉換成相同的 BoarderLess stream event 與 proposal operation，不讓 provider-specific payload 滲入 domain。
+
+App 至少需要：
 
 - 建立 AI request/job，payload 明確包含 context scope、Workspace/version 與 selected object versions。
 - SSE 或 WebSocket 串流文字 delta、結構化 proposal item、完成與錯誤事件。
 - 可冪等取消 endpoint；取消或失敗不得提交正式 Workspace operation。
 - Proposal operation schema 沿用 Workspace operation 語意，且 commit 前由 App 再做版本預覽／確認。
 - Provider policy 與資料保留資訊，可在送出前顯示給使用者。
+
+## BAI-009：多人即時協作 transport 尚未交付
+
+狀態：Priority 2 / Blocking（Realtime Collaboration）
+
+App 目前以 REST operation log 每 3 秒 catch up，可安全取得遠端正式狀態，但沒有 WebSocket join、即時 operation fan-out、presence、cursor 或 selection 訊息。
+
+最低合約需求：
+
+- 版本化 WebSocket handshake，包含 authenticated user、Workspace、client ID、last seen server sequence 與 protocol version。
+- 正式 operation 沿用 REST envelope、operation ID、Workspace version 與 server sequence；REST 與 WebSocket 不能產生兩套語意。
+- accepted／duplicate／conflict／rejected ack，支援遺失 ack 後以 operation ID reconcile。
+- 重連時從 durable operation log catch up；重複及亂序事件不重複套用。
+- Presence、cursor、viewport 與 selection 使用可丟失的暫態通道，不寫入 PostgreSQL operation history。
+- 成員權限變更或撤銷後，server 立即停止 mutation 與 subscription。
+- 多 process fan-out 的暫態 broker 中斷不得造成已回覆 accepted 的正式內容遺失。
 
 ## BAI-005：Canvas 正式樣式沒有可同步、可撤銷的 operation
 

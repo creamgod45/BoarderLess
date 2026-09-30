@@ -14,10 +14,16 @@ import cg.creamgod.boarderless.domain.history.UpdateTextNodeAttributesOperation
 import cg.creamgod.boarderless.domain.history.TransactionOperation
 import cg.creamgod.boarderless.domain.history.TransformChange
 import cg.creamgod.boarderless.domain.history.TransformObjectsOperation
+import cg.creamgod.boarderless.domain.history.CreateObjectsOperation
+import cg.creamgod.boarderless.domain.history.MediaNodeAttributes
+import cg.creamgod.boarderless.domain.history.MediaNodeAttributesChange
+import cg.creamgod.boarderless.domain.history.UpdateMediaNodeAttributesOperation
 import cg.creamgod.boarderless.domain.model.CanvasObjectId
 import cg.creamgod.boarderless.domain.model.CanvasSize
 import cg.creamgod.boarderless.domain.model.CanvasTransform
 import cg.creamgod.boarderless.domain.model.NodeShape
+import cg.creamgod.boarderless.domain.model.MediaKind
+import cg.creamgod.boarderless.domain.model.MediaNode
 import cg.creamgod.boarderless.domain.model.Vec2
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -25,6 +31,59 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class BackendOperationMappingTest {
+    @Test
+    fun mediaCreationSerializesStableReferencesWithoutUrlsOrLocalPaths() {
+        val operation = CreateObjectsOperation(
+            operationId = "create-media",
+            objects = listOf(
+                MediaNode(
+                    id = CanvasObjectId("media-node"),
+                    transform = CanvasTransform(Vec2.Zero, CanvasSize(640f, 360f)),
+                    assetId = "asset-original",
+                    mediaKind = MediaKind.Video,
+                    altText = "Product demo",
+                    thumbnailAssetId = "asset-poster",
+                ),
+            ),
+        )
+
+        val dto = operation.toExpandedDtos(startingSequence = 4).single()
+        val properties = dto.payload.getValue("properties").jsonObject
+
+        assertEquals("create_object", dto.kind)
+        assertEquals("media", dto.payload.getValue("objectType").jsonPrimitive.content)
+        assertEquals("asset-original", properties.getValue("assetId").jsonPrimitive.content)
+        assertEquals("video", properties.getValue("mediaKind").jsonPrimitive.content)
+        assertEquals("asset-poster", properties.getValue("thumbnailAssetId").jsonPrimitive.content)
+        assertEquals(
+            setOf("assetId", "mediaKind", "altText", "thumbnailAssetId"),
+            properties.keys,
+        )
+    }
+
+    @Test
+    fun mediaAttributeUpdateUsesPartialObjectContract() {
+        val operation = UpdateMediaNodeAttributesOperation(
+            operationId = "describe-media",
+            changes = listOf(
+                MediaNodeAttributesChange(
+                    objectId = CanvasObjectId("media-node"),
+                    expectedVersion = 3,
+                    before = MediaNodeAttributes(2, false, ""),
+                    after = MediaNodeAttributes(2, true, "Architecture overview"),
+                ),
+            ),
+        )
+
+        val dto = operation.toExpandedDtos(startingSequence = 9).single()
+        val properties = dto.payload.getValue("properties").jsonObject
+
+        assertEquals("update_object", dto.kind)
+        assertEquals(true, dto.payload.getValue("locked").jsonPrimitive.content.toBoolean())
+        assertEquals(setOf("altText"), properties.keys)
+        assertEquals("Architecture overview", properties.getValue("altText").jsonPrimitive.content)
+    }
+
     @Test
     fun multiNodeTextEditExpandsIntoOrderedBackendOperations() {
         val firstId = CanvasObjectId("node-1")

@@ -6,6 +6,7 @@ import cg.creamgod.boarderless.domain.history.TransactionOperation
 import cg.creamgod.boarderless.domain.history.WorkspaceOperation
 import cg.creamgod.boarderless.domain.model.CanvasObjectId
 import cg.creamgod.boarderless.domain.model.GroupFrame
+import cg.creamgod.boarderless.domain.model.MediaNode
 import cg.creamgod.boarderless.domain.model.TextNode
 import cg.creamgod.boarderless.domain.model.Workspace
 import kotlinx.coroutines.flow.Flow
@@ -63,6 +64,13 @@ data class AiContextSnapshot(
                             objectType = "group",
                             version = canvasObject.version,
                             content = canvasObject.title,
+                        )
+
+                        is MediaNode -> AiContextObject(
+                            objectId = canvasObject.id.value,
+                            objectType = "media",
+                            version = canvasObject.version,
+                            content = canvasObject.altText.ifBlank { canvasObject.mediaKind.token },
                         )
                     }
                 },

@@ -5,8 +5,9 @@ import cg.creamgod.boarderless.domain.model.CanvasObject
 import cg.creamgod.boarderless.domain.model.CanvasObjectId
 import cg.creamgod.boarderless.domain.model.GroupFrame
 import cg.creamgod.boarderless.domain.model.TextNode
+import cg.creamgod.boarderless.domain.model.MediaNode
 
-internal enum class LayerObjectKind { Group, Thought }
+internal enum class LayerObjectKind { Group, Thought, Media }
 
 internal data class LayerTreeEntry(
     val objectId: CanvasObjectId,
@@ -60,6 +61,15 @@ private fun CanvasObject.toLayerTreeEntry(depth: Int): LayerTreeEntry = when (th
         depth = depth,
         title = text.lineSequence().firstOrNull().orEmpty().ifBlank { Strings.content.untitledThought() }.take(48),
         kind = LayerObjectKind.Thought,
+        locked = locked,
+        zIndex = zIndex,
+    )
+
+    is MediaNode -> LayerTreeEntry(
+        objectId = id,
+        depth = depth,
+        title = altText.ifBlank { mediaKind.name }.take(48),
+        kind = LayerObjectKind.Media,
         locked = locked,
         zIndex = zIndex,
     )

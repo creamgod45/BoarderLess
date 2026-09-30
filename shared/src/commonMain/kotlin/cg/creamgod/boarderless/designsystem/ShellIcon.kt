@@ -44,6 +44,7 @@ enum class ShellIcon {
     Menu,
     Members,
     Paste,
+    QaChecklist,
     Redo,
     Radial,
     Rename,
@@ -246,6 +247,21 @@ private fun DrawScope.drawShellIcon(icon: ShellIcon, color: Color) {
             line(10f, 10f, 13f, 11.5f)
             line(3.2f, 4.5f, 3.2f, 8f)
             line(3.2f, 4.5f, 6.5f, 4.5f)
+        }
+        ShellIcon.QaChecklist -> {
+            drawRoundRect(color, p(3.5f, 2.8f), Size(13f * unit, 14.5f * unit), CornerRadius(2f * unit), lineStyle)
+            path {
+                moveTo(6f * unit, 7f * unit)
+                lineTo(7.4f * unit, 8.4f * unit)
+                lineTo(9.4f * unit, 5.5f * unit)
+            }
+            line(11f, 7f, 14f, 7f)
+            path {
+                moveTo(6f * unit, 12f * unit)
+                lineTo(7.4f * unit, 13.4f * unit)
+                lineTo(9.4f * unit, 10.5f * unit)
+            }
+            line(11f, 12f, 14f, 12f)
         }
         ShellIcon.Workspaces -> {
             drawRoundRect(color, p(3f, 5f), Size(11f * unit, 10f * unit), CornerRadius(2f * unit), lineStyle)

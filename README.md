@@ -20,6 +20,7 @@ Use the run configurations provided by the run widget in your IDE's toolbar. You
 - Desktop app:
   - Hot reload: `./gradlew :desktopApp:hotRun --auto`
   - Standard run: `./gradlew :desktopApp:run`
+  - Development QA Workbench: `BOARDERLESS_QA_MODE=true ./gradlew :desktopApp:run`
 - Web app:
   - Wasm target (faster, modern browsers): `./gradlew :webApp:wasmJsBrowserDevelopmentRun`
   - JS target (slower, supports older browsers): `./gradlew :webApp:jsBrowserDevelopmentRun`
@@ -28,6 +29,23 @@ Use the run configurations provided by the run widget in your IDE's toolbar. You
   `iosApp/Configuration/Config.xcconfig` to the Mac's LAN IPv4 address or local hostname before running.
   The Xcode build phase automatically finds a system JDK, Android Studio, IntelliJ IDEA, or the JetBrains
   Toolbox runtime; if none is available it reports an actionable error.
+
+### Development QA Workbench
+
+The QA Workbench is excluded from the normal product UI unless the environment flag is explicitly enabled. On Desktop, start it with:
+
+```bash
+BOARDERLESS_QA_MODE=true ./gradlew :desktopApp:run
+```
+
+Windows PowerShell:
+
+```powershell
+$env:BOARDERLESS_QA_MODE = "true"
+.\gradlew.bat :desktopApp:run
+```
+
+The `QA` control opens an acceptance questionnaire based on [`docs/產品 QA 品質檢驗 SOP.md`](docs/%E7%94%A2%E5%93%81%20QA%20%E5%93%81%E8%B3%AA%E6%AA%A2%E9%A9%97%20SOP.md). It can capture the BoarderLess window, attach existing PNG/JPEG evidence from mobile devices, and generate self-contained HTML and PDF reports in `Documents/BoarderLess QA`. Screenshot bytes and form answers remain in the QA session and exported files; they are not written into Workspace content or sent to the backend.
 
 ### Running tests
 

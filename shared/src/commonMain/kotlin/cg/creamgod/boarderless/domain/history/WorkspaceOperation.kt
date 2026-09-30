@@ -6,6 +6,7 @@ import cg.creamgod.boarderless.domain.model.CanvasTransform
 import cg.creamgod.boarderless.domain.model.GroupFrame
 import cg.creamgod.boarderless.domain.model.NodeShape
 import cg.creamgod.boarderless.domain.model.TextNode
+import cg.creamgod.boarderless.domain.model.MediaNode
 import cg.creamgod.boarderless.domain.model.Relation
 import cg.creamgod.boarderless.domain.model.RelationId
 import cg.creamgod.boarderless.domain.model.Workspace
@@ -689,6 +690,74 @@ data class UpdateGroupFrameAttributesOperation(
     override fun inverse(): WorkspaceOperation = UpdateGroupFrameAttributesOperation(
         operationId = "$operationId:inverse",
         changes = changes.map(GroupFrameAttributesChange::inverse),
+    )
+}
+
+data class MediaNodeAttributes(
+    val zIndex: Long,
+    val locked: Boolean,
+    val altText: String,
+)
+
+data class MediaNodeAttributesChange(
+    val objectId: CanvasObjectId,
+    val expectedVersion: Long,
+    val before: MediaNodeAttributes,
+    val after: MediaNodeAttributes,
+) {
+    fun inverse(): MediaNodeAttributesChange = copy(
+        expectedVersion = expectedVersion + 1,
+        before = after,
+        after = before,
+    )
+}
+
+data class UpdateMediaNodeAttributesOperation(
+    override val operationId: String,
+    val changes: List<MediaNodeAttributesChange>,
+) : WorkspaceOperation {
+    init {
+        require(changes.isNotEmpty()) { "Media attribute operation needs at least one change" }
+        require(changes.map { it.objectId }.distinct().size == changes.size) {
+            "Media attribute operation cannot contain duplicate ids"
+        }
+    }
+
+    override fun applyTo(workspace: Workspace): OperationResult {
+        val replacements = mutableMapOf<CanvasObjectId, CanvasObject>()
+        for (change in changes) {
+            val current = workspace.objects[change.objectId]
+                ?: return OperationResult.Rejected(OperationError.MissingObject(change.objectId))
+            if (current !is MediaNode) {
+                return OperationResult.Rejected(OperationError.UnsupportedObject(change.objectId))
+            }
+            if (current.version != change.expectedVersion) {
+                return OperationResult.Rejected(
+                    OperationError.VersionConflict(change.objectId, change.expectedVersion, current.version),
+                )
+            }
+            val currentAttributes = MediaNodeAttributes(current.zIndex, current.locked, current.altText)
+            if (currentAttributes != change.before) {
+                return OperationResult.Rejected(OperationError.StateConflict(change.objectId))
+            }
+            replacements[current.id] = current.copy(
+                version = current.version + 1,
+                zIndex = change.after.zIndex,
+                locked = change.after.locked,
+                altText = change.after.altText,
+            )
+        }
+        return OperationResult.Applied(
+            workspace.copy(
+                version = workspace.version + 1,
+                objects = workspace.objects + replacements,
+            ),
+        )
+    }
+
+    override fun inverse(): WorkspaceOperation = UpdateMediaNodeAttributesOperation(
+        operationId = "$operationId:inverse",
+        changes = changes.map(MediaNodeAttributesChange::inverse),
     )
 }
 

@@ -117,6 +117,8 @@ import cg.creamgod.boarderless.data.WorkspaceSummary
 import cg.creamgod.boarderless.data.WorkspaceActivity
 import cg.creamgod.boarderless.data.WorkspaceMember
 import cg.creamgod.boarderless.data.WorkspaceMemberRole
+import cg.creamgod.boarderless.data.AssetStatus
+import cg.creamgod.boarderless.data.WorkspaceAsset
 import cg.creamgod.boarderless.data.WorkspaceSubmissionQueue
 import cg.creamgod.boarderless.data.WorkspaceSubmissionStep
 import cg.creamgod.boarderless.data.canEditContent
@@ -148,6 +150,9 @@ import cg.creamgod.boarderless.domain.history.UpdateRelationAttributesOperation
 import cg.creamgod.boarderless.domain.history.GroupFrameAttributes
 import cg.creamgod.boarderless.domain.history.GroupFrameAttributesChange
 import cg.creamgod.boarderless.domain.history.UpdateGroupFrameAttributesOperation
+import cg.creamgod.boarderless.domain.history.MediaNodeAttributes
+import cg.creamgod.boarderless.domain.history.MediaNodeAttributesChange
+import cg.creamgod.boarderless.domain.history.UpdateMediaNodeAttributesOperation
 import cg.creamgod.boarderless.domain.history.WorkspaceHistory
 import cg.creamgod.boarderless.domain.history.HistoryResult
 import cg.creamgod.boarderless.domain.history.WorkspaceOperation
@@ -168,6 +173,8 @@ import cg.creamgod.boarderless.domain.model.RelationDirection
 import cg.creamgod.boarderless.domain.model.RelationId
 import cg.creamgod.boarderless.domain.model.GroupFrame
 import cg.creamgod.boarderless.domain.model.NodeShape
+import cg.creamgod.boarderless.domain.model.MediaKind
+import cg.creamgod.boarderless.domain.model.MediaNode
 import kotlin.math.roundToInt
 import kotlin.math.max
 import kotlin.math.min
@@ -344,9 +351,10 @@ internal data class WorkspaceChangePolicy(
 @Serializable
 internal data class ClipboardPayload(
     val format: String = "boarderless/selection",
-    val version: Int = 3,
+    val version: Int = 4,
     val nodes: List<ClipboardNode>,
     val groups: List<ClipboardGroup> = emptyList(),
+    val media: List<ClipboardMedia> = emptyList(),
     val relations: List<ClipboardRelation> = emptyList(),
 )
 
@@ -376,6 +384,23 @@ internal data class ClipboardGroup(
     val rotationDegrees: Float,
     val title: String,
     val colorToken: String,
+    val parentOriginalId: String? = null,
+    val locked: Boolean = false,
+    val zOffset: Long = 0,
+)
+
+@Serializable
+internal data class ClipboardMedia(
+    val originalId: String,
+    val x: Float,
+    val y: Float,
+    val width: Float,
+    val height: Float,
+    val rotationDegrees: Float,
+    val assetId: String,
+    val mediaKind: String,
+    val altText: String = "",
+    val thumbnailAssetId: String? = null,
     val parentOriginalId: String? = null,
     val locked: Boolean = false,
     val zOffset: Long = 0,
@@ -414,6 +439,7 @@ internal enum class ClipboardPayloadIssue {
     DuplicateObjectId,
     InvalidTransform,
     UnsupportedShape,
+    InvalidMedia,
     InvalidParent,
     ParentCycle,
     InvalidRelation,
@@ -421,10 +447,14 @@ internal enum class ClipboardPayloadIssue {
 
 internal fun validateClipboardPayload(payload: ClipboardPayload): ClipboardPayloadIssue? {
     if (payload.format != "boarderless/selection") return ClipboardPayloadIssue.UnsupportedFormat
-    if (payload.version !in 1..3) return ClipboardPayloadIssue.UnsupportedVersion
-    if (payload.nodes.isEmpty() && payload.groups.isEmpty()) return ClipboardPayloadIssue.Empty
+    if (payload.version !in 1..4) return ClipboardPayloadIssue.UnsupportedVersion
+    if (payload.nodes.isEmpty() && payload.groups.isEmpty() && payload.media.isEmpty()) {
+        return ClipboardPayloadIssue.Empty
+    }
 
-    val objectIds = payload.groups.map(ClipboardGroup::originalId) + payload.nodes.map(ClipboardNode::originalId)
+    val objectIds = payload.groups.map(ClipboardGroup::originalId) +
+        payload.nodes.map(ClipboardNode::originalId) +
+        payload.media.map(ClipboardMedia::originalId)
     if (objectIds.any(String::isBlank)) return ClipboardPayloadIssue.InvalidObjectId
     if (objectIds.toSet().size != objectIds.size) return ClipboardPayloadIssue.DuplicateObjectId
 
@@ -437,6 +467,8 @@ internal fun validateClipboardPayload(payload: ClipboardPayload): ClipboardPaylo
             !validTransform(it.x, it.y, it.width, it.height, it.rotationDegrees)
         } || payload.groups.any {
             !validTransform(it.x, it.y, it.width, it.height, it.rotationDegrees)
+        } || payload.media.any {
+            !validTransform(it.x, it.y, it.width, it.height, it.rotationDegrees)
         }
     ) {
         return ClipboardPayloadIssue.InvalidTransform
@@ -444,9 +476,17 @@ internal fun validateClipboardPayload(payload: ClipboardPayload): ClipboardPaylo
     if (payload.nodes.any { NodeShape.fromToken(it.shapeToken) == null }) {
         return ClipboardPayloadIssue.UnsupportedShape
     }
+    if (payload.media.any {
+            it.assetId.isBlank() || MediaKind.fromToken(it.mediaKind) == null ||
+                it.thumbnailAssetId?.isBlank() == true
+        }
+    ) {
+        return ClipboardPayloadIssue.InvalidMedia
+    }
 
     val groupIds = payload.groups.mapTo(mutableSetOf(), ClipboardGroup::originalId)
     if (payload.nodes.any { it.parentOriginalId != null && it.parentOriginalId !in groupIds } ||
+        payload.media.any { it.parentOriginalId != null && it.parentOriginalId !in groupIds } ||
         payload.groups.any {
             it.parentOriginalId != null &&
                 (it.parentOriginalId !in groupIds || it.parentOriginalId == it.originalId)
@@ -913,12 +953,14 @@ private fun QuickSchemePreview(
             .background(colors.canvas.copy(alpha = 0.72f))
             .border(1.dp, colors.contentBorder, RoundedCornerShape(12.dp)),
     ) {
-        if (payload.nodes.isEmpty() && payload.groups.isEmpty()) return@Canvas
+        if (payload.nodes.isEmpty() && payload.groups.isEmpty() && payload.media.isEmpty()) return@Canvas
         val padding = 12f * density
-        val lefts = payload.nodes.map { it.x } + payload.groups.map { it.x }
-        val tops = payload.nodes.map { it.y } + payload.groups.map { it.y }
-        val rights = payload.nodes.map { it.x + it.width } + payload.groups.map { it.x + it.width }
-        val bottoms = payload.nodes.map { it.y + it.height } + payload.groups.map { it.y + it.height }
+        val lefts = payload.nodes.map { it.x } + payload.groups.map { it.x } + payload.media.map { it.x }
+        val tops = payload.nodes.map { it.y } + payload.groups.map { it.y } + payload.media.map { it.y }
+        val rights = payload.nodes.map { it.x + it.width } + payload.groups.map { it.x + it.width } +
+            payload.media.map { it.x + it.width }
+        val bottoms = payload.nodes.map { it.y + it.height } + payload.groups.map { it.y + it.height } +
+            payload.media.map { it.y + it.height }
         val minX = lefts.min()
         val minY = tops.min()
         val maxX = rights.max()
@@ -994,6 +1036,26 @@ private fun QuickSchemePreview(
                 size = nodeSize,
                 cornerRadius = 4f * density,
                 borderWidth = 1f * density,
+            )
+        }
+        payload.media.forEach { media ->
+            val topLeft = project(media.x, media.y)
+            val mediaSize = Size(
+                width = (media.width * scale).coerceAtLeast(8f * density),
+                height = (media.height * scale).coerceAtLeast(6f * density),
+            )
+            drawRoundRect(
+                color = colors.canvas,
+                topLeft = topLeft,
+                size = mediaSize,
+                cornerRadius = CornerRadius(4f * density),
+            )
+            drawRoundRect(
+                color = colors.accent,
+                topLeft = topLeft,
+                size = mediaSize,
+                cornerRadius = CornerRadius(4f * density),
+                style = Stroke(1f * density),
             )
         }
     }
@@ -1083,6 +1145,7 @@ fun WorkspaceScreen(
     var showHistoryPanel by remember { mutableStateOf(false) }
     var showMembersPanel by remember { mutableStateOf(false) }
     var workspaceMembers by remember { mutableStateOf<List<WorkspaceMember>>(emptyList()) }
+    var workspaceAssets by remember { mutableStateOf<Map<String, WorkspaceAsset>>(emptyMap()) }
     var membersLoading by remember { mutableStateOf(false) }
     var membersError by remember { mutableStateOf<String?>(null) }
     var membersRefreshAttempt by remember { mutableStateOf(0) }
@@ -1195,6 +1258,7 @@ fun WorkspaceScreen(
         recentWorkspaceActivity = emptyList()
         activityError = null
         workspaceMembers = emptyList()
+        workspaceAssets = emptyMap()
         membersError = null
         memberUserIdDraft = ""
         memberRoleDraft = WorkspaceMemberRole.Editor
@@ -1459,6 +1523,19 @@ fun WorkspaceScreen(
         launch {
             snapshotFlow { displaySettings }
                 .collect { canvasPreferences.saveDisplaySettings(workspaceId, it) }
+        }
+    }
+
+    LaunchedEffect(session?.workspace?.id, session?.lastServerSeq) {
+        val activeSession = session ?: return@LaunchedEffect
+        workspaceAssets = try {
+            repository.listAssets(activeSession).associateBy(WorkspaceAsset::id)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Throwable) {
+            // Editing remains available when metadata is temporarily unreachable. Media cards
+            // show an explicit unavailable state instead of pretending that a preview loaded.
+            emptyMap()
         }
     }
 
@@ -1855,6 +1932,27 @@ fun WorkspaceScreen(
         }
     }
 
+    fun updateSelectedMedia(
+        operationName: String,
+        update: (node: MediaNode, index: Int) -> MediaNodeAttributes,
+    ) {
+        val media = selectedIds.mapNotNull { history.workspace.objectById(it) as? MediaNode }
+            .sortedBy { it.zIndex }
+        val changes = media.mapIndexedNotNull { index, node ->
+            val before = MediaNodeAttributes(node.zIndex, node.locked, node.altText)
+            val after = update(node, index)
+            if (before == after) null else MediaNodeAttributesChange(node.id, node.version, before, after)
+        }
+        if (changes.isNotEmpty()) {
+            execute(
+                UpdateMediaNodeAttributesOperation(
+                    operationId = "$operationName-${history.workspace.version}",
+                    changes = changes,
+                ),
+            )
+        }
+    }
+
     fun reorderSelectedNodeLayers(move: LayerMove) {
         val nodes = history.workspace.objects.values.filterIsInstance<TextNode>()
         val selectedNodeIds = selectedIds.filterTo(mutableSetOf()) { id ->
@@ -1899,6 +1997,31 @@ fun WorkspaceScreen(
             execute(
                 UpdateGroupFrameAttributesOperation(
                     operationId = "layer-group-${move.name.lowercase()}-${history.workspace.version}",
+                    changes = changes,
+                ),
+            )
+        }
+    }
+
+    fun reorderSelectedMediaLayers(move: LayerMove) {
+        val media = history.workspace.objects.values.filterIsInstance<MediaNode>()
+        val selectedMediaIds = selectedIds.filterTo(mutableSetOf()) { id ->
+            history.workspace.objectById(id) is MediaNode
+        }
+        val updates = layerZIndexUpdates(media, selectedMediaIds, move)
+        val changes = media.mapNotNull { node ->
+            val nextZIndex = updates[node.id] ?: return@mapNotNull null
+            MediaNodeAttributesChange(
+                objectId = node.id,
+                expectedVersion = node.version,
+                before = MediaNodeAttributes(node.zIndex, node.locked, node.altText),
+                after = MediaNodeAttributes(nextZIndex, node.locked, node.altText),
+            )
+        }
+        if (changes.isNotEmpty()) {
+            execute(
+                UpdateMediaNodeAttributesOperation(
+                    operationId = "layer-media-${move.name.lowercase()}-${history.workspace.version}",
                     changes = changes,
                 ),
             )
@@ -1979,6 +2102,7 @@ fun WorkspaceScreen(
         if (objects.isEmpty()) return null
         val nodes = objects.filterIsInstance<TextNode>()
         val groups = objects.filterIsInstance<GroupFrame>()
+        val media = objects.filterIsInstance<MediaNode>()
         val minimumZ = objects.minOf(CanvasObject::zIndex)
         val includedIdSet = objects.mapTo(mutableSetOf()) { it.id }
         val nodeIds = nodes.mapTo(mutableSetOf()) { it.id }
@@ -2017,6 +2141,23 @@ fun WorkspaceScreen(
                     zOffset = group.zIndex - minimumZ,
                 )
             },
+            media = media.map { node ->
+                ClipboardMedia(
+                    originalId = node.id.value,
+                    x = node.transform.position.x,
+                    y = node.transform.position.y,
+                    width = node.transform.size.width,
+                    height = node.transform.size.height,
+                    rotationDegrees = node.transform.rotationDegrees,
+                    assetId = node.assetId,
+                    mediaKind = node.mediaKind.token,
+                    altText = node.altText,
+                    thumbnailAssetId = node.thumbnailAssetId,
+                    parentOriginalId = node.parentId?.takeIf { it in includedIdSet }?.value,
+                    locked = node.locked,
+                    zOffset = node.zIndex - minimumZ,
+                )
+            },
             relations = relations.map { relation ->
                 ClipboardRelation(
                     sourceId = relation.sourceObjectId.value,
@@ -2033,7 +2174,7 @@ fun WorkspaceScreen(
         val payload = selectionClipboardPayload() ?: return null
         @Suppress("DEPRECATION")
         clipboardManager.setText(AnnotatedString(ClipboardJson.encodeToString(payload)))
-        val objectCount = payload.nodes.size + payload.groups.size
+        val objectCount = payload.nodes.size + payload.groups.size + payload.media.size
         statusMessage = Strings.status.copiedObjects(objectCount)
         return payload
     }
@@ -2065,10 +2206,16 @@ fun WorkspaceScreen(
         val nodeShapes = payload.nodes.associate { copied ->
             copied.originalId to checkNotNull(NodeShape.fromToken(copied.shapeToken))
         }
-        val idMap = (payload.groups.map { it.originalId } + payload.nodes.map { it.originalId })
+        val idMap = (
+            payload.groups.map { it.originalId } +
+                payload.nodes.map { it.originalId } +
+                payload.media.map { it.originalId }
+            )
             .associateWith { CanvasObjectId(randomUuid()) }
         val top = history.workspace.objects.values.maxOfOrNull { it.zIndex } ?: 0L
-        val allPositions = payload.groups.map { Vec2(it.x, it.y) } + payload.nodes.map { Vec2(it.x, it.y) }
+        val allPositions = payload.groups.map { Vec2(it.x, it.y) } +
+            payload.nodes.map { Vec2(it.x, it.y) } +
+            payload.media.map { Vec2(it.x, it.y) }
         val sourceOrigin = Vec2(
             x = allPositions.minOf(Vec2::x),
             y = allPositions.minOf(Vec2::y),
@@ -2077,6 +2224,7 @@ fun WorkspaceScreen(
         val zOrder = (
             payload.groups.map { it.originalId to it.zOffset } +
                 payload.nodes.map { it.originalId to it.zOffset }
+                + payload.media.map { it.originalId to it.zOffset }
             ).sortedBy { (_, zOffset) -> zOffset }
             .mapIndexed { index, (id, _) -> id to (top + index + 1L) }
             .toMap()
@@ -2111,6 +2259,23 @@ fun WorkspaceScreen(
                 shape = nodeShapes.getValue(copied.originalId),
             )
         }
+        val media = payload.media.map { copied ->
+            MediaNode(
+                id = idMap.getValue(copied.originalId),
+                parentId = copied.parentOriginalId?.let(idMap::get),
+                zIndex = zOrder.getValue(copied.originalId),
+                locked = copied.locked,
+                transform = CanvasTransform(
+                    position = Vec2(copied.x + offset.x, copied.y + offset.y),
+                    size = CanvasSize(copied.width, copied.height),
+                    rotationDegrees = copied.rotationDegrees,
+                ),
+                assetId = copied.assetId,
+                mediaKind = checkNotNull(MediaKind.fromToken(copied.mediaKind)),
+                altText = copied.altText,
+                thumbnailAssetId = copied.thumbnailAssetId,
+            )
+        }
         val relations = payload.relations.mapNotNull { copied ->
             val sourceId = idMap[copied.sourceId] ?: return@mapNotNull null
             val targetId = idMap[copied.targetId] ?: return@mapNotNull null
@@ -2123,7 +2288,7 @@ fun WorkspaceScreen(
                 label = copied.label,
             )
         }
-        val objects = groups + nodes
+        val objects = groups + nodes + media
         val createObjects = CreateObjectsOperation("paste-objects-${history.workspace.version}", objects)
         val operation = if (relations.isEmpty()) {
             createObjects
@@ -3629,6 +3794,67 @@ fun WorkspaceScreen(
                 )
             }
 
+        history.workspace.objects.values.filterIsInstance<MediaNode>()
+            .sortedBy { it.zIndex }
+            .forEach { node ->
+                MediaNodeCard(
+                    node = node,
+                    asset = workspaceAssets[node.assetId],
+                    viewport = viewport,
+                    previewDelta = dragPreviews[node.id] ?: Vec2.Zero,
+                    previewTransform = transformPreviews[node.id],
+                    selected = node.id in selectedIds,
+                    interactionEnabled = !canvasInteractionBlocked,
+                    mutationEnabled = !inputBlocked,
+                    onSelect = { additive ->
+                        selectedRelationId = null
+                        editingId = null
+                        selectedIds = hierarchyAwareSelectionAfterObjectTap(
+                            selectedIds = selectedIds,
+                            objectId = node.id,
+                            additive = additive || (compactLayout && multiSelectionMode),
+                            objectsById = history.workspace.objects,
+                        )
+                    },
+                    onDragPreview = { delta ->
+                        val roots = if (node.id in selectedIds) selectedIds else setOf(node.id).also {
+                            selectedIds = it
+                            editingId = null
+                        }
+                        val movingIds = movableSelectionObjectIds(history.workspace, roots)
+                        dragPreviews = movingIds.associateWith { delta }
+                    },
+                    onDragCancel = { dragPreviews = emptyMap() },
+                    onDragCommit = commit@{ delta ->
+                        val movingIds = movableSelectionObjectIds(
+                            history.workspace,
+                            if (node.id in selectedIds) selectedIds else setOf(node.id),
+                        )
+                        val committedDelta = dragPreviews[node.id] ?: delta
+                        dragPreviews = emptyMap()
+                        if (movingIds.isEmpty() || committedDelta == Vec2.Zero) return@commit
+                        val changes = movingIds.mapNotNull { id ->
+                            history.workspace.objectById(id)?.let { movingObject ->
+                                TransformChange(
+                                    objectId = id,
+                                    expectedVersion = movingObject.version,
+                                    before = movingObject.transform,
+                                    after = movingObject.transform.copy(
+                                        position = movingObject.transform.position + committedDelta,
+                                    ),
+                                )
+                            }
+                        }
+                        execute(
+                            TransformObjectsOperation(
+                                operationId = "move-media-${node.id.value}-${history.workspace.version}",
+                                changes = changes,
+                            ),
+                        )
+                    },
+                )
+            }
+
         AlignmentGuideCanvas(alignmentGuides, viewport, density)
 
         if (editingId == null && !inputBlocked) {
@@ -3639,6 +3865,7 @@ fun WorkspaceScreen(
                 ?.let { node ->
                     NodeTransformHandles(
                         node = node,
+                        objectLabel = node.text,
                         previewTransform = transformPreviews[node.id] ?: node.transform,
                         viewport = viewport,
                         largeTouchTargets = compactLayout,
@@ -3713,6 +3940,52 @@ fun WorkspaceScreen(
                                 }
                             }
                         },
+                    )
+                }
+            selectedIds.singleOrNull()
+                ?.let(history.workspace::objectById)
+                ?.let { it as? MediaNode }
+                ?.takeUnless { it.locked }
+                ?.let { node ->
+                    NodeTransformHandles(
+                        node = node,
+                        objectLabel = node.altText.ifBlank { node.mediaKind.name },
+                        connectionEnabled = false,
+                        previewTransform = transformPreviews[node.id] ?: node.transform,
+                        viewport = viewport,
+                        largeTouchTargets = compactLayout,
+                        onPreview = { transformPreviews = mapOf(node.id to it) },
+                        onCancel = { transformPreviews = emptyMap() },
+                        onResizeCommit = { after ->
+                            transformPreviews = emptyMap()
+                            if (after != node.transform) {
+                                execute(
+                                    TransformObjectsOperation(
+                                        operationId = "resize-media-${node.id.value}-${history.workspace.version}",
+                                        changes = listOf(
+                                            TransformChange(node.id, node.version, node.transform, after),
+                                        ),
+                                    ),
+                                )
+                            }
+                        },
+                        onRotateCommit = { after ->
+                            transformPreviews = emptyMap()
+                            if (after != node.transform) {
+                                execute(
+                                    TransformObjectsOperation(
+                                        operationId = "rotate-media-${node.id.value}-${history.workspace.version}",
+                                        changes = listOf(
+                                            TransformChange(node.id, node.version, node.transform, after),
+                                        ),
+                                    ),
+                                )
+                            }
+                        },
+                        onConnectionPreview = { _, _ -> },
+                        onConnectionCancel = {},
+                        onConnectionOpenPicker = {},
+                        onConnectionCommit = {},
                     )
                 }
         }
@@ -4270,12 +4543,19 @@ fun WorkspaceScreen(
                     move,
                 ).isNotEmpty()
 
+                is MediaNode -> layerZIndexUpdates(
+                    history.workspace.objects.values.filterIsInstance<MediaNode>(),
+                    setOf(selectedLayerObject.id),
+                    move,
+                ).isNotEmpty()
+
                 else -> false
             }
             fun moveSelectedLayer(move: LayerMove) {
                 when (selectedLayerObject) {
                     is TextNode -> reorderSelectedNodeLayers(move)
                     is GroupFrame -> reorderSelectedGroupLayers(move)
+                    is MediaNode -> reorderSelectedMediaLayers(move)
                     else -> Unit
                 }
             }
@@ -4315,7 +4595,11 @@ fun WorkspaceScreen(
                     }
                     layerEntries.forEach { entry ->
                         val prefix = "  ".repeat(entry.depth)
-                        val kind = if (entry.kind == LayerObjectKind.Group) Strings.objects.group() else Strings.objects.thought()
+                        val kind = when (entry.kind) {
+                            LayerObjectKind.Group -> Strings.objects.group()
+                            LayerObjectKind.Thought -> Strings.objects.thought()
+                            LayerObjectKind.Media -> Strings.objects.media()
+                        }
                         ShellButton(
                             label = "$prefix${if (entry.depth > 0) "↳ " else ""}$kind • ${entry.title}" +
                                 if (entry.locked) " • ${Strings.common.locked()}" else "",
@@ -5242,6 +5526,7 @@ fun WorkspaceScreen(
         ) {
             val selectedNodes = selectedIds.mapNotNull { history.workspace.objectById(it) as? TextNode }
             val selectedGroups = selectedIds.mapNotNull { history.workspace.objectById(it) as? GroupFrame }
+            val selectedMedia = selectedIds.mapNotNull { history.workspace.objectById(it) as? MediaNode }
             val allLocked = selectedNodes.isNotEmpty() && selectedNodes.all { it.locked }
             val anyLocked = selectedNodes.any { it.locked }
             val allGroupsLocked = selectedGroups.isNotEmpty() && selectedGroups.all { it.locked }
@@ -5257,6 +5542,9 @@ fun WorkspaceScreen(
             val groupColorSummary = selectionPropertySummary(selectedGroups.map { it.colorToken }, valueLabel = ::colorTokenLabel)
             val singleGroup = selectedGroups.singleOrNull()
             val singleNode = selectedNodes.singleOrNull()
+            val singleMedia = selectedMedia.singleOrNull()
+            val allMediaLocked = selectedMedia.isNotEmpty() && selectedMedia.all { it.locked }
+            val anyMediaLocked = selectedMedia.any { it.locked }
             val allNodes = history.workspace.objects.values.filterIsInstance<TextNode>()
             val allGroups = history.workspace.objects.values.filterIsInstance<GroupFrame>()
             val selectedNodeIds = selectedNodes.mapTo(mutableSetOf()) { it.id }
@@ -5267,6 +5555,19 @@ fun WorkspaceScreen(
                 layerZIndexUpdates(allGroups, selectedGroupIds, move).isNotEmpty()
             var groupTitleDraft by remember(singleGroup?.id, singleGroup?.version) {
                 mutableStateOf(singleGroup?.title.orEmpty())
+            }
+            var mediaAltTextDraft by remember(singleMedia?.id, singleMedia?.version) {
+                mutableStateOf(singleMedia?.altText.orEmpty())
+            }
+            fun submitMediaAltText() {
+                val media = singleMedia ?: return
+                val next = mediaAltTextDraft.trim().take(500)
+                if (next == media.altText) return
+                updateSelectedMedia("media-alt-text") { node, _ ->
+                    MediaNodeAttributes(node.zIndex, node.locked, next)
+                }
+                focusManager.clearFocus()
+                canvasFocusRequester.requestFocus()
             }
             fun submitGroupTitle() {
                 val title = groupTitleDraft.trim()
@@ -5348,6 +5649,7 @@ fun WorkspaceScreen(
                 ) {
                     val inspectorTitle = when {
                         selectedGroups.size == 1 -> selectedGroups.single().title
+                        selectedMedia.size == 1 -> selectedMedia.single().altText.ifBlank { Strings.objects.media() }
                         selectedIds.size == 1 -> Strings.objects.node()
                         else -> Strings.objects.nodeCount(selectedIds.size)
                     }
@@ -5472,6 +5774,66 @@ fun WorkspaceScreen(
                                 },
                             )
                         }
+                        }
+                    }
+                    if (selectedMedia.isNotEmpty()) {
+                        CollapsibleSectionHeader(
+                            label = Strings.objects.media(),
+                            collapsed = isSectionCollapsed(InspectorSection.Content),
+                            width = inspectorSectionWidth,
+                            onToggle = { toggleInspectorSection(InspectorSection.Content) },
+                        )
+                        if (!isSectionCollapsed(InspectorSection.Content)) {
+                            singleMedia?.let { media ->
+                                BasicText(
+                                    text = "${when (media.mediaKind) {
+                                        MediaKind.Image -> Strings.objects.image()
+                                        MediaKind.Gif -> Strings.objects.gif()
+                                        MediaKind.Video -> Strings.objects.video()
+                                    }} • ${Strings.media.assetReference(media.assetId.take(12))}",
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                                    style = TextStyle(color = colors.contentMuted, fontSize = 11.sp),
+                                )
+                                BasicTextField(
+                                    value = mediaAltTextDraft,
+                                    onValueChange = { mediaAltTextDraft = it.take(500) },
+                                    modifier = Modifier
+                                        .width(inspectorWidth - 24.dp)
+                                        .background(colors.canvas.copy(alpha = 0.78f), RoundedCornerShape(10.dp))
+                                        .border(1.dp, colors.contentBorder, RoundedCornerShape(10.dp))
+                                        .onFocusChanged { inspectorTextEditing = it.isFocused }
+                                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                                    textStyle = TextStyle(color = colors.contentText, fontSize = 12.sp),
+                                    cursorBrush = SolidColor(colors.selection),
+                                    singleLine = true,
+                                )
+                                ShellButton(
+                                    label = Strings.media.saveAlternativeText(),
+                                    enabled = !inputBlocked && mediaAltTextDraft.trim() != media.altText,
+                                    onClick = ::submitMediaAltText,
+                                )
+                            }
+                            ShellButton(
+                                label = if (allMediaLocked) Strings.media.unlockMedia() else Strings.media.lockMedia(),
+                                icon = if (allMediaLocked) ShellIcon.Unlock else ShellIcon.Lock,
+                                enabled = !inputBlocked,
+                                onClick = {
+                                    updateSelectedMedia("lock-media") { media, _ ->
+                                        MediaNodeAttributes(
+                                            media.zIndex,
+                                            !allMediaLocked,
+                                            media.altText,
+                                        )
+                                    }
+                                },
+                            )
+                            if (anyMediaLocked && !allMediaLocked) {
+                                BasicText(
+                                    text = Strings.common.mixed(),
+                                    modifier = Modifier.padding(horizontal = 12.dp),
+                                    style = TextStyle(color = colors.contentMuted, fontSize = 10.sp),
+                                )
+                            }
                         }
                     }
                     if (selectedNodes.isNotEmpty()) {
@@ -5826,7 +6188,7 @@ fun WorkspaceScreen(
                                 onClick = { ungroup(group) },
                             )
                         }
-                        if (selectedNodes.size + selectedGroups.size >= 2) {
+                        if (selectedNodes.size + selectedGroups.size + selectedMedia.size >= 2) {
                             ShellButton(
                                 label = Strings.palette.groupSelection(),
                                 icon = ShellIcon.Group,
@@ -6852,7 +7214,9 @@ private fun InspectorNumberField(
 
 @Composable
 private fun NodeTransformHandles(
-    node: TextNode,
+    node: CanvasObject,
+    objectLabel: String,
+    connectionEnabled: Boolean = true,
     previewTransform: CanvasTransform,
     viewport: Viewport,
     largeTouchTargets: Boolean,
@@ -6922,7 +7286,7 @@ private fun NodeTransformHandles(
             .width(touchTargetSize)
             .height(touchTargetSize)
             .semantics {
-                contentDescription = Strings.a11y.resizeHandleFor(node.text.take(80))
+                contentDescription = Strings.a11y.resizeHandleFor(objectLabel.take(80))
                 stateDescription = Strings.a11y.dragToResize()
                 role = Role.Button
                 onClick(label = Strings.a11y.increaseSize()) {
@@ -6981,7 +7345,7 @@ private fun NodeTransformHandles(
             .width(touchTargetSize)
             .height(touchTargetSize)
             .semantics {
-                contentDescription = Strings.a11y.rotateHandleFor(node.text.take(80))
+                contentDescription = Strings.a11y.rotateHandleFor(objectLabel.take(80))
                 stateDescription = Strings.a11y.dragToRotate()
                 role = Role.Button
                 onClick(label = Strings.a11y.rotateClockwise15Degrees()) {
@@ -7028,7 +7392,7 @@ private fun NodeTransformHandles(
         }
     }
 
-    Box(
+    if (connectionEnabled) Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .offset {
@@ -7040,7 +7404,7 @@ private fun NodeTransformHandles(
             .width(touchTargetSize)
             .height(touchTargetSize)
             .semantics {
-                contentDescription = Strings.a11y.connectorHandleFor(node.text.take(80))
+                contentDescription = Strings.a11y.connectorHandleFor(objectLabel.take(80))
                 stateDescription = Strings.a11y.dragOntoAnotherThoughtTo()
                 role = Role.Button
                 onClick(label = Strings.a11y.chooseConnectionTarget()) {
@@ -7312,6 +7676,147 @@ private fun TextNodeCard(
                         ),
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MediaNodeCard(
+    node: MediaNode,
+    asset: WorkspaceAsset?,
+    viewport: Viewport,
+    previewDelta: Vec2,
+    previewTransform: CanvasTransform?,
+    selected: Boolean,
+    interactionEnabled: Boolean,
+    mutationEnabled: Boolean,
+    onSelect: (additive: Boolean) -> Unit,
+    onDragPreview: (Vec2) -> Unit,
+    onDragCancel: () -> Unit,
+    onDragCommit: (Vec2) -> Unit,
+) {
+    val colors = BoarderLessTheme.colors
+    val density = LocalDensity.current
+    val renderedTransform = previewTransform ?: node.transform
+    val screenPosition = viewport.worldToScreen(renderedTransform.position + previewDelta)
+    val screenWidth = with(density) { (renderedTransform.size.width * viewport.zoom).toDp() }
+    val screenHeight = with(density) { (renderedTransform.size.height * viewport.zoom).toDp() }
+    val kindLabel = when (node.mediaKind) {
+        MediaKind.Image -> Strings.objects.image()
+        MediaKind.Gif -> Strings.objects.gif()
+        MediaKind.Video -> Strings.objects.video()
+    }
+    val statusLabel = when (asset?.status) {
+        AssetStatus.Pending -> Strings.media.pending()
+        AssetStatus.Ready -> Strings.media.readyDownloadUnavailable()
+        AssetStatus.Rejected -> Strings.media.rejected()
+        AssetStatus.Missing -> Strings.media.missing()
+        null -> Strings.media.metadataUnavailable()
+    }
+    val accessibleName = node.altText.ifBlank { kindLabel }
+
+    Box(
+        modifier = Modifier
+            .canvasObjectBounds(screenPosition, screenWidth, screenHeight)
+            .graphicsLayer(rotationZ = renderedTransform.rotationDegrees)
+            .shadow(if (selected) 12.dp else 5.dp, RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(16.dp))
+            .background(colors.canvas.copy(alpha = 0.94f))
+            .border(
+                width = if (selected) 2.dp else 1.dp,
+                color = if (selected) colors.selection else colors.contentBorder,
+                shape = RoundedCornerShape(16.dp),
+            )
+            .semantics {
+                contentDescription = "$kindLabel • $accessibleName"
+                this.selected = selected
+                stateDescription = when {
+                    node.locked -> "${Strings.common.locked()} • $statusLabel"
+                    !mutationEnabled -> "${Strings.common.readOnly()} • $statusLabel"
+                    else -> statusLabel
+                }
+                role = Role.Button
+                onClick(label = Strings.a11y.selectThought()) {
+                    onSelect(false)
+                    true
+                }
+            }
+            .focusable(enabled = interactionEnabled)
+            .pointerInput(node.id, viewport.zoom, mutationEnabled, node.version) {
+                if (interactionEnabled) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val additiveSelection = currentEvent.keyboardModifiers.isShiftPressed
+                        down.consume()
+                        var accumulated = Vec2.Zero
+                        var moved = false
+                        val completed = drag(down.id) { change ->
+                            val dragAmount = change.positionChange()
+                            if (dragAmount != Offset.Zero && !node.locked && mutationEnabled) {
+                                moved = true
+                                change.consume()
+                                accumulated += Vec2(dragAmount.x, dragAmount.y) / viewport.zoom
+                                onDragPreview(accumulated)
+                            }
+                        }
+                        when {
+                            !completed -> onDragCancel()
+                            moved -> onDragCommit(accumulated)
+                            else -> onSelect(additiveSelection)
+                        }
+                    }
+                }
+            },
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            BasicText(
+                text = when (node.mediaKind) {
+                    MediaKind.Image -> "▧"
+                    MediaKind.Gif -> "GIF"
+                    MediaKind.Video -> "▶"
+                },
+                style = TextStyle(
+                    color = if (selected) colors.selection else colors.accent,
+                    fontSize = (if (node.mediaKind == MediaKind.Gif) 18f else 28f).sp,
+                    fontWeight = FontWeight.Bold,
+                ),
+            )
+            BasicText(
+                text = accessibleName,
+                modifier = Modifier.padding(top = 8.dp),
+                style = TextStyle(
+                    color = colors.contentText,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center,
+                ),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            BasicText(
+                text = statusLabel,
+                modifier = Modifier.padding(top = 4.dp),
+                style = TextStyle(
+                    color = colors.contentMuted,
+                    fontSize = 10.sp,
+                    textAlign = TextAlign.Center,
+                ),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (asset == null) {
+                BasicText(
+                    text = Strings.media.assetReference(node.assetId.take(12)),
+                    modifier = Modifier.padding(top = 4.dp),
+                    style = TextStyle(color = colors.contentMuted, fontSize = 9.sp),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }

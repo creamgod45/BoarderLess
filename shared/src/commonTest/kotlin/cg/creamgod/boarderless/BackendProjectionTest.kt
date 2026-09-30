@@ -8,6 +8,8 @@ import cg.creamgod.boarderless.data.remote.toDomainWorkspace
 import cg.creamgod.boarderless.domain.model.RelationDirection
 import cg.creamgod.boarderless.domain.model.NodeShape
 import cg.creamgod.boarderless.domain.model.TextNode
+import cg.creamgod.boarderless.domain.model.MediaKind
+import cg.creamgod.boarderless.domain.model.MediaNode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -35,6 +37,49 @@ class BackendProjectionTest {
         assertEquals("First", assertIs<TextNode>(workspace.objects.values.first { it.id.value == firstId }).text)
         assertEquals(RelationDirection.Both, workspace.relations.values.single().direction)
         assertEquals(4L, workspace.version)
+    }
+
+    @Test
+    fun mediaProjectionKeepsOnlyDurableAssetReferences() {
+        val media = textObject(firstId, "ignored").copy(
+            objectType = "media",
+            properties = buildJsonObject {
+                put("assetId", "asset-original")
+                put("mediaKind", "video")
+                put("altText", "Launch demo")
+                put("thumbnailAssetId", "asset-poster")
+            },
+        )
+
+        val node = assertIs<MediaNode>(
+            state(objects = listOf(media)).toDomainWorkspace("Media").objects.values.single(),
+        )
+
+        assertEquals("asset-original", node.assetId)
+        assertEquals(MediaKind.Video, node.mediaKind)
+        assertEquals("Launch demo", node.altText)
+        assertEquals("asset-poster", node.thumbnailAssetId)
+    }
+
+    @Test
+    fun malformedMediaProjectionFailsExplicitly() {
+        val missingAsset = textObject(firstId, "ignored").copy(
+            objectType = "media",
+            properties = buildJsonObject { put("mediaKind", "image") },
+        )
+        assertFailsWith<BackendContractException> {
+            state(objects = listOf(missingAsset)).toDomainWorkspace("Missing asset")
+        }
+
+        val unknownKind = missingAsset.copy(
+            properties = buildJsonObject {
+                put("assetId", "asset-original")
+                put("mediaKind", "audio")
+            },
+        )
+        assertFailsWith<BackendContractException> {
+            state(objects = listOf(unknownKind)).toDomainWorkspace("Unknown media")
+        }
     }
 
     @Test

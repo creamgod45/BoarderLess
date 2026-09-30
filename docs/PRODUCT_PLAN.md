@@ -241,6 +241,14 @@ User Intent
 - 接受狀態。
 - 可逆操作所需資料。
 
+AI transport 使用 provider-neutral adapter，首批正式支援三類端點：
+
+- OpenAI-compatible API server：可設定 base URL、model、能力與受保護的 API key reference。
+- Anthropic-compatible API server：可設定 base URL、model、能力與受保護的 API key reference。
+- Local AI server：以使用者明確設定的本機或區域網路 endpoint 提供輔助，可選擇不帶金鑰或使用裝置端受保護憑證。
+
+遠端供應商的正式金鑰預設由 BoarderLess 後端 gateway 或安全 secret store 管理，App 不把明文金鑰寫入 Workspace、operation、日誌或同步偏好。Local AI endpoint 屬於裝置層設定，不隨 Workspace 分享；所有 provider response 先轉成統一的文字 delta、proposal item、完成、取消與錯誤事件，AI 仍不得繞過 proposal review 直接修改正式內容。
+
 ### 9.5 Workspace Operation 與互動狀態
 
 建立、編輯、移動、調整尺寸、群組、鎖定、改變層級與 AI 接受結果，都必須轉換成可序列化的 `WorkspaceOperation`。多物件行為以 transaction 表示，作為 undo/redo、自動儲存、AI proposal 和未來多人同步的共同邊界。
@@ -259,7 +267,10 @@ Canvas 輸入採明確互動狀態，不讓各元件各自解讀指標事件：
 ### 9.6 素材與方案資料
 
 - Workspace 對圖片、GIF 和影片保存可攜的 asset reference，不把平台檔案控制項或暫存 URL 放入 domain。
-- 「物品庫」提供系統內建物件與素材入口；「快速方案簿」保存使用者建立的物件或群組模板。
+- 「物品庫」提供系統內建物件與素材入口；圖形依基本幾何、流程圖、箭頭、標註、容器／泳道、組織／架構、網路／拓樸、文字、媒體與自訂圖形分類，可搜尋、收藏及顯示最近使用。
+- 文字輸入框是獨立、可直接輸入的畫布物件，不強迫套用卡片外框；仍共用 selection、transform、history、clipboard 與 collaboration operation。
+- 鋼筆工具建立 BoarderLess 自有的版本化向量路徑。路徑以有限且通過驗證的 move／line／quadratic／cubic／close commands 保存，不接受可執行 script 或未驗證的任意 SVG；建立、節點編輯、關閉路徑、填色與描邊均可 Undo。
+- 「快速方案簿」保存使用者建立的物件或群組模板；使用者層級 API 讓同一帳號跨裝置同步，並以 revision／ETag 防止靜默覆蓋。
 - 插入快速方案時預設建立具新 ID 的副本；模板本身具有 schema version，避免日後模型升級破壞既有方案。
 - 第一階段先支援本機圖片；GIF、影片播放與線上 GIF Browser 在資產保存及生命週期穩定後加入。
 
@@ -268,6 +279,8 @@ Canvas 輸入採明確互動狀態，不讓各元件各自解讀指標事件：
 Node.js 後端、正式儲存、多核心處理、WebSocket 協定與多人協作的詳細規劃見 `docs/BACKEND_ARCHITECTURE.md`。用戶端與伺服器共用版本化 `WorkspaceOperation` 語意；PostgreSQL 是正式內容與 operation log 的 source of truth，Redis 只承擔可重建的暫態協調與背景工作分發，媒體檔案保存於 object storage。
 
 ## 10. 里程碑
+
+目前執行順序以圖片／GIF／影片素材為第一優先、多人即時協作為第二優先，其後依序補 Quick Scheme 跨裝置同步、共用 Canvas 樣式、AI transport 與物件庫／鋼筆工具。視覺辨識與遮擋依 [`產品 QA 品質檢驗 SOP.md`](產品%20QA%20品質檢驗%20SOP.md) 交由產品負責人最終簽核；效能量測在核心功能、後端整合與主要回歸穩定後才進入最後階段。
 
 ### M0：Foundation 與領域契約
 
@@ -328,8 +341,9 @@ Node.js 後端、正式儲存、多核心處理、WebSocket 協定與多人協�
 
 ### M5：Library 與 Rich Media
 
-- 可拖曳的物品庫與內建元件。
-- 快速方案簿：保存、預覽與插入使用者方案。
+- 可拖曳、可搜尋並分類的擴充物品庫與大量內建圖形。
+- 無外框文字輸入框與自訂向量形狀鋼筆工具。
+- 快速方案簿：保存、預覽、插入及跨裝置同步使用者方案。
 - 本機圖片匯入、縮圖、遺失資產處理。
 - GIF 與影片物件；資產生命週期穩定後再加入線上 GIF Browser。
 
@@ -337,7 +351,8 @@ Node.js 後端、正式儲存、多核心處理、WebSocket 協定與多人協�
 
 ### M6：AI Cowork
 
-- Provider abstraction。
+- OpenAI-compatible、Anthropic-compatible 與 Local AI server 的 provider adapters。
+- Provider profile、能力探測、金鑰 reference 與裝置本機 endpoint 設定。
 - 選取內容作為 context。
 - 串流回應與取消。
 - Proposal preview、接受、拒絕與撤銷。
@@ -348,7 +363,8 @@ Node.js 後端、正式儲存、多核心處理、WebSocket 協定與多人協�
 
 - Onboarding 和空狀態。
 - 搜尋與 Command Palette。
-- 效能、鍵盤及可及性整理。
+- 鍵盤、VoiceOver 與可及性整理。
+- 視覺與遮擋由產品負責人依 QA SOP 簽核。
 - 封閉測試與回饋收集。
 
 ### M8：Realtime Collaboration（MVP 後）
@@ -359,6 +375,15 @@ Node.js 後端、正式儲存、多核心處理、WebSocket 協定與多人協�
 - 活動紀錄、版本回復與安全性檢查。
 
 完成標準：兩位以上使用者能在同一 Workspace 同時編輯，暫時離線後可安全合併且不遺失已確認內容。
+
+### M9：Performance Validation（最後階段）
+
+- 在功能與後端合約穩定後建立大型 Workspace 固定測試資料。
+- 量測啟動、載入、平移／縮放、記憶體、CPU、網路與同步延遲。
+- 素材處理與多使用者 operation fan-out 納入同一版基線。
+- 依實測建立門檻並完成退化比較，不在功能尚未穩定時臆定數字。
+
+完成標準：主要平台在固定資料與裝置上有可重現基線，沒有阻擋核心工作流程的效能退化。
 
 ## 11. 成功指標
 

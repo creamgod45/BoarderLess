@@ -63,17 +63,55 @@ data class GroupFrame(
     }
 }
 
+/** A durable reference to media stored by the Workspace asset service.
+ *
+ * Download URLs and local file paths deliberately do not belong here: both are ephemeral and
+ * device-specific. A MediaNode can therefore survive clipboard, history, sync, and reopening the
+ * Workspace without leaking a signed URL into the canvas projection.
+ */
+enum class MediaKind(val token: String) {
+    Image("image"),
+    Gif("gif"),
+    Video("video"),
+    ;
+
+    companion object {
+        fun fromToken(token: String): MediaKind? = entries.firstOrNull { it.token == token }
+    }
+}
+
+data class MediaNode(
+    override val id: CanvasObjectId,
+    override val version: Long = 1,
+    override val parentId: CanvasObjectId? = null,
+    override val zIndex: Long = 0,
+    override val locked: Boolean = false,
+    override val transform: CanvasTransform,
+    val assetId: String,
+    val mediaKind: MediaKind,
+    val altText: String = "",
+    val thumbnailAssetId: String? = null,
+) : CanvasObject {
+    init {
+        require(version >= 1) { "media node version must be positive" }
+        require(assetId.isNotBlank()) { "media node asset id must not be blank" }
+        require(thumbnailAssetId?.isNotBlank() != false) { "thumbnail asset id must not be blank" }
+    }
+}
+
 fun CanvasObject.withTransform(
     transform: CanvasTransform,
     version: Long = this.version + 1,
 ): CanvasObject = when (this) {
     is TextNode -> copy(transform = transform, version = version)
     is GroupFrame -> copy(transform = transform, version = version)
+    is MediaNode -> copy(transform = transform, version = version)
 }
 
 fun CanvasObject.withVersion(version: Long): CanvasObject = when (this) {
     is TextNode -> copy(version = version)
     is GroupFrame -> copy(version = version)
+    is MediaNode -> copy(version = version)
 }
 
 fun CanvasObject.withParentId(
@@ -82,4 +120,5 @@ fun CanvasObject.withParentId(
 ): CanvasObject = when (this) {
     is TextNode -> copy(parentId = parentId, version = version)
     is GroupFrame -> copy(parentId = parentId, version = version)
+    is MediaNode -> copy(parentId = parentId, version = version)
 }

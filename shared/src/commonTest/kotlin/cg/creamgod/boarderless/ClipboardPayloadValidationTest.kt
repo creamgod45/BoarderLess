@@ -1,6 +1,7 @@
 package cg.creamgod.boarderless
 
 import cg.creamgod.boarderless.feature.canvas.ClipboardGroup
+import cg.creamgod.boarderless.feature.canvas.ClipboardMedia
 import cg.creamgod.boarderless.feature.canvas.ClipboardNode
 import cg.creamgod.boarderless.feature.canvas.ClipboardPayload
 import cg.creamgod.boarderless.feature.canvas.ClipboardPayloadIssue
@@ -42,10 +43,28 @@ class ClipboardPayloadValidationTest {
         parentOriginalId = parentId,
     )
 
+    private fun media(
+        id: String,
+        assetId: String = "asset-1",
+        mediaKind: String = "image",
+        parentId: String? = null,
+    ) = ClipboardMedia(
+        originalId = id,
+        x = 0f,
+        y = 0f,
+        width = 320f,
+        height = 180f,
+        rotationDegrees = 0f,
+        assetId = assetId,
+        mediaKind = mediaKind,
+        parentOriginalId = parentId,
+    )
+
     @Test
     fun acceptsCurrentAndLegacySelections() {
-        assertNull(validateClipboardPayload(ClipboardPayload(version = 3, nodes = listOf(node("a")))))
+        assertNull(validateClipboardPayload(ClipboardPayload(version = 4, nodes = listOf(node("a")))))
         assertNull(validateClipboardPayload(ClipboardPayload(version = 1, nodes = listOf(node("legacy")))))
+        assertNull(validateClipboardPayload(ClipboardPayload(nodes = emptyList(), media = listOf(media("photo")))))
     }
 
     @Test
@@ -56,7 +75,7 @@ class ClipboardPayloadValidationTest {
         )
         assertEquals(
             ClipboardPayloadIssue.UnsupportedVersion,
-            validateClipboardPayload(ClipboardPayload(version = 4, nodes = listOf(node("a")))),
+            validateClipboardPayload(ClipboardPayload(version = 5, nodes = listOf(node("a")))),
         )
         assertEquals(ClipboardPayloadIssue.Empty, validateClipboardPayload(ClipboardPayload(nodes = emptyList())))
     }
@@ -86,6 +105,28 @@ class ClipboardPayloadValidationTest {
         assertEquals(
             ClipboardPayloadIssue.UnsupportedShape,
             validateClipboardPayload(ClipboardPayload(nodes = listOf(node("shape", shape = "future-shape")))),
+        )
+    }
+
+    @Test
+    fun mediaRequiresDurableAssetReferenceAndKnownKind() {
+        assertEquals(
+            ClipboardPayloadIssue.InvalidMedia,
+            validateClipboardPayload(
+                ClipboardPayload(nodes = emptyList(), media = listOf(media("photo", assetId = ""))),
+            ),
+        )
+        assertEquals(
+            ClipboardPayloadIssue.InvalidMedia,
+            validateClipboardPayload(
+                ClipboardPayload(nodes = emptyList(), media = listOf(media("audio", mediaKind = "audio"))),
+            ),
+        )
+        assertEquals(
+            ClipboardPayloadIssue.InvalidParent,
+            validateClipboardPayload(
+                ClipboardPayload(nodes = emptyList(), media = listOf(media("photo", parentId = "missing"))),
+            ),
         )
     }
 

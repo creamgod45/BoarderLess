@@ -47,6 +47,25 @@ internal data class WorkspaceMemberListDto(val members: List<WorkspaceMemberDto>
 internal data class SetWorkspaceMemberRoleRequest(val role: String)
 
 @Serializable
+internal data class AssetDto(
+    val id: String,
+    val workspaceId: String,
+    val ownerId: String,
+    val storageKey: String,
+    val mediaType: String,
+    val byteSize: Long,
+    val checksum: String,
+    val width: Int? = null,
+    val height: Int? = null,
+    val durationMs: Long? = null,
+    val status: String,
+    val createdAt: String,
+)
+
+@Serializable
+internal data class AssetListDto(val assets: List<AssetDto>)
+
+@Serializable
 internal data class CanvasObjectDto(
     val objectId: String,
     val objectType: String,

@@ -2,6 +2,9 @@ package cg.creamgod.boarderless.data.remote
 
 import cg.creamgod.boarderless.i18n.Strings
 import cg.creamgod.boarderless.data.SubmitOutcome
+import cg.creamgod.boarderless.data.AssetRepository
+import cg.creamgod.boarderless.data.AssetStatus
+import cg.creamgod.boarderless.data.WorkspaceAsset
 import cg.creamgod.boarderless.data.WorkspaceRepository
 import cg.creamgod.boarderless.data.WorkspaceActivity
 import cg.creamgod.boarderless.data.WorkspaceSession
@@ -19,6 +22,7 @@ import cg.creamgod.boarderless.domain.history.ReparentObjectsOperation
 import cg.creamgod.boarderless.domain.history.UpdateTextNodeAttributesOperation
 import cg.creamgod.boarderless.domain.history.UpdateRelationAttributesOperation
 import cg.creamgod.boarderless.domain.history.UpdateGroupFrameAttributesOperation
+import cg.creamgod.boarderless.domain.history.UpdateMediaNodeAttributesOperation
 import cg.creamgod.boarderless.domain.history.WorkspaceOperation
 import cg.creamgod.boarderless.domain.model.CanvasObjectId
 import cg.creamgod.boarderless.domain.model.CanvasObject
@@ -26,6 +30,8 @@ import cg.creamgod.boarderless.domain.model.CanvasSize
 import cg.creamgod.boarderless.domain.model.CanvasTransform
 import cg.creamgod.boarderless.domain.model.TextNode
 import cg.creamgod.boarderless.domain.model.GroupFrame
+import cg.creamgod.boarderless.domain.model.MediaKind
+import cg.creamgod.boarderless.domain.model.MediaNode
 import cg.creamgod.boarderless.domain.model.NodeShape
 import cg.creamgod.boarderless.domain.model.Relation
 import cg.creamgod.boarderless.domain.model.RelationDirection
@@ -62,7 +68,7 @@ class BackendWorkspaceRepository(
     baseUrl: String = defaultBackendBaseUrl(),
     private val preferences: SessionPreferences = SessionPreferences(),
     private val client: HttpClient = createHttpClient(),
-) : WorkspaceRepository {
+) : WorkspaceRepository, AssetRepository {
     private val apiBase = "${baseUrl.trimEnd('/')}/api/v1"
 
     override suspend fun openOrCreateWorkspace(): WorkspaceSession {
@@ -160,6 +166,18 @@ class BackendWorkspaceRepository(
         client.get("$apiBase/workspaces/${session.workspace.id.value}/members") {
             header(DevUserHeader, session.userId)
         }.requireSuccess().body<WorkspaceMemberListDto>().members.map(WorkspaceMemberDto::toDomain)
+
+    override suspend fun listAssets(session: WorkspaceSession): List<WorkspaceAsset> =
+        client.get("$apiBase/workspaces/${session.workspace.id.value}/assets") {
+            header(DevUserHeader, session.userId)
+        }.requireSuccess().body<AssetListDto>().assets.map(AssetDto::toDomain)
+
+    override suspend fun getAsset(session: WorkspaceSession, assetId: String): WorkspaceAsset {
+        require(assetId.isNotBlank()) { "Asset id must not be blank" }
+        return client.get("$apiBase/workspaces/${session.workspace.id.value}/assets/${assetId.trim()}") {
+            header(DevUserHeader, session.userId)
+        }.requireSuccess().body<AssetDto>().toDomain()
+    }
 
     override suspend fun setWorkspaceMemberRole(
         session: WorkspaceSession,
@@ -382,6 +400,33 @@ internal fun WorkspaceMemberDto.toDomain(): WorkspaceMember {
     )
 }
 
+internal fun AssetDto.toDomain(): WorkspaceAsset {
+    if (id.isBlank() || workspaceId.isBlank() || ownerId.isBlank() || storageKey.isBlank() ||
+        mediaType.isBlank() || checksum.isBlank() || createdAt.isBlank()
+    ) {
+        throw BackendContractException("Asset metadata contains a blank required field")
+    }
+    val parsedStatus = AssetStatus.fromToken(status)
+        ?: throw BackendContractException("Asset has unsupported status '$status'")
+    return try {
+        WorkspaceAsset(
+            id = id,
+            workspaceId = WorkspaceId(workspaceId),
+            ownerId = ownerId,
+            mediaType = mediaType,
+            byteSize = byteSize,
+            checksum = checksum,
+            width = width,
+            height = height,
+            durationMs = durationMs,
+            status = parsedStatus,
+            createdAt = createdAt,
+        )
+    } catch (error: IllegalArgumentException) {
+        throw BackendContractException("Asset $id contains invalid metadata", error)
+    }
+}
+
 internal fun String.toWorkspaceMemberRole(): WorkspaceMemberRole =
     WorkspaceMemberRole.fromToken(this)
         ?: throw BackendContractException("Workspace has unsupported role '$this'")
@@ -539,6 +584,25 @@ private fun WorkspaceOperation.toDto(clientSequence: Long): OperationDto = when 
         )
     }
 
+    is UpdateMediaNodeAttributesOperation -> {
+        require(changes.size == 1) { "Backend update_object mapping currently accepts one media change" }
+        val change = changes.single()
+        OperationDto(
+            operationId = randomUuid(),
+            clientSeq = clientSequence,
+            kind = "update_object",
+            expectedObjectVersions = mapOf(change.objectId.value to change.expectedVersion),
+            payload = buildJsonObject {
+                put("objectId", JsonPrimitive(change.objectId.value))
+                if (change.before.zIndex != change.after.zIndex) put("zIndex", JsonPrimitive(change.after.zIndex))
+                if (change.before.locked != change.after.locked) put("locked", JsonPrimitive(change.after.locked))
+                if (change.before.altText != change.after.altText) {
+                    put("properties", buildJsonObject { put("altText", JsonPrimitive(change.after.altText)) })
+                }
+            },
+        )
+    }
+
     is TransactionOperation -> error("Transactions must be flattened before conversion")
 }
 
@@ -562,6 +626,10 @@ private fun UpdateGroupFrameAttributesOperation.expand(): List<WorkspaceOperatio
     UpdateGroupFrameAttributesOperation(operationId, listOf(change))
 }
 
+private fun UpdateMediaNodeAttributesOperation.expand(): List<WorkspaceOperation> = changes.map { change ->
+    UpdateMediaNodeAttributesOperation(operationId, listOf(change))
+}
+
 private fun ReparentObjectsOperation.expand(): List<WorkspaceOperation> = changes.map { change ->
     ReparentObjectsOperation(operationId, listOf(change))
 }
@@ -577,6 +645,7 @@ private fun WorkspaceOperation.flattenAndExpand(): List<WorkspaceOperation> = fl
         is UpdateTextNodeAttributesOperation -> it.expand()
         is UpdateRelationAttributesOperation -> it.expand()
         is UpdateGroupFrameAttributesOperation -> it.expand()
+        is UpdateMediaNodeAttributesOperation -> it.expand()
         is ReparentObjectsOperation -> it.expand()
         is EditTextOperation -> it.expand()
         else -> listOf(it)
@@ -593,7 +662,16 @@ internal fun WorkspaceOperation.toExpandedDtos(startingSequence: Long): List<Ope
                 kind = "create_object",
                 payload = buildJsonObject {
                     put("objectId", JsonPrimitive(canvasObject.id.value))
-                    put("objectType", JsonPrimitive(if (canvasObject is TextNode) "text" else "group"))
+                    put(
+                        "objectType",
+                        JsonPrimitive(
+                            when (canvasObject) {
+                                is TextNode -> "text"
+                                is GroupFrame -> "group"
+                                is MediaNode -> "media"
+                            },
+                        ),
+                    )
                     canvasObject.parentId?.let { put("parentId", JsonPrimitive(it.value)) }
                     put("zIndex", JsonPrimitive(canvasObject.zIndex))
                     put("locked", JsonPrimitive(canvasObject.locked))
@@ -610,6 +688,14 @@ internal fun WorkspaceOperation.toExpandedDtos(startingSequence: Long): List<Ope
                                 is GroupFrame -> {
                                     put("title", JsonPrimitive(canvasObject.title))
                                     put("colorToken", JsonPrimitive(canvasObject.colorToken))
+                                }
+                                is MediaNode -> {
+                                    put("assetId", JsonPrimitive(canvasObject.assetId))
+                                    put("mediaKind", JsonPrimitive(canvasObject.mediaKind.token))
+                                    put("altText", JsonPrimitive(canvasObject.altText))
+                                    canvasObject.thumbnailAssetId?.let {
+                                        put("thumbnailAssetId", JsonPrimitive(it))
+                                    }
                                 }
                             }
                         },
@@ -704,6 +790,22 @@ internal fun WorkspaceStateDto.toDomainWorkspace(title: String): Workspace {
                 transform = transform,
                 title = dto.properties.string("title") ?: Strings.objects.group(),
                 colorToken = dto.properties.string("colorToken") ?: "group",
+            )
+            "media" -> MediaNode(
+                id = CanvasObjectId(dto.objectId),
+                version = dto.objectVersion,
+                parentId = dto.parentId?.let(::CanvasObjectId),
+                zIndex = dto.zIndex,
+                locked = dto.locked,
+                transform = transform,
+                assetId = dto.properties.requiredString("assetId", dto.objectId),
+                mediaKind = dto.properties.requiredString("mediaKind", dto.objectId).let { token ->
+                    MediaKind.fromToken(token) ?: throw BackendContractException(
+                        "Object ${dto.objectId} has unsupported media kind '$token'",
+                    )
+                },
+                altText = dto.properties.string("altText").orEmpty(),
+                thumbnailAssetId = dto.properties.string("thumbnailAssetId"),
             )
             else -> throw BackendContractException(
                 "Unsupported canvas object type '${dto.objectType}' for object ${dto.objectId}",
@@ -806,3 +908,7 @@ private fun JsonObject.string(key: String): String? {
     return primitive?.takeIf(JsonPrimitive::isString)?.contentOrNull
         ?: throw BackendContractException("Projection field '$key' must be a string")
 }
+
+private fun JsonObject.requiredString(key: String, objectId: String): String =
+    string(key)?.takeIf(String::isNotBlank)
+        ?: throw BackendContractException("Object $objectId requires non-blank property '$key'")

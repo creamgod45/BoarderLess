@@ -480,6 +480,45 @@ UX 狀態：Light、Dark、Reduce Transparency。
 - Given 一組物件已選取，When 保存為快速方案，Then 方案包含相對位置、支援樣式、內部關係、縮圖與 schema version。
 - Given 使用者插入方案，When 放置完成，Then 所有插入物件取得新 ID，且不與來源物件共享可變狀態。
 - Given 舊版方案可遷移，When 使用者插入它，Then 系統先完成 migration；無法遷移時不破壞原方案。
+- Given 使用者在另一台裝置建立或修改方案，When 同一帳號同步，Then 方案依 revision 更新且並行修改不會靜默覆蓋。
+
+### US-LB-003：搜尋並插入大型圖形庫
+
+**身為** 使用圖表整理複雜概念的使用者
+
+**我想要** 從分類完整的物件庫搜尋及插入多種圖形與文字框
+
+**以便** 建立流程圖、組織圖、架構圖、關係圖、拓樸圖與自由註解
+
+優先級：Should
+
+目標里程碑：M5
+
+驗收條件：
+
+- Given 物件庫已開啟，When 依名稱、別名或分類搜尋，Then 可找到基本幾何、流程、箭頭、標註、容器、架構、網路與文字類型。
+- Given 使用者插入文字輸入框，When 輸入完成，Then 文字可無卡片外框存在，並支援 selection、transform、clipboard、history 與 collaboration。
+- Given 使用者收藏或使用圖形，When 再次開啟物件庫，Then 可從收藏或最近使用快速取得。
+- Given 內建圖形版本升級，When 開啟舊 Workspace，Then 原有 shape token 仍能穩定渲染或明確遷移。
+
+### US-LB-004：以鋼筆工具建立自訂形狀
+
+**身為** 需要特殊視覺語彙的使用者
+
+**我想要** 以鋼筆工具畫出並編輯自己的向量形狀
+
+**以便** 不受內建圖形限制
+
+優先級：Should
+
+目標里程碑：M5
+
+驗收條件：
+
+- Given 鋼筆工具啟用，When 使用者建立直線或曲線節點並完成／關閉路徑，Then 產生可選取、移動、縮放、旋轉的正式物件。
+- Given 自訂路徑已選取，When 編輯 anchor、control point、填色或描邊，Then 每次正式修改可 Undo／Redo。
+- Given 自訂形狀被複製、加入群組、存成快速方案或多人同步，When 重新開啟，Then 路徑與樣式保持一致。
+- Given 匯入或同步的路徑包含非有限座標、過多 commands 或可執行內容，When 驗證，Then 安全拒絕且不影響既有 Workspace。
 
 ### US-MD-001：加入並保存圖片
 
