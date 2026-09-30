@@ -1,0 +1,2 @@
+/* iOS 首次連線到區域網路上的開發伺服器時顯示。 */
+"NSLocalNetworkUsageDescription" = "BoarderLess 需要連線到區域網路上的開發伺服器，才能儲存並同步工作區。";

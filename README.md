@@ -23,7 +23,11 @@ Use the run configurations provided by the run widget in your IDE's toolbar. You
 - Web app:
   - Wasm target (faster, modern browsers): `./gradlew :webApp:wasmJsBrowserDevelopmentRun`
   - JS target (slower, supports older browsers): `./gradlew :webApp:jsBrowserDevelopmentRun`
-- iOS app: open the [/iosApp](./iosApp) directory in Xcode and run it from there.
+- iOS app: open the [/iosApp](./iosApp) directory in Xcode and run it from there. The simulator uses
+  `127.0.0.1:3000` by default. For a physical iPhone, set `BOARDERLESS_BACKEND_HOST` in
+  `iosApp/Configuration/Config.xcconfig` to the Mac's LAN IPv4 address or local hostname before running.
+  The Xcode build phase automatically finds a system JDK, Android Studio, IntelliJ IDEA, or the JetBrains
+  Toolbox runtime; if none is available it reports an actionable error.
 
 ### Running tests
 

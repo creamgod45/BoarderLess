@@ -2,7 +2,21 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>zh-Hant</string>
+	</array>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>BoarderLessBackendURL</key>
+	<string>$(BOARDERLESS_BACKEND_SCHEME)://$(BOARDERLESS_BACKEND_HOST):$(BOARDERLESS_BACKEND_PORT)</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>BoarderLess connects to your development server on the local network to save and synchronize workspaces.</string>
 </dict>
 </plist>

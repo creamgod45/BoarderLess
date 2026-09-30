@@ -1,6 +1,6 @@
 # BoarderLess 產品與介面計畫書
 
-版本：0.1  
+版本：0.2
 狀態：產品假設草案，供設計與 MVP 開發使用
 
 ## 1. 產品摘要
@@ -140,6 +140,18 @@ MVP 優先完成 Text node、Group 和 Relation；其他物件在核心互動穩
 - Bottom/Corner：Zoom、定位與同步狀態。
 - Overlay：Command Palette、搜尋、AI Proposal Review。
 
+### 7.4 Canvas Object 基礎模型
+
+首版雖以 Text node 為主要可見內容，但領域模型不應只針對文字設計。所有正式畫布物件共用以下能力：
+
+- 穩定且跨儲存週期不變的唯一識別碼與資料版本。
+- 世界座標、尺寸、旋轉、可計算的 bounds 與 z-order。
+- 可選的 parent/group、locked 狀態與樣式資料。
+- 可被選取、移動、複製、刪除及納入統一 history。
+- 不保存 Compose state 或平台專屬 UI 物件。
+
+`TextNode`、`ImageNode`、`VideoNode`、`GroupFrame` 和其他未來內容型別應建立在共同 Canvas Object 契約上。Relation 是具有來源、目標、方向和意圖的領域資料，不只是畫面上的線段。
+
 ## 8. MVP 範圍
 
 ### 8.1 必須具備
@@ -229,35 +241,101 @@ User Intent
 - 接受狀態。
 - 可逆操作所需資料。
 
+### 9.5 Workspace Operation 與互動狀態
+
+建立、編輯、移動、調整尺寸、群組、鎖定、改變層級與 AI 接受結果，都必須轉換成可序列化的 `WorkspaceOperation`。多物件行為以 transaction 表示，作為 undo/redo、自動儲存、AI proposal 和未來多人同步的共同邊界。
+
+Canvas 輸入採明確互動狀態，不讓各元件各自解讀指標事件：
+
+- Select：單選、多選、框選與拖曳物件。
+- Pan：平移 viewport。
+- Create：建立指定內容型別。
+- Connect：建立或調整 relation。
+- Transform：縮放與旋轉選取物件。
+- Text edit：文字輸入，避免與 Canvas 快捷鍵衝突。
+
+自由移動是預設行為；網格顯示與吸附規則彼此獨立，可分別開關。吸附至少區分網格、物件邊緣與中心輔助線。
+
+### 9.6 素材與方案資料
+
+- Workspace 對圖片、GIF 和影片保存可攜的 asset reference，不把平台檔案控制項或暫存 URL 放入 domain。
+- 「物品庫」提供系統內建物件與素材入口；「快速方案簿」保存使用者建立的物件或群組模板。
+- 插入快速方案時預設建立具新 ID 的副本；模板本身具有 schema version，避免日後模型升級破壞既有方案。
+- 第一階段先支援本機圖片；GIF、影片播放與線上 GIF Browser 在資產保存及生命週期穩定後加入。
+
+### 9.7 後端與協作邊界
+
+Node.js 後端、正式儲存、多核心處理、WebSocket 協定與多人協作的詳細規劃見 `docs/BACKEND_ARCHITECTURE.md`。用戶端與伺服器共用版本化 `WorkspaceOperation` 語意；PostgreSQL 是正式內容與 operation log 的 source of truth，Redis 只承擔可重建的暫態協調與背景工作分發，媒體檔案保存於 object storage。
+
 ## 10. 里程碑
 
-### M0：Foundation Spike
+### M0：Foundation 與領域契約
 
+- 建立可重複的 JDK、Gradle 與各平台編譯基線。
 - 移除範例畫面對 Material 3 的依賴。
 - 建立 tokens、ShellTheme、ContentTheme。
-- 建立 GlassSurface 和 fallback renderer。
+- 建立最小 GlassSurface 和 fallback renderer。
+- 建立 Workspace、Canvas Object、Relation、Transform 與 Workspace Operation 契約。
+- 為 operation、transaction 與 undo/redo 建立 common test。
 - 驗證 Desktop、Android、iOS、Web 均能編譯。
 
-完成標準：同一個示範畫面能呈現 Canvas、原始內容節點和玻璃工具列，並可切換 Reduce Transparency。
+完成標準：同一個示範畫面能呈現 Canvas、原始內容節點和玻璃工具列；領域模型不依賴 Compose，基本 operation 可測試及反轉。
 
-### M1：Canvas Core
+### M1A：Canvas Navigation
 
 - Viewport transform。
-- 建立、選取、移動及編輯文字節點。
-- 多選、群組、連線。
+- 平移、游標焦點縮放與 Fit Content。
+- 世界座標和畫面座標互轉。
+- 基本 hit testing 與穩定重繪。
+
+完成標準：使用者能流暢瀏覽含多個測試物件的無邊際 Canvas，且縮放時焦點不明顯漂移。
+
+### M1B：Node Editing
+
+- 建立、選取、自由移動、編輯及刪除文字節點。
+- 框選、多選與鍵盤刪除。
 - Undo / redo。
 
-完成標準：使用者能在單一工作階段完成一張可編輯思想圖。
+完成標準：使用者能在單一工作階段建立和重新排列一組文字思想，且所有正式變更可撤銷與重做。
 
 ### M2：Persistence
 
-- Workspace schema。
+- Workspace 檔案 schema 與 migration version；領域 schema 已於 M0 建立。
 - 自動儲存、開啟與資料遷移基礎。
 - 異常關閉後復原。
 
 完成標準：重新啟動後能恢復內容及 viewport，且不遺失最後一次已確認操作。
 
-### M3：AI Cowork
+### M3：Structure 與 Control
+
+- 有方向、意圖與可選標籤的 relation。
+- 群組與解除群組。
+- 鎖定物件與基本 z-order/layer 操作。
+- 剪下、複製、貼上與 duplicate。
+- 多物件操作以單一 transaction 進入 history。
+
+完成標準：使用者能把自由節點整理成具有關係、群組與前後層級的思想圖，並安全撤銷整批操作。
+
+### M4：Customization 與進階互動
+
+- 網格顯示、網格吸附、物件對齊輔助線。
+- Canvas 背景與 Node 顏色自訂。
+- Inspector 與進階屬性。
+- Node 縮放、旋轉及 transform handles。
+- 操作回饋動畫與 Reduce Motion 降級。
+
+完成標準：使用者能在不犧牲自由移動的前提下精確排列並調整物件外觀。
+
+### M5：Library 與 Rich Media
+
+- 可拖曳的物品庫與內建元件。
+- 快速方案簿：保存、預覽與插入使用者方案。
+- 本機圖片匯入、縮圖、遺失資產處理。
+- GIF 與影片物件；資產生命週期穩定後再加入線上 GIF Browser。
+
+完成標準：使用者能重用自己設計的物件組合，並可靠地保存與重新開啟含圖片的 Workspace。
+
+### M6：AI Cowork
 
 - Provider abstraction。
 - 選取內容作為 context。
@@ -266,12 +344,21 @@ User Intent
 
 完成標準：AI 能對選取節點提出結構化修改，且未經接受不會變更正式內容。
 
-### M4：Product Validation
+### M7：Product Validation
 
 - Onboarding 和空狀態。
 - 搜尋與 Command Palette。
 - 效能、鍵盤及可及性整理。
 - 封閉測試與回饋收集。
+
+### M8：Realtime Collaboration（MVP 後）
+
+- 身分、Workspace 權限與分享流程。
+- Presence、游標和選取狀態。
+- Operation 同步、衝突合併、離線重連與資產同步。
+- 活動紀錄、版本回復與安全性檢查。
+
+完成標準：兩位以上使用者能在同一 Workspace 同時編輯，暫時離線後可安全合併且不遺失已確認內容。
 
 ## 11. 成功指標
 
@@ -302,4 +389,3 @@ MVP 不以註冊數為主要指標，而觀察核心價值是否成立：
 - 使用者內容的「原始樣式」是否允許自訂主題與嵌入 HTML/Markdown。
 - 第一版是否只支援自由節點，或同時提供文件視圖。
 - 行動版定位為完整編輯器或快速捕捉與檢視工具。
-

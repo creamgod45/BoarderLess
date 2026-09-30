@@ -1,6 +1,6 @@
 # BoarderLess User Story 與 Backlog 樣式
 
-版本：0.1  
+版本：0.2
 對應產品計畫：`docs/PRODUCT_PLAN.md`
 
 ## 1. Story 撰寫格式
@@ -15,7 +15,7 @@
 **以便** <使用者價值>
 
 優先級：Must / Should / Could  
-目標里程碑：M0 / M1 / M2 / M3 / M4
+目標里程碑：M0 / M1A / M1B / M2 / M3 / M4 / M5 / M6 / M7 / M8
 
 前置條件：
 - ...
@@ -68,6 +68,9 @@ Story 描述使用者成果，不指定類別名稱或實作方式；技術工�
 | AI | AI Cowork | 讓 AI 以 proposal 方式共同工作 |
 | FD | Find & Navigate | 快速找到內容與執行命令 |
 | AX | Accessibility | 確保不同能力與裝置環境可操作 |
+| LB | Library | 從物品庫建立內容並重用使用者方案 |
+| MD | Media | 在 Workspace 中可靠管理圖片、GIF 與影片 |
+| CL | Collaboration | 讓多人安全地共同編輯同一 Workspace |
 
 ## 5. MVP User Stories
 
@@ -140,7 +143,7 @@ UX 狀態：Light、Dark、Reduce Transparency。
 **以便** 同時掌握局部內容與整體結構
 
 優先級：Must  
-目標里程碑：M1
+目標里程碑：M1A
 
 驗收條件：
 
@@ -155,7 +158,7 @@ UX 狀態：Light、Dark、Reduce Transparency。
 **以便** 不讓操作打斷思考
 
 優先級：Must  
-目標里程碑：M1
+目標里程碑：M1B
 
 驗收條件：
 
@@ -170,7 +173,7 @@ UX 狀態：Light、Dark、Reduce Transparency。
 **以便** 依照逐漸形成的結構重新排列思想
 
 優先級：Must  
-目標里程碑：M1
+目標里程碑：M1B
 
 驗收條件：
 
@@ -185,7 +188,7 @@ UX 狀態：Light、Dark、Reduce Transparency。
 **以便** 表達因果、支持、衝突或一般關聯
 
 優先級：Must  
-目標里程碑：M1
+目標里程碑：M3
 
 驗收條件：
 
@@ -200,7 +203,7 @@ UX 狀態：Light、Dark、Reduce Transparency。
 **以便** 建立中階結構而不必轉成固定文件
 
 優先級：Must  
-目標里程碑：M1
+目標里程碑：M3
 
 驗收條件：
 
@@ -215,7 +218,7 @@ UX 狀態：Light、Dark、Reduce Transparency。
 **以便** 大膽嘗試而不怕破壞工作成果
 
 優先級：Must  
-目標里程碑：M1
+目標里程碑：M1B
 
 驗收條件：
 
@@ -245,7 +248,7 @@ UX 狀態：Light、Dark、Reduce Transparency。
 **以便** 得到與當前思考直接相關的協助
 
 優先級：Must  
-目標里程碑：M3
+目標里程碑：M6
 
 驗收條件：
 
@@ -260,7 +263,7 @@ UX 狀態：Light、Dark、Reduce Transparency。
 **以便** 判斷結果是否符合意圖
 
 優先級：Must  
-目標里程碑：M3
+目標里程碑：M6
 
 驗收條件：
 
@@ -275,7 +278,7 @@ UX 狀態：Light、Dark、Reduce Transparency。
 **以便** 最終內容仍由我決定
 
 優先級：Must  
-目標里程碑：M3
+目標里程碑：M6
 
 驗收條件：
 
@@ -290,7 +293,7 @@ UX 狀態：Light、Dark、Reduce Transparency。
 **以便** 網路或供應商問題不會破壞工作
 
 優先級：Must  
-目標里程碑：M3
+目標里程碑：M6
 
 驗收條件：
 
@@ -305,7 +308,7 @@ UX 狀態：Light、Dark、Reduce Transparency。
 **以便** 不需在多個面板間移動
 
 優先級：Should  
-目標里程碑：M4
+目標里程碑：M7
 
 驗收條件：
 
@@ -320,7 +323,7 @@ UX 狀態：Light、Dark、Reduce Transparency。
 **以便** 快速回到需要處理的思想
 
 優先級：Should  
-目標里程碑：M4
+目標里程碑：M7
 
 驗收條件：
 
@@ -334,7 +337,7 @@ UX 狀態：Light、Dark、Reduce Transparency。
 **以便** 高效率工作或在無法使用指標裝置時仍可操作
 
 優先級：Must  
-目標里程碑：M4
+目標里程碑：M7
 
 驗收條件：
 
@@ -342,30 +345,216 @@ UX 狀態：Light、Dark、Reduce Transparency。
 - Given 焦點位於任何 Shell 控制項，When 使用 Tab 或方向鍵，Then 焦點順序可預測且具有可見指示。
 - Given 使用螢幕閱讀器，When 聚焦節點或控制項，Then 能取得名稱、角色與主要狀態。
 
-## 6. 建議的第一個 Sprint
+## 6. 擴充 Backlog
 
-Sprint 目標：證明「玻璃工具層＋原始內容層」可以在 KMP 中形成穩定產品基礎。
+### US-CV-002：切換網格與吸附規則
+
+**身為** 同時需要自由探索與精確排列的使用者
+**我想要** 分別控制網格顯示與物件吸附
+**以便** 依工作階段選擇自由移動或整齊排列
+
+優先級：Should
+目標里程碑：M4
+
+驗收條件：
+
+- Given 網格隱藏，When 啟用網格吸附並移動物件，Then 物件仍依指定間距吸附。
+- Given 網格顯示，When 關閉所有吸附並移動物件，Then 物件保持自由座標。
+- Given 吸附生效，When 使用暫時略過快捷鍵，Then 本次拖曳不套用吸附。
+
+### US-CV-003：自訂 Canvas 背景
+
+**身為** 希望區分不同工作空間的使用者
+**我想要** 調整 Canvas 背景與網格樣式
+**以便** 建立適合內容與閱讀環境的視覺基底
+
+優先級：Could
+目標里程碑：M4
+
+驗收條件：
+
+- Given Workspace 已開啟，When 使用者選擇背景顏色或支援的網格樣式，Then Canvas 立即預覽並以可撤銷操作保存設定。
+- Given 背景可能降低內容對比，When 設定套用，Then selection、工具與主要文字仍維持可讀性。
+
+### US-CT-005：表達連接線的方向與意圖
+
+**身為** 正在形成觀點的使用者
+**我想要** 指定關係方向、意圖與標籤
+**以便** 區分因果、支持、衝突、延伸或一般關聯
+
+優先級：Must
+目標里程碑：M3
+
+驗收條件：
+
+- Given 兩個節點已連接，When 使用者設定方向和意圖，Then relation domain 同時保存來源、目標、意圖與可選標籤。
+- Given 任一節點移動或調整大小，When Canvas 重繪，Then connector 仍連接正確端點且箭頭方向不變。
+- Given relation 被複製、保存或撤銷，When 操作完成，Then 其語意資料不遺失。
+
+### US-CT-006：鎖定物件並調整層級
+
+**身為** 正在整理複雜 Canvas 的使用者
+**我想要** 鎖定背景物件並控制前後層級
+**以便** 編輯其他內容時不會誤移重要配置
+
+優先級：Should
+目標里程碑：M3
+
+驗收條件：
+
+- Given 物件已鎖定，When 一般選取或拖曳發生，Then 物件不被移動或調整大小。
+- Given 多個物件重疊，When 執行前移、後移、置頂或置底，Then hit testing 與顯示順序依新 z-order 更新。
+- Given 鎖定或層級改變已完成，When 使用 Undo，Then 恢復先前狀態。
+
+### US-CT-007：調整物件尺寸與旋轉
+
+**身為** 使用視覺方式整理內容的使用者
+**我想要** 透過控制點調整物件大小與角度
+**以便** 建立符合內容重點的版面
+
+優先級：Should
+目標里程碑：M4
+
+驗收條件：
+
+- Given 一個可變形物件已選取，When 拖曳縮放或旋轉控制點，Then 提供即時預覽並在提交後建立單一 history operation。
+- Given 多個物件已選取，When 執行共同 transform，Then 維持彼此相對位置並可一次撤銷。
+- Given 物件型別不支援某種 transform，When 使用者選取它，Then 不顯示無效控制點。
+
+### US-CT-008：使用 Inspector 編輯外觀與進階屬性
+
+**身為** 需要調整內容表達的使用者
+**我想要** 從 Inspector 修改 Node 顏色及型別相關屬性
+**以便** 不必離開 Canvas 就能強調與整理內容
+
+優先級：Should
+目標里程碑：M4
+
+驗收條件：
+
+- Given 一個或多個相容 Node 已選取，When 修改顏色或共同屬性，Then Canvas 即時預覽並以可撤銷 operation 提交。
+- Given 多選內容的屬性值不同，When Inspector 顯示，Then 使用 mixed state，不以任一物件值覆蓋其他物件。
+- Given 選取型別不支援某項屬性，When Inspector 顯示，Then 該控制項隱藏或明確 disabled。
+
+### US-HX-003：使用系統剪貼簿重用內容
+
+**身為** 正在快速排列思想的使用者
+**我想要** 剪下、複製、貼上與 duplicate 物件
+**以便** 快速重用既有結構
+
+優先級：Must
+目標里程碑：M3
+
+驗收條件：
+
+- Given 選取內容包含節點、群組或其內部關係，When 複製並貼上，Then 建立新 ID 且保留副本內部關係。
+- Given 貼上位置未指定，When 操作完成，Then 副本相對原內容偏移並被選取。
+- Given 貼上建立多個物件，When Undo，Then 整批副本以單一 transaction 移除。
+
+### US-LB-001：從物品庫拖曳建立內容
+
+**身為** 想快速開始編排的使用者
+**我想要** 從物品庫拖曳內建元件到 Canvas
+**以便** 不必逐一設定常用物件
+
+優先級：Should
+目標里程碑：M5
+
+驗收條件：
+
+- Given 物品庫已開啟，When 元件被拖到 Canvas，Then 在放置的世界座標建立正式物件並進入 selection。
+- Given 拖曳在 Canvas 外取消，When 指標放開，Then Workspace 不新增物件或 history entry。
+- Given 元件不適用目前平台，When 物品庫顯示，Then 它具有明確 disabled 狀態或不出現。
+
+### US-LB-002：保存與插入快速方案
+
+**身為** 經常重用自己配置的使用者
+**我想要** 把選取物件保存成快速方案
+**以便** 在目前或其他 Workspace 重建相同結構
+
+優先級：Should
+目標里程碑：M5
+
+驗收條件：
+
+- Given 一組物件已選取，When 保存為快速方案，Then 方案包含相對位置、支援樣式、內部關係、縮圖與 schema version。
+- Given 使用者插入方案，When 放置完成，Then 所有插入物件取得新 ID，且不與來源物件共享可變狀態。
+- Given 舊版方案可遷移，When 使用者插入它，Then 系統先完成 migration；無法遷移時不破壞原方案。
+
+### US-MD-001：加入並保存圖片
+
+**身為** 使用視覺材料思考的使用者
+**我想要** 將圖片放入 Canvas
+**以便** 把參考素材與文字想法放在同一空間
+
+優先級：Should
+目標里程碑：M5
+
+驗收條件：
+
+- Given 使用者選擇或拖入支援圖片，When 匯入成功，Then 建立可移動與調整大小的 Image node。
+- Given Workspace 重新開啟，When 原始匯入路徑不可用，Then 仍能從 Workspace asset storage 載入或顯示可恢復的遺失狀態。
+- Given 圖片解碼失敗，When 錯誤顯示，Then 其他正式內容不受影響。
+
+### US-MD-002：播放 GIF 與影片素材
+
+**身為** 收集動態素材的使用者
+**我想要** 在 Canvas 中加入 GIF 或影片
+**以便** 保留動態參考內容與上下文
+
+優先級：Could
+目標里程碑：M5
+
+驗收條件：
+
+- Given 動態素材進入可視範圍，When 使用者啟動播放，Then 播放控制不攔截必要的 Canvas 選取與移動操作。
+- Given 動態素材離開可視範圍或 Workspace 關閉，When 生命週期更新，Then 播放與解碼資源被暫停或釋放。
+- Given GIF Browser 無網路或供應商失敗，When 搜尋失敗，Then 本機 Canvas 編輯仍可正常使用。
+
+### US-CL-001：共同編輯 Workspace
+
+**身為** 受邀的協作者
+**我想要** 和其他人同時編輯同一 Workspace
+**以便** 共同整理想法且不覆蓋彼此的已確認內容
+
+優先級：Could
+目標里程碑：M8
+
+前置條件：本機 persistence、operation log、物件版本、權限與資產同步策略已穩定。
+
+驗收條件：
+
+- Given 兩位使用者同時在線，When 各自提交不衝突操作，Then 兩端最終得到一致 Workspace。
+- Given 同一物件發生並行修改，When 合併執行，Then 依明確規則解決或要求使用者處理，不靜默遺失內容。
+- Given 使用者暫時離線，When 重新連線，Then 本機已確認 operations 可安全同步並保留活動紀錄。
+
+## 7. 建議的第一個 Sprint
+
+Sprint 目標：建立可演進的 Workspace 操作基礎，並證明「玻璃工具層＋原始內容層」能在 Desktop Canvas 上形成最小垂直切片。
 
 納入：
 
 - US-DS-001 辨識工具與內容。
 - US-DS-002 模糊降級。
 - US-CV-001 的 viewport 技術 spike。
-- US-CT-001 的最小建立／編輯流程。
+- US-CT-001 的最小建立流程。
+- US-HX-001 的 operation 與反轉模型，不要求第一個 Sprint 完成所有 UI。
 
 技術 Tasks：
 
 - 移除 `App.kt` 對 Material 3 Theme、Button、Text 的使用。
-- 建立 Shell 與 Content tokens。
-- 建立 `GlassRenderer` contract、Skia/fallback implementation。
+- 建立最小 Shell 與 Content tokens，不先投入完整動畫與視覺打磨。
+- 建立 `GlassRenderer` contract 與可讀的 fallback implementation。
+- 建立不依賴 Compose 的 Workspace、TextNode、Transform、Viewport 與 WorkspaceOperation。
+- 建立 create、move、delete operation 及 transaction/undo common tests。
 - 建立示範 Workspace screen。
 - 加入 Light、Dark、Reduce Transparency previews。
-- 在 Desktop、Android、iOS、Web 執行編譯驗證。
+- 先確保 Desktop 行為可展示；Android、iOS、Web 維持編譯通過。
 
 Sprint Review 應展示：
 
-1. 使用者能在 Canvas 建立一個原始樣式文字節點。
+1. 使用者能平移、縮放 Canvas，並建立一個原始樣式文字節點。
 2. 使用者能透過浮動玻璃工具列觸發建立操作。
-3. 關閉透明效果後仍保有清楚層級。
-4. 相同產品語意可在各平台 renderer 下成立。
-
+3. Node 建立與移動透過統一 operation 執行，且 common test 能反轉操作。
+4. 關閉透明效果後仍保有清楚層級。
+5. 相同 domain 與產品語意可在各平台編譯，互動驗證以 Desktop 為主。
