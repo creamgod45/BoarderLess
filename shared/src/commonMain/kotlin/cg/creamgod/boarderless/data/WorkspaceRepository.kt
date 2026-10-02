@@ -3,6 +3,7 @@ package cg.creamgod.boarderless.data
 import cg.creamgod.boarderless.domain.history.WorkspaceOperation
 import cg.creamgod.boarderless.domain.model.Workspace
 import cg.creamgod.boarderless.domain.model.WorkspaceId
+import kotlinx.coroutines.flow.Flow
 
 data class WorkspaceSummary(
     val id: WorkspaceId,
@@ -62,7 +63,8 @@ sealed interface SubmitOutcome {
 }
 
 interface WorkspaceRepository {
-    suspend fun openOrCreateWorkspace(): WorkspaceSession
+    /** Opens [preferredWorkspaceId] when it can, otherwise the last opened or a new workspace. */
+    suspend fun openOrCreateWorkspace(preferredWorkspaceId: WorkspaceId? = null): WorkspaceSession
 
     suspend fun listWorkspaces(session: WorkspaceSession): List<WorkspaceSummary>
 
@@ -94,6 +96,9 @@ interface WorkspaceRepository {
     suspend fun removeWorkspaceMember(session: WorkspaceSession, userId: String)
 
     suspend fun refresh(session: WorkspaceSession): WorkspaceSession
+
+    /** Optional authenticated, session-scoped notification stream. Null keeps REST fallback. */
+    fun observeRemoteChanges(session: WorkspaceSession): Flow<WorkspaceRemoteNotification>? = null
 
     suspend fun submit(
         session: WorkspaceSession,

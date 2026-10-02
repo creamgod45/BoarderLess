@@ -12,7 +12,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.tooling.preview.Preview
 import cg.creamgod.boarderless.data.persistence.UiPreferences
+import cg.creamgod.boarderless.data.MediaImportRuntime
+import cg.creamgod.boarderless.data.RecentWorkspacesPublisher
 import cg.creamgod.boarderless.designsystem.BoarderLessTheme
+import cg.creamgod.boarderless.feature.canvas.WorkspaceMenuBridge
 import cg.creamgod.boarderless.feature.canvas.WorkspaceScreen
 import cg.creamgod.boarderless.feature.qa.QaRuntime
 import cg.creamgod.boarderless.feature.qa.QaWorkbenchHost
@@ -23,7 +26,12 @@ import cg.creamgod.boarderless.i18n.resolveLanguage
 
 @Composable
 @Preview
-fun App(qaRuntime: QaRuntime = QaRuntime.Disabled) {
+fun App(
+    qaRuntime: QaRuntime = QaRuntime.Disabled,
+    mediaImportRuntime: MediaImportRuntime = MediaImportRuntime.Unavailable,
+    menuBridge: WorkspaceMenuBridge? = null,
+    recentWorkspacesPublisher: RecentWorkspacesPublisher = RecentWorkspacesPublisher.None,
+) {
     val uiPreferences = remember { UiPreferences() }
     var reduceTransparency by remember { mutableStateOf(uiPreferences.reduceTransparency) }
     var reduceMotion by remember { mutableStateOf(uiPreferences.reduceMotion) }
@@ -40,6 +48,9 @@ fun App(qaRuntime: QaRuntime = QaRuntime.Disabled) {
     BoarderLessTheme(reduceTransparency = reduceTransparency) {
         Box(modifier = Modifier.fillMaxSize()) {
             WorkspaceScreen(
+                mediaImportRuntime = mediaImportRuntime,
+                menuBridge = menuBridge,
+                recentWorkspacesPublisher = recentWorkspacesPublisher,
                 reduceTransparency = reduceTransparency,
                 onReduceTransparencyChange = { enabled ->
                     reduceTransparency = enabled

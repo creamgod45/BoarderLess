@@ -71,8 +71,16 @@ class BackendWorkspaceRepository(
 ) : WorkspaceRepository, AssetRepository {
     private val apiBase = "${baseUrl.trimEnd('/')}/api/v1"
 
-    override suspend fun openOrCreateWorkspace(): WorkspaceSession {
+    override suspend fun openOrCreateWorkspace(preferredWorkspaceId: WorkspaceId?): WorkspaceSession {
         val savedUserId = preferences.userId
+        if (savedUserId != null && preferredWorkspaceId != null && preferredWorkspaceId.value != preferences.workspaceId) {
+            try {
+                return loadAndRemember(savedUserId, preferredWorkspaceId.value)
+            } catch (error: BackendHttpException) {
+                // Gone or no longer shared: fall back to the last opened workspace.
+                if (error.status != HttpStatusCode.NotFound && error.status != HttpStatusCode.Forbidden) throw error
+            }
+        }
         val savedWorkspaceId = preferences.workspaceId
         if (savedUserId != null && savedWorkspaceId != null) {
             try {
@@ -421,6 +429,7 @@ internal fun AssetDto.toDomain(): WorkspaceAsset {
             durationMs = durationMs,
             status = parsedStatus,
             createdAt = createdAt,
+            thumbnailAssetId = thumbnailAssetId,
         )
     } catch (error: IllegalArgumentException) {
         throw BackendContractException("Asset $id contains invalid metadata", error)

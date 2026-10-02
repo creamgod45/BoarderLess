@@ -24,8 +24,11 @@ class RelationRoutingTest {
 
         val route = orthogonalRelationRoute(source, sourceTransform, target, targetTransform)
 
-        assertEquals(Vec2(100f, 40f), route.first())
-        assertEquals(Vec2(300f, 250f), route.last())
+        // Kotlin/JS retains intermediate Number precision instead of rounding to Float32.
+        assertEquals(100f, route.first().x, 0.00001f)
+        assertEquals(40f, route.first().y, 0.00001f)
+        assertEquals(300f, route.last().x, 0.00001f)
+        assertEquals(250f, route.last().y, 0.00001f)
         assertTrue(route.zipWithNext().all { (start, end) -> start.x == end.x || start.y == end.y })
     }
 

@@ -102,13 +102,17 @@ kotlin {
     jvm()
     
     js {
-        browser()
+        browser {
+            testTask { useKarma { useChromeHeadless() } }
+        }
         binaries.executable()
     }
     
     @OptIn(ExperimentalWasmDsl::class)
     wasmJs {
-        browser()
+        browser {
+            testTask { useKarma { useChromeHeadless() } }
+        }
         binaries.executable()
     }
     
@@ -135,8 +139,12 @@ kotlin {
     
     sourceSets {
         androidMain.dependencies {
+            implementation(libs.glide.gifdecoder)
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.compose.uiTooling)
+        }
+        getByName("androidDeviceTest").dependencies {
+            implementation(libs.androidx.test.runner)
         }
         commonMain {
             kotlin.srcDir(generateI18nStrings)
@@ -157,13 +165,25 @@ kotlin {
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
+            implementation(libs.ktor.client.mock)
+            implementation(libs.kotlinx.coroutinesTest)
         }
         jsMain.dependencies {
             implementation(libs.wrappers.browser)
+        }
+        webMain.dependencies {
+            implementation(libs.kotlincrypto.sha2)
         }
     }
 }
 
 dependencies {
     androidRuntimeClasspath(libs.compose.uiTooling)
+}
+
+// Karma loads these scripts outside the compiled Kotlin test bundle.
+tasks.matching { it.name == "jsBrowserTest" || it.name == "wasmJsBrowserTest" }.configureEach {
+    inputs.file(rootProject.layout.projectDirectory.file("webApp/src/webMain/resources/media-import.js"))
+    inputs.file(rootProject.layout.projectDirectory.file("webApp/src/webMain/resources/video-playback.js"))
+    inputs.file(layout.projectDirectory.file("src/webTest/resources/media-import-fixture.js"))
 }

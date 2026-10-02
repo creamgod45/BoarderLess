@@ -226,7 +226,7 @@ class WorkspaceSubmissionCoordinatorTest {
         private val onSubmit: suspend (WorkspaceSession, WorkspaceOperation) -> SubmitOutcome,
         private val onRefresh: suspend (WorkspaceSession) -> WorkspaceSession = { it },
     ) : WorkspaceRepository {
-        override suspend fun openOrCreateWorkspace(): WorkspaceSession = error("Not used")
+        override suspend fun openOrCreateWorkspace(preferredWorkspaceId: WorkspaceId?): WorkspaceSession = error("Not used")
 
         override suspend fun listWorkspaces(session: WorkspaceSession): List<WorkspaceSummary> = error("Not used")
 

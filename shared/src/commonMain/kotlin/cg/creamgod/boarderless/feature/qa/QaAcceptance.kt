@@ -12,6 +12,8 @@ data class QaQuestion(
     val category: String,
     val prompt: String,
     val requiresProductSignoff: Boolean = false,
+    val sopSection: String = "",
+    val evidenceHint: String = "",
 )
 
 data class QaQuestionResult(
@@ -110,7 +112,10 @@ fun QaReportDraft.toQaHtml(sopReference: String): String {
         """
         <tr>
           <td>${result.question.category.escapeHtml()}</td>
-          <td>${result.question.prompt.escapeHtml()}${if (result.question.requiresProductSignoff) " <span class=\"owner\">Product sign-off</span>" else ""}</td>
+          <td>${result.question.prompt.escapeHtml()}${if (result.question.requiresProductSignoff) " <span class=\"owner\">Product sign-off</span>" else ""}
+            ${if (result.question.sopSection.isNotBlank()) "<div class=\"muted\">SOP §${result.question.sopSection.escapeHtml()}</div>" else ""}
+            ${if (result.question.evidenceHint.isNotBlank()) "<div class=\"muted\">${result.question.evidenceHint.escapeHtml()}</div>" else ""}
+          </td>
           <td><span class=\"status ${result.answer.token}\">${result.answer.token.replace('_', ' ').escapeHtml()}</span></td>
           <td>${result.note.escapeHtml().replace("\n", "<br>")}</td>
         </tr>
@@ -190,6 +195,8 @@ fun QaReportDraft.toPlainText(): String = buildString {
         append("[${result.answer.token}] ${result.question.category}: ${result.question.prompt}")
         if (result.question.requiresProductSignoff) append(" (Product sign-off)")
         appendLine()
+        if (result.question.sopSection.isNotBlank()) appendLine("  SOP §${result.question.sopSection}")
+        if (result.question.evidenceHint.isNotBlank()) appendLine("  Evidence: ${result.question.evidenceHint}")
         if (result.note.isNotBlank()) appendLine("  Note: ${result.note}")
     }
     appendLine()
@@ -213,4 +220,3 @@ internal fun String.escapeHtml(): String = buildString(length) {
         )
     }
 }
-

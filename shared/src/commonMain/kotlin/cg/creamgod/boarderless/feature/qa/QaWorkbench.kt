@@ -338,18 +338,7 @@ private fun QaWorkbench(runtime: QaRuntime, onClose: () -> Unit) {
 }
 
 @Composable
-private fun rememberQaQuestions(): List<QaQuestion> = listOf(
-    QaQuestion("functional", Strings.qa.categoryFunctional(), Strings.qa.questionFunctional()),
-    QaQuestion("persistence", Strings.qa.categoryFunctional(), Strings.qa.questionPersistence()),
-    QaQuestion("permissions", Strings.qa.categoryFunctional(), Strings.qa.questionPermissions()),
-    QaQuestion("mobile", Strings.qa.categoryMobile(), Strings.qa.questionMobileInteraction()),
-    QaQuestion("visual", Strings.qa.categoryProduct(), Strings.qa.questionVisual(), requiresProductSignoff = true),
-    QaQuestion("occlusion", Strings.qa.categoryProduct(), Strings.qa.questionOcclusion(), requiresProductSignoff = true),
-    QaQuestion("operation", Strings.qa.categoryProduct(), Strings.qa.questionOperationOwnership(), requiresProductSignoff = true),
-    QaQuestion("voiceover", Strings.qa.categoryAccessibility(), Strings.qa.questionVoiceOver()),
-    QaQuestion("regression", Strings.qa.categoryRegression(), Strings.qa.questionRegression()),
-    QaQuestion("performance", Strings.qa.categoryDeferred(), Strings.qa.questionPerformanceDeferred()),
-)
+private fun rememberQaQuestions(): List<QaQuestion> = qaQuestionCatalog()
 
 @Composable
 private fun QaSection(title: String, content: @Composable ColumnScope.() -> Unit) {
@@ -418,6 +407,8 @@ private fun QaQuestionEditor(
             style = TextStyle(colors.contentText, 12.sp, FontWeight.Medium),
         )
         if (question.requiresProductSignoff) QaHint(Strings.qa.productSignoffRequired())
+        if (question.sopSection.isNotBlank()) QaHint("SOP §${question.sopSection}")
+        if (question.evidenceHint.isNotBlank()) QaHint(question.evidenceHint)
         Row(
             modifier = Modifier.horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(5.dp),

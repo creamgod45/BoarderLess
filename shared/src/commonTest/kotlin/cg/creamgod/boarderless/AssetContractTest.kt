@@ -9,6 +9,15 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class AssetContractTest {
+    @Test fun derivativeReferenceSurvivesMetadataMappingWithoutStorageUrl() {
+        assertEquals("poster", dto(status = "ready").copy(thumbnailAssetId = "poster").toDomain().thumbnailAssetId)
+    }
+
+    @Test fun blankAndSelfReferencingThumbnailsFailClosed() {
+        assertFailsWith<BackendContractException> { dto(status = "ready").copy(thumbnailAssetId = " ").toDomain() }
+        assertFailsWith<BackendContractException> { dto(status = "ready").copy(thumbnailAssetId = "asset-1").toDomain() }
+    }
+
     @Test
     fun backendMetadataMapsToValidatedDomainAsset() {
         val asset = dto(status = "ready").toDomain()

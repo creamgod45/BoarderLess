@@ -23,6 +23,7 @@ class WorkspaceChangePolicyTest {
 
     @Test
     fun pendingOrActiveSaveCannotBeInterrupted() {
+        assertFalse(ready.copy(mediaImportActive = true).allowed)
         assertFalse(ready.copy(syncInProgress = true).allowed)
         assertFalse(ready.copy(pendingSaveCount = 1).allowed)
         assertFailsWith<IllegalArgumentException> {

@@ -1,2 +1,5 @@
+/* Home screen name. */
+"CFBundleDisplayName" = "BoarderLess";
+
 /* Shown by iOS when BoarderLess first reaches the development server on the local network. */
 "NSLocalNetworkUsageDescription" = "BoarderLess connects to your development server on the local network to save and synchronize workspaces.";

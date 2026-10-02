@@ -60,6 +60,8 @@ internal data class AssetDto(
     val durationMs: Long? = null,
     val status: String,
     val createdAt: String,
+    val thumbnailAssetId: String? = null,
+    val rejectionReason: String? = null,
 )
 
 @Serializable

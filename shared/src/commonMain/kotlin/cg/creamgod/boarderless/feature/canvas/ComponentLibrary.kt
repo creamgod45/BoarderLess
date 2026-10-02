@@ -70,9 +70,11 @@ internal fun ComponentLibrary(
     onDragEnd: (ComponentLibraryEntry, Vec2) -> Unit,
     onDragCancel: () -> Unit,
     onDismiss: (() -> Unit)? = null,
+    workspaceMediaContent: (@Composable () -> Unit)? = null,
 ) {
     val colors = BoarderLessTheme.colors
     var query by remember { mutableStateOf("") }
+    var showMedia by remember { mutableStateOf(false) }
     val visibleEntries = filterComponentLibraryEntries(entries, query)
     GlassSurface(modifier = modifier) {
         Column(
@@ -92,6 +94,15 @@ internal fun ComponentLibrary(
                     fontWeight = FontWeight.SemiBold,
                 ),
             )
+            if (workspaceMediaContent != null) {
+                ShellButton(label = Strings.media.builtInLibrary(), icon = ShellIcon.Library, accent = !showMedia,
+                    onClick = { showMedia = false })
+                ShellButton(label = Strings.media.workspaceLibrary(), icon = ShellIcon.Library, accent = showMedia,
+                    onClick = { showMedia = true })
+            }
+            if (showMedia && workspaceMediaContent != null) {
+                workspaceMediaContent()
+            } else {
             BasicText(
                 text = Strings.library.dragComponentOntoCanvasOr(),
                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp),
@@ -206,6 +217,7 @@ internal fun ComponentLibrary(
                         onClick = { onInsert(entry) },
                     )
                 }
+            }
             }
             onDismiss?.let { dismiss ->
                 ShellButton(

@@ -26,6 +26,7 @@ data class WorkspaceAsset(
     val durationMs: Long?,
     val status: AssetStatus,
     val createdAt: String,
+    val thumbnailAssetId: String? = null,
 ) {
     init {
         require(id.isNotBlank()) { "asset id must not be blank" }
@@ -37,6 +38,9 @@ data class WorkspaceAsset(
         require(height == null || height > 0) { "asset height must be positive" }
         require(durationMs == null || durationMs >= 0) { "asset duration must not be negative" }
         require(createdAt.isNotBlank()) { "asset creation time must not be blank" }
+        require(thumbnailAssetId == null || (thumbnailAssetId.isNotBlank() && thumbnailAssetId != id)) {
+            "asset thumbnail must reference a distinct nonblank asset"
+        }
     }
 }
 

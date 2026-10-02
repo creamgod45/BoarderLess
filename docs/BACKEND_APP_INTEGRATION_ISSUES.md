@@ -58,9 +58,37 @@ JS / Wasm client 目前以 `http://localhost:3000` 呼叫 REST API。後端未�
 - 可授權的原檔／縮圖下載 URL。
 - 內容雜湊、media type、大小及圖片尺寸的伺服器端驗證。
 
+建議後端交付的最小 v1 合約（命名可調整，但語意不可缺）：
+
+```text
+POST /workspaces/:workspaceId/assets
+  request:  { mediaType, byteSize, checksum, width?, height?, durationMs? }
+  response: { asset, upload: { method, url, headers, expiresAt } }
+
+POST /workspaces/:workspaceId/assets/:assetId/complete
+  request:  { byteSize, checksum }
+  response: 202 { asset }          # pending/processing；worker 驗證後才 ready
+
+GET /workspaces/:workspaceId/assets/:assetId
+  response: { ...asset, thumbnailAssetId?, rejectionReason? }
+
+GET /workspaces/:workspaceId/assets/:assetId/content
+  response: { download: { method: "GET", url, headers, expiresAt } }
+
+GET /workspaces/:workspaceId/assets/:assetId/thumbnail/content
+  response: { thumbnailAssetId, download: { method: "GET", url, headers, expiresAt } }
+```
+
+- Upload／download URL 必須短效且 Workspace ACL 生效；App 不會保存 URL。
+- `complete` 必須冪等；同一 asset 重送相同 checksum／size 回相同結果，不得重複建立衍生檔。
+- `ready` 只能在 object 存在、server-side MIME／size／checksum 驗證完成後出現。
+- GIF 保留動畫原檔並產生靜態 thumbnail；影片至少產生 poster thumbnail，轉碼可延後但狀態需可觀察。
+- `rejected`／`missing` 必須是終態並提供機器可讀原因；pending upload 應有過期清理政策。
+- Signed request 若需要特定 `Content-Type`、checksum 或 provider headers，必須完整回傳在 `headers`，不得要求 App 推測。
+
 在這個合約完成前，App 不會建立看似成功但實際無內容的 Image Node。
 
-App 端已先完成可安全推進的部分：`MediaNode` projection／operation mapping、asset metadata 唯讀 client、狀態 placeholder、transform／lock／layer／history，以及 clipboard v4／Quick Scheme 可攜格式。`ready` 資產在沒有授權 download URL 時仍會明確顯示「等待下載端點」，不會嘗試由 `storageKey` 猜測或直接存取 object storage。
+App 端已先完成可安全推進的部分：`MediaNode` projection／operation mapping、asset metadata 唯讀 client、狀態 placeholder、transform／lock／layer／history、clipboard v4／Quick Scheme 可攜格式，以及不依賴 storage provider 的 `prepare → chunk upload → confirm → processing → ready` 協調器。Desktop/JVM 檔案來源採 bounded chunk 與 SHA-256，避免把 200 MB 影片一次讀入記憶體。協調器會驗證 server 回傳 metadata 與來源一致，截斷或失敗時清理 pending row，且只在 `ready` 後交付可建立 Node 的結果。下載端亦已具授權 ticket、bounded chunk sink、byte count／checksum 驗證、暫存檔清理與 atomic cache publish；signed URL 只存在 transfer ticket，不進 Workspace。Ktor gateway 已實作上列 signed PUT／GET、完成確認、polling、縮圖引用及 provider header 轉送，並有不依賴真實後端的契約測試。現有後端若回傳 `uploadUrl: null`，gateway 會先刪除剛建立的 pending metadata，再回報明確的 transfer unavailable 錯誤。`ready` 資產在沒有授權 download URL 時仍會明確顯示「等待下載端點」，不會嘗試由 `storageKey` 猜測或直接存取 object storage。
 
 ## BAI-004：AI Cowork provider adapters 與串流合約尚未交付
 
@@ -88,6 +116,10 @@ App 至少需要：
 狀態：Priority 2 / Blocking（Realtime Collaboration）
 
 App 目前以 REST operation log 每 3 秒 catch up，可安全取得遠端正式狀態，但沒有 WebSocket join、即時 operation fan-out、presence、cursor 或 selection 訊息。
+
+APP 準備進度（2026-10-02）：Repository 已增加 nullable、authenticated/session-scoped 的 `observeRemoteChanges` 通知入口，WorkspaceScreen 接上 join／commit／metadata 訊號觸發的權威 refresh；未提供 stream、stream 結束或失敗仍保留 3 秒 REST polling。通知只作 wakeup，不套用 operation、不前移 durable checkpoint、不認領 pending ack；離開 user／client／workspace 時取消 observer。BackendWorkspaceRepository 目前仍回傳預設 null，沒有自行猜測 WebSocket URL 或把 `x-user-id` 當成正式 socket auth，因此此狀態仍是 Blocking，不是已完成即時協作。
+
+後端交付時需另提供確切 WebSocket URL、短效 token／ticket 取得方式（含 Browser 限制）、join／catch-up／snapshot／live／ack／error／revocation message fixtures、sequence transaction 邊界與 protocol version。APP notification adapter 與真正 operation apply、Presence／Cursor／Selection、重連 backoff 尚待這些合約；UI 不會把通知即時 refresh 的準備入口宣稱為 operation fan-out。
 
 最低合約需求：
 

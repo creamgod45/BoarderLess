@@ -1,8 +1,12 @@
 package cg.creamgod.boarderless.feature.canvas
 
 import cg.creamgod.boarderless.i18n.Strings
+import cg.creamgod.boarderless.data.RecentWorkspaceStore
+import cg.creamgod.boarderless.data.RecentWorkspacesPublisher
+import cg.creamgod.boarderless.data.WorkspaceLaunchRequests
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -37,8 +41,13 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,6 +66,8 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -119,6 +130,18 @@ import cg.creamgod.boarderless.data.WorkspaceMember
 import cg.creamgod.boarderless.data.WorkspaceMemberRole
 import cg.creamgod.boarderless.data.AssetStatus
 import cg.creamgod.boarderless.data.WorkspaceAsset
+import cg.creamgod.boarderless.data.MediaImportRuntime
+import cg.creamgod.boarderless.data.MediaPlaybackActivity
+import cg.creamgod.boarderless.data.VideoPlayback
+import cg.creamgod.boarderless.data.VideoPlaybackLease
+import cg.creamgod.boarderless.data.workspaceCatchUpRequests
+import cg.creamgod.boarderless.data.VideoPlaybackState
+import kotlinx.coroutines.flow.MutableStateFlow
+import cg.creamgod.boarderless.data.AssetImportCoordinator
+import cg.creamgod.boarderless.data.AssetImportStage
+import cg.creamgod.boarderless.data.AssetTransferSource
+import cg.creamgod.boarderless.data.remote.BackendAssetTransferGateway
+import cg.creamgod.boarderless.data.remote.AssetTransferUnavailableException
 import cg.creamgod.boarderless.data.WorkspaceSubmissionQueue
 import cg.creamgod.boarderless.data.WorkspaceSubmissionStep
 import cg.creamgod.boarderless.data.canEditContent
@@ -185,9 +208,17 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.PI
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.ensureActive
+import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
+import cg.creamgod.boarderless.data.GifAnimation
+import cg.creamgod.boarderless.data.playGifFrames
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
@@ -327,6 +358,7 @@ internal data class WorkspaceChangePolicy(
     val connectionDragActive: Boolean = false,
     val marqueeActive: Boolean = false,
     val libraryDragActive: Boolean = false,
+    val mediaImportActive: Boolean = false,
 ) {
     init {
         require(pendingSaveCount >= 0) { "Pending save count cannot be negative" }
@@ -345,7 +377,8 @@ internal data class WorkspaceChangePolicy(
             !transformActive &&
             !connectionDragActive &&
             !marqueeActive &&
-            !libraryDragActive
+            !libraryDragActive &&
+            !mediaImportActive
 }
 
 @Serializable
@@ -1063,12 +1096,15 @@ private fun QuickSchemePreview(
 
 @Composable
 fun WorkspaceScreen(
+    mediaImportRuntime: MediaImportRuntime = MediaImportRuntime.Unavailable,
     reduceTransparency: Boolean = false,
     onReduceTransparencyChange: (Boolean) -> Unit = {},
     reduceMotion: Boolean = false,
     onReduceMotionChange: (Boolean) -> Unit = {},
     languagePreference: LanguagePreference = LanguagePreference.System,
     onLanguagePreferenceChange: (LanguagePreference) -> Unit = {},
+    menuBridge: WorkspaceMenuBridge? = null,
+    recentWorkspacesPublisher: RecentWorkspacesPublisher = RecentWorkspacesPublisher.None,
 ) {
     val colors = BoarderLessTheme.colors
     val density = LocalDensity.current.density
@@ -1078,6 +1114,18 @@ fun WorkspaceScreen(
     val uiScope = rememberCoroutineScope()
     val canvasFocusRequester = remember { FocusRequester() }
     val repository = remember { BackendWorkspaceRepository() }
+    val recentWorkspaces = remember { RecentWorkspaceStore() }
+    fun publishRecentWorkspaces() = recentWorkspacesPublisher.publish(recentWorkspaces.items)
+    LaunchedEffect(recentWorkspacesPublisher) { publishRecentWorkspaces() }
+    val assetGateway = remember(mediaImportRuntime) {
+        if (mediaImportRuntime.selectSource != null) BackendAssetTransferGateway() else null
+    }
+    DisposableEffect(assetGateway) {
+        onDispose { assetGateway?.close() }
+    }
+    var mediaImportBusy by remember { mutableStateOf(false) }
+    var mediaImportJob by remember { mutableStateOf<Job?>(null) }
+    var mediaImportLabel by remember { mutableStateOf("") }
     val canvasPreferences = remember { CanvasPreferences() }
     val quickSchemeStore = remember { QuickSchemeStore() }
     DisposableEffect(repository) {
@@ -1133,6 +1181,9 @@ fun WorkspaceScreen(
     var alignmentGuides by remember { mutableStateOf(AlignmentGuides()) }
     var nextNodeNumber by remember { mutableStateOf(1) }
     var session by remember { mutableStateOf<WorkspaceSession?>(null) }
+    LaunchedEffect(mediaImportRuntime, session?.userId, session?.workspace?.id) {
+        mediaImportRuntime.clearPreviewCache?.invoke()
+    }
     var submissionQueue by remember { mutableStateOf(WorkspaceSubmissionQueue()) }
     var syncInProgress by remember { mutableStateOf(false) }
     var connectionFailed by remember { mutableStateOf(false) }
@@ -1146,6 +1197,10 @@ fun WorkspaceScreen(
     var showMembersPanel by remember { mutableStateOf(false) }
     var workspaceMembers by remember { mutableStateOf<List<WorkspaceMember>>(emptyList()) }
     var workspaceAssets by remember { mutableStateOf<Map<String, WorkspaceAsset>>(emptyMap()) }
+    var workspaceAssetsLoading by remember { mutableStateOf(false) }
+    var workspaceAssetsUnavailable by remember { mutableStateOf(false) }
+    var workspaceAssetsRefreshAttempt by remember { mutableStateOf(0) }
+    var workspaceAssetsLoadEpoch by remember { mutableStateOf(0L) }
     var membersLoading by remember { mutableStateOf(false) }
     var membersError by remember { mutableStateOf<String?>(null) }
     var membersRefreshAttempt by remember { mutableStateOf(0) }
@@ -1165,7 +1220,7 @@ fun WorkspaceScreen(
     var selectedSchemeId by remember { mutableStateOf<Int?>(schemes.lastOrNull()?.id) }
     var schemeNameDraft by remember { mutableStateOf(schemes.lastOrNull()?.name.orEmpty()) }
     val canvasInteractionBlocked = session == null || connectionFailed || workspaceSwitchInProgress
-    val inputBlocked = canvasInteractionBlocked || session?.canEditContent != true
+    val inputBlocked = canvasInteractionBlocked || session?.canEditContent != true || mediaImportBusy
     val libraryComponents = remember(density, Localization.language) { builtInComponents(density) }
     val compactLayout = usesCompactCanvasLayout(canvasSize.width, canvasSize.height, density)
     val inspectorWidth = if (compactLayout && canvasSize.width > 0) {
@@ -1202,6 +1257,7 @@ fun WorkspaceScreen(
         session != null &&
             !connectionFailed &&
             !workspaceSwitchInProgress &&
+            !mediaImportBusy &&
             !syncInProgress &&
             submissionQueue.isEmpty &&
             editingId == null &&
@@ -1228,6 +1284,7 @@ fun WorkspaceScreen(
         connectionDragActive = connectionDragPreview != null,
         marqueeActive = marquee != null,
         libraryDragActive = libraryDragPreview != null,
+        mediaImportActive = mediaImportBusy,
     ).allowed
     val currentWorkspaceCanRename = session?.canEditContent == true
     val currentWorkspaceCanDelete = session?.role == WorkspaceMemberRole.Owner
@@ -1268,11 +1325,16 @@ fun WorkspaceScreen(
         compactInspectorExpanded = false
         connectionFailed = false
         statusMessage = message
+        recentWorkspaces.recordOpened(opened.workspace.id, opened.workspace.title)
+        publishRecentWorkspaces()
     }
 
     suspend fun refreshWorkspaceSummaries(activeSession: WorkspaceSession) {
         workspaceSummaries = try {
-            repository.listWorkspaces(activeSession)
+            repository.listWorkspaces(activeSession).also { available ->
+                recentWorkspaces.reconcile(available)
+                publishRecentWorkspaces()
+            }
         } catch (error: CancellationException) {
             throw error
         } catch (_: Throwable) {
@@ -1374,6 +1436,8 @@ fun WorkspaceScreen(
                 }
                 workspaceRenameDraft = renamed.title
                 workspaceDeleteArmed = false
+                recentWorkspaces.rename(renamed.id, renamed.title)
+                publishRecentWorkspaces()
                 statusMessage = Strings.status.renamedAllChangesSaved(renamed.title)
             } catch (error: CancellationException) {
                 throw error
@@ -1410,6 +1474,8 @@ fun WorkspaceScreen(
             try {
                 repository.deleteWorkspace(activeSession, activeSession.workspace.id)
                 deletionAccepted = true
+                recentWorkspaces.remove(activeSession.workspace.id)
+                publishRecentWorkspaces()
                 val remaining = repository.listWorkspaces(activeSession)
                 val opened = remaining.firstOrNull()?.let { repository.openWorkspace(activeSession, it.id) }
                     ?: repository.createWorkspace(activeSession, Strings.content.myThinkingSpace())
@@ -1498,7 +1564,7 @@ fun WorkspaceScreen(
         connectionFailed = false
         statusMessage = Strings.status.connectingToWorkspace()
         try {
-            val opened = repository.openOrCreateWorkspace()
+            val opened = repository.openOrCreateWorkspace(WorkspaceLaunchRequests.pending.value)
             adoptWorkspace(opened, Strings.status.connectedLiveCatchUpAll(opened.workspace.title))
             refreshWorkspaceSummaries(opened)
         } catch (error: CancellationException) {
@@ -1507,6 +1573,20 @@ fun WorkspaceScreen(
             connectionFailed = true
             statusMessage = Strings.status.couldNotConnect(error.message ?: Strings.common.unknownError())
         }
+    }
+
+    // Opens workspaces requested from outside the app (Dock menu, jump list, launcher shortcut).
+    val launchRequest by WorkspaceLaunchRequests.pending.collectAsState()
+    LaunchedEffect(launchRequest, session?.workspace?.id, workspaceSwitchInProgress) {
+        val requested = launchRequest ?: return@LaunchedEffect
+        val activeSession = session ?: return@LaunchedEffect
+        if (workspaceSwitchInProgress) return@LaunchedEffect
+        WorkspaceLaunchRequests.consume(requested)
+        if (requested == activeSession.workspace.id) return@LaunchedEffect
+        val title = workspaceSummaries.firstOrNull { it.id == requested }?.title
+            ?: recentWorkspaces.items.firstOrNull { it.id == requested.value }?.title
+            ?: requested.value
+        switchWorkspace(WorkspaceSummary(requested, title, role = "", workspaceVersion = 0, lastServerSeq = 0))
     }
 
     LaunchedEffect(session?.workspace?.id) {
@@ -1526,16 +1606,24 @@ fun WorkspaceScreen(
         }
     }
 
-    LaunchedEffect(session?.workspace?.id, session?.lastServerSeq) {
+    LaunchedEffect(session?.userId, session?.clientId, session?.workspace?.id, session?.lastServerSeq, workspaceAssetsRefreshAttempt) {
         val activeSession = session ?: return@LaunchedEffect
+        val loadEpoch = ++workspaceAssetsLoadEpoch
+        workspaceAssetsLoading = true
+        workspaceAssetsUnavailable = false
         workspaceAssets = try {
-            repository.listAssets(activeSession).associateBy(WorkspaceAsset::id)
+            val listed = repository.listAssets(activeSession)
+            coroutineContext.ensureActive()
+            listed.associateBy(WorkspaceAsset::id)
         } catch (error: CancellationException) {
             throw error
         } catch (_: Throwable) {
             // Editing remains available when metadata is temporarily unreachable. Media cards
             // show an explicit unavailable state instead of pretending that a preview loaded.
+            workspaceAssetsUnavailable = true
             emptyMap()
+        } finally {
+            if (loadEpoch == workspaceAssetsLoadEpoch) workspaceAssetsLoading = false
         }
     }
 
@@ -1580,13 +1668,12 @@ fun WorkspaceScreen(
         }
     }
 
-    LaunchedEffect(repository, session?.workspace?.id, connectionAttempt) {
-        if (session == null) return@LaunchedEffect
+    LaunchedEffect(repository, session?.userId, session?.clientId, session?.workspace?.id, connectionAttempt) {
+        val observedSession = session ?: return@LaunchedEffect
         var consecutiveFailures = 0
-        while (true) {
-            delay(3_000)
-            if (!remoteCatchUpAllowed) continue
-            val requestedFrom = latestSession ?: continue
+        workspaceCatchUpRequests(observedSession, repository.observeRemoteChanges(observedSession)).collect {
+            if (!remoteCatchUpAllowed) return@collect
+            val requestedFrom = latestSession ?: return@collect
             try {
                 val refreshed = repository.refresh(requestedFrom)
                 val current = latestSession
@@ -1774,6 +1861,104 @@ fun WorkspaceScreen(
             ),
             shape = shape,
         )
+    }
+
+    fun insertStoredMedia(entry: MediaAssetLibraryEntry) {
+        val openedSession = session ?: return
+        if (inputBlocked || !workspaceChangeAllowed || connectionFailed || !entry.insertable) return
+        mediaImportBusy = true
+        mediaImportLabel = Strings.media.checkingAsset()
+        mediaImportJob = uiScope.launch {
+            try {
+                val asset = repository.getAsset(openedSession, entry.asset.id)
+                coroutineContext.ensureActive()
+                val current = latestSession
+                if (!canInsertMediaInSession(openedSession, current, connectionFailed)) return@launch
+                checkNotNull(current)
+                require(asset.id == entry.asset.id && asset.workspaceId == current.workspace.id)
+                workspaceAssets = workspaceAssets + (asset.id to asset)
+                val node = mediaNodeFromReadyAsset(asset, current.workspace.id, CanvasObjectId(randomUuid()),
+                    viewport.screenToWorld(Vec2(canvasSize.width / 2f, canvasSize.height / 2f)), density,
+                    (history.workspace.objects.values.maxOfOrNull { it.zIndex } ?: 0L) + 1, entry.title, requestedAssetId = entry.asset.id)
+                if (execute(CreateObjectsOperation("reuse-media-${node.id.value}", listOf(node)))) {
+                    selectedIds = setOf(node.id)
+                    selectedRelationId = null
+                    multiSelectionMode = false
+                } else statusMessage = Strings.media.assetInsertFailed()
+            } catch (error: CancellationException) { throw error }
+            catch (_: Exception) { statusMessage = Strings.media.assetInsertFailed() }
+            finally {
+                mediaImportBusy = false
+                mediaImportJob = null
+                mediaImportLabel = ""
+            }
+        }
+    }
+
+    fun startMediaImport() {
+        val picker = mediaImportRuntime.selectSource ?: return
+        val gateway = assetGateway ?: return
+        val importSession = session ?: return
+        if (inputBlocked || !workspaceChangeAllowed) return
+        workspaceDeleteArmed = false
+        mediaImportBusy = true
+        mediaImportLabel = Strings.media.selecting()
+        mediaImportJob = uiScope.launch {
+            var selectedSource: AssetTransferSource? = null
+            try {
+                val source = picker()
+                selectedSource = source
+                if (source == null) {
+                    statusMessage = Strings.media.importCancelled()
+                    return@launch
+                }
+                val imported = AssetImportCoordinator(gateway).import(importSession, source) { stage ->
+                    mediaImportLabel = when (stage) {
+                        AssetImportStage.Validating, AssetImportStage.Preparing -> Strings.media.preparing()
+                        is AssetImportStage.Uploading -> Strings.media.uploading(
+                            (stage.uploadedBytes * 100 / stage.totalBytes).toString(),
+                        )
+                        AssetImportStage.Confirming -> Strings.media.confirming()
+                        is AssetImportStage.Processing -> Strings.media.processing()
+                        is AssetImportStage.Ready -> Strings.media.confirming()
+                    }
+                }
+                coroutineContext.ensureActive()
+                val current = latestSession
+                if (!canInsertMediaInSession(importSession, current, connectionFailed)) {
+                    statusMessage = Strings.media.importNotInserted()
+                    return@launch
+                }
+                checkNotNull(current)
+                val asset = imported.asset
+                val center = viewport.screenToWorld(Vec2(canvasSize.width / 2f, canvasSize.height / 2f))
+                val node = mediaNodeFromReadyAsset(asset, current.workspace.id, CanvasObjectId(randomUuid()), center, density,
+                    (history.workspace.objects.values.maxOfOrNull { it.zIndex } ?: 0L) + 1, source.displayName,
+                    imported.thumbnailAssetId ?: asset.thumbnailAssetId)
+                workspaceAssets = workspaceAssets + (asset.id to asset)
+                if (execute(CreateObjectsOperation("import-${node.id.value}", listOf(node)))) {
+                    selectedIds = setOf(node.id)
+                    selectedRelationId = null
+                    multiSelectionMode = false
+                } else {
+                    statusMessage = Strings.media.importNotInserted()
+                }
+            } catch (error: CancellationException) {
+                statusMessage = Strings.media.importCancelled()
+                throw error
+            } catch (_: AssetTransferUnavailableException) {
+                statusMessage = Strings.media.transferUnavailable()
+            } catch (_: Exception) {
+                statusMessage = Strings.media.importFailed()
+            } finally {
+                withContext(NonCancellable) {
+                    runCatching { selectedSource?.release() }
+                }
+                mediaImportBusy = false
+                mediaImportJob = null
+                mediaImportLabel = ""
+            }
+        }
     }
 
     fun startEditingSelectedNode(): Boolean {
@@ -2601,6 +2786,18 @@ fun WorkspaceScreen(
     }
 
     val commandPaletteEntries = buildList {
+        if (mediaImportRuntime.selectSource != null) {
+            add(
+                PaletteEntry(
+                    id = if (mediaImportBusy) "cancel-media-import" else "import-media",
+                    title = if (mediaImportBusy) Strings.media.cancelImport() else Strings.media.importMedia(),
+                    subtitle = if (mediaImportBusy) mediaImportLabel else Strings.media.selecting(),
+                    keywords = "image gif video upload import media 圖片 影片 素材 匯入 取消",
+                    enabled = mediaImportBusy || (!inputBlocked && workspaceChangeAllowed),
+                    disabledReason = Strings.palette.waitForWorkspaceToFinish(),
+                ),
+            )
+        }
         add(
             PaletteEntry(
                 id = "new-thought",
@@ -3004,6 +3201,8 @@ fun WorkspaceScreen(
         commandPaletteQuery = ""
         when (entry.id) {
             "new-thought" -> addTextNodeAtCenter()
+            "import-media" -> startMediaImport()
+            "cancel-media-import" -> mediaImportJob?.cancel()
 
             "fit-content" -> fitContent()
             "zoom-in" -> zoomCanvas(1.2f)
@@ -3202,6 +3401,60 @@ fun WorkspaceScreen(
         }
     }
 
+    fun toggleCommandPalette() {
+        showCommandPalette = !showCommandPalette
+        commandPaletteQuery = ""
+        if (showCommandPalette) {
+            showSchemeLibrary = false
+            showComponentLibrary = false
+            showWorkspaceSwitcher = false
+            showMembersPanel = false
+            showLayersPanel = false
+            showHistoryPanel = false
+            showCompactMenu = false
+        }
+    }
+
+    fun selectAllObjects() {
+        selectedIds = topLevelSelectionIds(history.workspace.objects.values)
+        selectedRelationId = null
+    }
+
+    if (menuBridge != null) {
+        val textEditing = editingId != null || inspectorTextEditing || workspaceFormEditing
+        val hasSelection = selectedIds.isNotEmpty()
+        val paletteById = commandPaletteEntries.associateBy(PaletteEntry::id)
+        val menuCommands = buildMap {
+            commandPaletteEntries.forEach { put(it.id, it.enabled && !textEditing) }
+            put(WorkspaceMenuCommands.CommandPalette, true)
+            put(WorkspaceMenuCommands.Cut, hasSelection && !inputBlocked && !textEditing)
+            put(WorkspaceMenuCommands.Copy, hasSelection && !textEditing)
+            put(WorkspaceMenuCommands.Paste, !inputBlocked && !textEditing)
+            put(WorkspaceMenuCommands.Duplicate, hasSelection && !inputBlocked && !textEditing)
+            put(WorkspaceMenuCommands.SelectAll, !textEditing)
+        }
+        SideEffect {
+            menuBridge.commands = menuCommands
+            menuBridge.handler = { id ->
+                when (id) {
+                    WorkspaceMenuCommands.CommandPalette -> toggleCommandPalette()
+                    WorkspaceMenuCommands.Cut -> cutSelection()
+                    WorkspaceMenuCommands.Copy -> copySelection()
+                    WorkspaceMenuCommands.Paste -> pasteFromClipboard()
+                    WorkspaceMenuCommands.Duplicate -> duplicateSelection()
+                    WorkspaceMenuCommands.SelectAll -> selectAllObjects()
+                    else -> paletteById[id]?.let(::invokePaletteEntry)
+                }
+            }
+        }
+        DisposableEffect(menuBridge) {
+            onDispose {
+                menuBridge.commands = emptyMap()
+                menuBridge.handler = null
+            }
+        }
+    }
+
     LaunchedEffect(Unit) {
         canvasFocusRequester.requestFocus()
     }
@@ -3214,17 +3467,7 @@ fun WorkspaceScreen(
             .onPreviewKeyEvent { event ->
                 val command = event.isMetaPressed || event.isCtrlPressed
                 if (event.type == KeyEventType.KeyDown && command && event.key == Key.K) {
-                    showCommandPalette = !showCommandPalette
-                    commandPaletteQuery = ""
-                    if (showCommandPalette) {
-                        showSchemeLibrary = false
-                        showComponentLibrary = false
-                        showWorkspaceSwitcher = false
-                        showMembersPanel = false
-                        showLayersPanel = false
-                        showHistoryPanel = false
-                        showCompactMenu = false
-                    }
+                    toggleCommandPalette()
                     return@onPreviewKeyEvent true
                 }
                 if (
@@ -3256,8 +3499,7 @@ fun WorkspaceScreen(
                     }
 
                     command && event.key == Key.A -> {
-                        selectedIds = topLevelSelectionIds(history.workspace.objects.values)
-                        selectedRelationId = null
+                        selectAllObjects()
                         true
                     }
 
@@ -3800,6 +4042,10 @@ fun WorkspaceScreen(
                 MediaNodeCard(
                     node = node,
                     asset = workspaceAssets[node.assetId],
+                    session = session,
+                    mediaRuntime = mediaImportRuntime,
+                    reduceMotion = reduceMotion,
+                    canvasSize = canvasSize,
                     viewport = viewport,
                     previewDelta = dragPreviews[node.id] ?: Vec2.Zero,
                     previewTransform = transformPreviews[node.id],
@@ -4049,6 +4295,19 @@ fun WorkspaceScreen(
                         accent = true,
                         enabled = !inputBlocked,
                         onClick = ::addTextNodeAtCenter,
+                    )
+                }
+                if (mediaImportRuntime.selectSource != null) {
+                    ShellButton(
+                        label = if (mediaImportBusy) mediaImportLabel else Strings.media.importMedia(),
+                        icon = ShellIcon.Library,
+                        enabled = !inputBlocked && workspaceChangeAllowed,
+                        onClick = ::startMediaImport,
+                    )
+                    if (mediaImportBusy) ShellButton(
+                        label = Strings.media.cancelImport(),
+                        icon = ShellIcon.Close,
+                        onClick = { mediaImportJob?.cancel() },
                     )
                 }
                 ShellButton(
@@ -4378,6 +4637,19 @@ fun WorkspaceScreen(
                                 canvasFocusRequester.requestFocus()
                             },
                         )
+                        if (mediaImportRuntime.selectSource != null) {
+                            ShellButton(
+                                label = if (mediaImportBusy) mediaImportLabel else Strings.media.importMedia(),
+                                icon = ShellIcon.Library,
+                                enabled = !inputBlocked && workspaceChangeAllowed,
+                                onClick = ::startMediaImport,
+                            )
+                            if (mediaImportBusy) ShellButton(
+                                label = Strings.media.cancelImport(),
+                                icon = ShellIcon.Close,
+                                onClick = { mediaImportJob?.cancel() },
+                            )
+                        }
                     }
                     listOf(
                         CompactMenuItem(Strings.toolbar.search(), ShellIcon.Search) {
@@ -5180,6 +5452,12 @@ fun WorkspaceScreen(
         if (showComponentLibrary) {
             ComponentLibrary(
                 entries = libraryComponents.map(BuiltInComponent::entry),
+                workspaceMediaContent = {
+                    MediaAssetLibraryContent(session, workspaceAssets.values, history.workspace.objects.values,
+                        mediaImportRuntime, workspaceAssetsLoading, workspaceAssetsUnavailable,
+                        !inputBlocked && workspaceChangeAllowed && !connectionFailed,
+                        onRefresh = { workspaceAssetsRefreshAttempt++ }, onInsert = ::insertStoredMedia)
+                },
                 modifier = Modifier
                     .then(
                         if (compactLayout) {
@@ -7685,6 +7963,10 @@ private fun TextNodeCard(
 private fun MediaNodeCard(
     node: MediaNode,
     asset: WorkspaceAsset?,
+    session: WorkspaceSession?,
+    mediaRuntime: MediaImportRuntime,
+    reduceMotion: Boolean,
+    canvasSize: IntSize,
     viewport: Viewport,
     previewDelta: Vec2,
     previewTransform: CanvasTransform?,
@@ -7702,6 +7984,61 @@ private fun MediaNodeCard(
     val screenPosition = viewport.worldToScreen(renderedTransform.position + previewDelta)
     val screenWidth = with(density) { (renderedTransform.size.width * viewport.zoom).toDp() }
     val screenHeight = with(density) { (renderedTransform.size.height * viewport.zoom).toDp() }
+    val previewAssetId = node.thumbnailAssetId ?: node.assetId.takeIf { node.mediaKind != MediaKind.Video }
+    val radius = kotlin.math.hypot(renderedTransform.size.width, renderedTransform.size.height) * viewport.zoom
+    val visible = screenPosition.x + radius >= 0 && screenPosition.y + radius >= 0 &&
+        screenPosition.x - radius <= canvasSize.width && screenPosition.y - radius <= canvasSize.height
+    // Session-scoped state is discarded on account/workspace/reference changes; never persisted.
+    var preview by remember(session?.userId, session?.workspace?.id, previewAssetId, asset) {
+        mutableStateOf<ImageBitmap?>(null)
+    }
+    var previewLoading by remember(session?.userId, session?.workspace?.id, previewAssetId, asset) { mutableStateOf(false) }
+    var previewFailed by remember(session?.userId, session?.workspace?.id, previewAssetId, asset) { mutableStateOf(false) }
+    var previewAttempt by remember(session?.userId, session?.workspace?.id, previewAssetId, asset) { mutableStateOf(0) }
+    val activityFlow = remember(mediaRuntime) { mediaRuntime.playbackActivity ?: MutableStateFlow(MediaPlaybackActivity()) }
+    val playbackActivity by activityFlow.collectAsState()
+    var gifActivated by remember(session?.userId, session?.workspace?.id, node.assetId, playbackActivity.epoch) { mutableStateOf(false) }
+    var gifPlaying by remember(session?.userId, session?.workspace?.id, node.assetId, playbackActivity.epoch) { mutableStateOf(false) }
+    var gifFinished by remember(session?.userId, session?.workspace?.id, node.assetId, playbackActivity.epoch) { mutableStateOf(false) }
+    val currentGifPlaying by rememberUpdatedState(gifPlaying)
+    LaunchedEffect(session?.userId, session?.workspace?.id, node.assetId, node.mediaKind, previewAssetId, asset, visible, mediaRuntime, previewAttempt, gifActivated, reduceMotion, playbackActivity) {
+        preview = null
+        previewFailed = false
+        previewLoading = false
+        val loader = mediaRuntime.loadPreview
+        if (visible && playbackActivity.available && asset?.status == AssetStatus.Ready && session != null && previewAssetId != null && loader != null) {
+            previewLoading = true
+            var animation: GifAnimation? = null
+            try {
+                val gifLoader = mediaRuntime.loadGif
+                if (node.mediaKind == MediaKind.Gif && gifActivated && !reduceMotion && gifLoader != null) {
+                    val opened = gifLoader(session, node.assetId).also { animation = it }
+                    gifFinished = false
+                    playGifFrames(
+                        opened.frameCount, opened.repetitionCount, opened::durationMs,
+                        awaitPlaying = { snapshotFlow { currentGifPlaying }.first { it } },
+                        showFrame = { index ->
+                            val frame = opened.frame(index)
+                            if (index != 0) snapshotFlow { currentGifPlaying }.first { it }
+                            preview = frame
+                            previewLoading = false
+                        },
+                    )
+                    gifPlaying = false
+                    gifFinished = true
+                } else preview = loader(session, previewAssetId)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                previewFailed = true
+                gifFinished = true
+                gifPlaying = false
+            } finally {
+                previewLoading = false
+                withContext(NonCancellable) { animation?.release() }
+            }
+        }
+    }
     val kindLabel = when (node.mediaKind) {
         MediaKind.Image -> Strings.objects.image()
         MediaKind.Gif -> Strings.objects.gif()
@@ -7709,7 +8046,13 @@ private fun MediaNodeCard(
     }
     val statusLabel = when (asset?.status) {
         AssetStatus.Pending -> Strings.media.pending()
-        AssetStatus.Ready -> Strings.media.readyDownloadUnavailable()
+        AssetStatus.Ready -> when {
+            previewFailed -> Strings.media.retryPreview()
+            preview != null -> Strings.media.previewReady()
+            previewLoading -> Strings.media.loadingPreview()
+            else -> if (mediaRuntime.loadPreview == null) Strings.media.readyDownloadUnavailable()
+                else Strings.media.previewUnavailable()
+        }
         AssetStatus.Rejected -> Strings.media.rejected()
         AssetStatus.Missing -> Strings.media.missing()
         null -> Strings.media.metadataUnavailable()
@@ -7738,6 +8081,7 @@ private fun MediaNodeCard(
                 }
                 role = Role.Button
                 onClick(label = Strings.a11y.selectThought()) {
+                    if (previewFailed) previewAttempt++
                     onSelect(false)
                     true
                 }
@@ -7746,7 +8090,7 @@ private fun MediaNodeCard(
             .pointerInput(node.id, viewport.zoom, mutationEnabled, node.version) {
                 if (interactionEnabled) {
                     awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val down = awaitFirstDown(requireUnconsumed = true)
                         val additiveSelection = currentEvent.keyboardModifiers.isShiftPressed
                         down.consume()
                         var accumulated = Vec2.Zero
@@ -7763,12 +8107,24 @@ private fun MediaNodeCard(
                         when {
                             !completed -> onDragCancel()
                             moved -> onDragCommit(accumulated)
-                            else -> onSelect(additiveSelection)
+                            else -> {
+                                if (previewFailed) previewAttempt++
+                                onSelect(additiveSelection)
+                            }
                         }
                     }
                 }
             },
     ) {
+        val displayedPreview = preview
+        if (displayedPreview != null) {
+            Image(
+                bitmap = displayedPreview,
+                contentDescription = null, // The outer object owns its accessible name and selection.
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
         Column(
             modifier = Modifier.fillMaxSize().padding(16.dp),
             verticalArrangement = Arrangement.Center,
@@ -7817,6 +8173,124 @@ private fun MediaNodeCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+            }
+        }
+        }
+        if (node.mediaKind == MediaKind.Video && mediaRuntime.loadVideo != null && mediaRuntime.videoSurface != null) {
+            MediaVideoContent(node, asset, session, mediaRuntime, visible, selected, interactionEnabled, reduceMotion)
+        }
+        if (selected && node.mediaKind == MediaKind.Gif && mediaRuntime.loadGif != null) {
+            ShellButton(
+                label = if (gifPlaying && !reduceMotion) Strings.media.pauseAnimation() else Strings.media.playAnimation(),
+                enabled = interactionEnabled && playbackActivity.available && asset?.status == AssetStatus.Ready && !reduceMotion,
+                accent = true,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
+                onClick = {
+                    if (gifFinished) previewAttempt++
+                    gifActivated = true
+                    gifPlaying = !gifPlaying
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun androidx.compose.foundation.layout.BoxScope.MediaVideoContent(
+    node: MediaNode, asset: WorkspaceAsset?, session: WorkspaceSession?, runtime: MediaImportRuntime,
+    visible: Boolean, selected: Boolean, interactionEnabled: Boolean, reduceMotion: Boolean,
+) {
+    // Only explicit playback creates a player. All state/handles remain local to this composition.
+    val activityFlow = remember(runtime) { runtime.playbackActivity ?: MutableStateFlow(MediaPlaybackActivity()) }
+    val playbackActivity by activityFlow.collectAsState()
+    val key = listOf(session?.userId, session?.workspace?.id, node.assetId, asset, runtime, playbackActivity.epoch)
+    var activated by remember(key) { mutableStateOf(false) }
+    var attempt by remember(key) { mutableStateOf(0) }
+    var loading by remember(key) { mutableStateOf(false) }
+    var failed by remember(key) { mutableStateOf(false) }
+    var lease by remember(key) { mutableStateOf<VideoPlaybackLease?>(null) }
+    val playback = lease?.player
+    val scope = rememberCoroutineScope()
+    val emptyState = remember { MutableStateFlow(VideoPlaybackState()) }
+    val state by (playback?.state ?: emptyState).collectAsState()
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(key, lifecycle) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) activated = false
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(key, activated, attempt, visible, reduceMotion, playbackActivity.available) {
+        failed = false
+        if (activated && visible && playbackActivity.available && !reduceMotion && session != null && asset?.status == AssetStatus.Ready) {
+            loading = true
+            var opened: VideoPlaybackLease? = null
+            try {
+                val owned = VideoPlaybackLease(checkNotNull(runtime.loadVideo)(session, node.assetId)).also { opened = it }
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                lease = owned
+                loading = false
+                owned.execute { setPlaying(true) }
+                kotlinx.coroutines.flow.combine(owned.player.state, owned.failed) { native, commandFailed ->
+                    native.failed || native.released || commandFailed
+                }.first { it }
+                failed = true
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { failed = true }
+            finally {
+                loading = false
+                lease = null
+                try { withContext(NonCancellable) { opened?.release() } }
+                catch (_: Exception) { failed = true }
+            }
+        }
+    }
+    fun command(block: suspend VideoPlayback.() -> Unit) {
+        val owned = lease ?: return
+        scope.launch {
+            try { owned.execute(block) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { failed = true }
+        }
+    }
+    playback?.takeIf { !state.released && !state.failed }?.let { player ->
+        runtime.videoSurface?.invoke(player, Modifier.fillMaxSize())
+    }
+    if (selected) {
+        Column(
+            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(BoarderLessTheme.colors.contentSurface.copy(alpha = .9f)).padding(4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            if (playback != null) BasicText(
+                text = "${state.positionMs / 1000} / ${state.durationMs / 1000} s",
+                style = TextStyle(color = BoarderLessTheme.colors.contentText, fontSize = 10.sp),
+            )
+            ShellButton(
+                label = when {
+                    loading -> Strings.media.videoLoading()
+                    failed || state.failed || state.released -> Strings.media.videoFailed()
+                    state.audioFocusBlocked -> Strings.media.audioFocusBlocked()
+                    state.playing -> Strings.media.pauseVideo()
+                    else -> Strings.media.playVideo()
+                },
+                enabled = interactionEnabled && playbackActivity.available && asset?.status == AssetStatus.Ready && !loading && !reduceMotion,
+                accent = true,
+                onClick = {
+                    val player = playback
+                    if (player == null || state.failed || state.released) { attempt++; activated = true }
+                    else command { setPlaying(!state.playing) }
+                },
+            )
+            if (playback != null && !state.failed && !state.released) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    ShellButton(label = Strings.media.videoBack(), enabled = interactionEnabled,
+                        onClick = { command { seekTo(state.positionMs - 10_000) } })
+                    ShellButton(label = Strings.media.videoForward(), enabled = interactionEnabled,
+                        onClick = { command { seekTo(state.positionMs + 10_000) } })
+                }
+                ShellButton(label = if (state.muted) Strings.media.unmuteVideo() else Strings.media.muteVideo(), enabled = interactionEnabled,
+                    onClick = { command { setMuted(!state.muted) } })
             }
         }
     }
