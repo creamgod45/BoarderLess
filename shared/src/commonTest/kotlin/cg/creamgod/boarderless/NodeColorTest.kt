@@ -11,6 +11,18 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class NodeColorTest {
+    @Test fun plainTextUsesThemeDefaultOrChosenInkNotCardContrastInk() {
+        val white = androidx.compose.ui.graphics.Color.White
+        val colors = cg.creamgod.boarderless.designsystem.BoarderLessColors(
+            canvas = white, canvasWarm = white, canvasCool = white, grid = white, contentSurface = white,
+            nodeLilac = white, nodeAmber = white, nodeMint = white, contentBorder = white, contentText = white,
+            contentMuted = white, shellSurface = white, shellSurfaceOpaque = white, shellBorder = white,
+            shellText = white, accent = white, selection = white, danger = white)
+        val plain = cg.creamgod.boarderless.domain.model.NodeShape.PlainText
+        assertEquals(white, cg.creamgod.boarderless.feature.canvas.nodeTextColors("paper", colors, plain).text)
+        assertEquals(androidx.compose.ui.graphics.Color(0xFF6255D9),
+            cg.creamgod.boarderless.feature.canvas.nodeTextColors("#6255d9", colors, plain).text)
+    }
     @Test
     fun customTokensAreLowercaseHex() {
         val color = RgbColor.parseHex("#6255D9")!!

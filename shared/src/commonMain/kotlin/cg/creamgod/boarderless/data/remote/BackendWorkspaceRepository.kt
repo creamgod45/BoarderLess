@@ -2,6 +2,12 @@ package cg.creamgod.boarderless.data.remote
 
 import cg.creamgod.boarderless.i18n.Strings
 import cg.creamgod.boarderless.data.SubmitOutcome
+import cg.creamgod.boarderless.data.canEditContent
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.serialization.SerializationException
+import cg.creamgod.boarderless.data.PendingWorkspaceChange
 import cg.creamgod.boarderless.data.AssetRepository
 import cg.creamgod.boarderless.data.AssetStatus
 import cg.creamgod.boarderless.data.WorkspaceAsset
@@ -23,7 +29,11 @@ import cg.creamgod.boarderless.domain.history.UpdateTextNodeAttributesOperation
 import cg.creamgod.boarderless.domain.history.UpdateRelationAttributesOperation
 import cg.creamgod.boarderless.domain.history.UpdateGroupFrameAttributesOperation
 import cg.creamgod.boarderless.domain.history.UpdateMediaNodeAttributesOperation
+import cg.creamgod.boarderless.domain.history.UpdateMediaReferenceOperation
 import cg.creamgod.boarderless.domain.history.WorkspaceOperation
+import cg.creamgod.boarderless.data.PendingWorkspaceDraft
+import cg.creamgod.boarderless.data.RestoredWorkspaceDraft
+import cg.creamgod.boarderless.data.WorkspaceDraftReview
 import cg.creamgod.boarderless.domain.model.CanvasObjectId
 import cg.creamgod.boarderless.domain.model.CanvasObject
 import cg.creamgod.boarderless.domain.model.CanvasSize
@@ -70,6 +80,13 @@ class BackendWorkspaceRepository(
     private val client: HttpClient = createHttpClient(),
 ) : WorkspaceRepository, AssetRepository {
     private val apiBase = "${baseUrl.trimEnd('/')}/api/v1"
+    private val submissionMutex = preferences.submissionMutex
+    private val draftPersistence = preferences.draftPersistence
+    private val sequenceAllocator = preferences.sequenceAllocator
+    private data class ProjectionCache(val session: WorkspaceSession, val state: WorkspaceStateDto)
+    // One authoritative raw snapshot only. Optimistic/domain-only sessions cannot reuse it.
+    private var projectionCache: ProjectionCache? = null
+    private val replayJson = Json { ignoreUnknownKeys = true }
 
     override suspend fun openOrCreateWorkspace(preferredWorkspaceId: WorkspaceId?): WorkspaceSession {
         val savedUserId = preferences.userId
@@ -209,20 +226,43 @@ class BackendWorkspaceRepository(
     }
 
     override suspend fun refresh(session: WorkspaceSession): WorkspaceSession {
+        val cached = projectionCache?.takeIf { it.session == session }
         val metadata = client.get("$apiBase/workspaces/${session.workspace.id.value}") {
             header(DevUserHeader, session.userId)
         }.requireSuccess().body<WorkspaceDto>()
+        if (metadata.id != session.workspace.id.value) throw BackendContractException("Workspace metadata scope mismatch")
         val role = metadata.role.toWorkspaceMemberRole()
-        val catchUp = client.get("$apiBase/workspaces/${session.workspace.id.value}/operations") {
+        val response = client.get("$apiBase/workspaces/${session.workspace.id.value}/operations") {
             header(DevUserHeader, session.userId)
             parameter("afterSeq", session.lastServerSeq)
-            parameter("limit", 1)
-        }.requireSuccess().body<CatchUpOperationsDto>()
-        if (catchUp.lastServerSeq <= session.lastServerSeq) {
-            return session.copy(
-                role = role,
-                workspace = session.workspace.copy(title = metadata.title),
-            )
+            parameter("limit", 1000)
+        }.requireSuccess()
+        val firstPage = try {
+            replayJson.decodeFromString<FullCatchUpOperationsDto>(response.bodyAsText())
+        } catch (_: SerializationException) { null }
+        currentCoroutineContext().ensureActive()
+        val catchUp = if (cached != null && firstPage != null) collectCommittedCatchUp(
+            session.lastServerSeq, firstPage,
+        ) { afterSeq ->
+            currentCoroutineContext().ensureActive()
+            val next = client.get("$apiBase/workspaces/${session.workspace.id.value}/operations") {
+                header(DevUserHeader, session.userId)
+                parameter("afterSeq", afterSeq)
+                parameter("limit", 1000)
+            }.requireSuccess()
+            try { replayJson.decodeFromString<FullCatchUpOperationsDto>(next.bodyAsText()) }
+            catch (_: SerializationException) { null }
+        } else firstPage
+        if (cached != null && catchUp != null && catchUp.lastServerSeq >= metadata.lastServerSeq) {
+            val replayed = try { reduceCommittedCatchUpPage(cached.state, catchUp) }
+                catch (_: BackendContractException) { null }
+            if (replayed != null && replayed.workspaceVersion >= metadata.currentVersion) {
+                val refreshed = session.copy(role = role, workspaceVersion = replayed.workspaceVersion,
+                    lastServerSeq = replayed.throughServerSeq, workspace = replayed.toDomainWorkspace(metadata.title))
+                currentCoroutineContext().ensureActive()
+                projectionCache = ProjectionCache(refreshed, replayed)
+                return refreshed
+            }
         }
 
         return loadWorkspaceState(session.userId, session.workspace.id.value, metadata.title, role)
@@ -231,16 +271,124 @@ class BackendWorkspaceRepository(
     override suspend fun submit(
         session: WorkspaceSession,
         operation: WorkspaceOperation,
-    ): SubmitOutcome {
-        val previousClientSequence = preferences.clientSequence
-        val operations = operation.toExpandedDtos(previousClientSequence)
-        val clientSequence = previousClientSequence + operations.size
+    ): SubmitOutcome = submissionMutex.withLock {
+        check(session.clientId == preferences.clientId) { "Submission belongs to another client" }
+        val scope = submissionScope(session)
+        check(draftPersistence.pending(scope) == null) { "An unconfirmed change requires recovery first" }
+        draftPersistence.journal(scope)?.let { draft ->
+            check(!draft.quarantined && draft.operations.firstOrNull() == operation) { "Saved draft head does not match submission" }
+        }
+        val expanded = operation.toExpandedDtos(0)
+        val range = sequenceAllocator?.reserve(scope, expanded.size) ?: preferences.reserveClientSequences(expanded.size)
+        if (sequenceAllocator != null) preferences.advanceClientSequence(range.last) // Compatibility mirror only.
+        val operations = expanded.mapIndexed { index, dto -> dto.copy(clientSeq = range.first + index) }
         val request = SubmitOperationsRequest(
             clientId = session.clientId,
             transactionId = randomUuid(),
             baseVersion = session.workspaceVersion,
             operations = operations,
         )
+        val pending = PendingWorkspaceSubmission(scope, operation.operationId, request)
+        draftPersistence.stage(pending)
+        submitWireRequest(session, request).also { outcome ->
+            if (outcome is SubmitOutcome.Accepted) {
+                sequenceAllocator?.advance(scope, range.last)
+                preferences.advanceClientSequence(range.last)
+                draftPersistence.acknowledge(pending, outcome.workspaceVersion, outcome.lastServerSeq)
+            }
+        }
+    }
+
+    private fun submissionScope(session: WorkspaceSession) =
+        PendingSubmissionScope(apiBase, session.userId, session.clientId, session.workspace.id.value)
+
+    override fun retainDraft(session: WorkspaceSession, before: Workspace, operation: WorkspaceOperation) {
+        check(session.clientId == preferences.clientId && session.canEditContent)
+        draftPersistence.append(submissionScope(session), session, before, operation)
+    }
+
+    override suspend fun pendingDraft(session: WorkspaceSession): PendingWorkspaceDraft? =
+        draftPersistence.journal(submissionScope(session))?.takeIf { it.operations.isNotEmpty() }?.let {
+            PendingWorkspaceDraft(it.id, it.operations.size, it.quarantined || it.headTransactionId != null)
+        }
+
+    override suspend fun restorePendingDraft(session: WorkspaceSession, draftId: String): RestoredWorkspaceDraft = submissionMutex.withLock {
+        check(session.clientId == preferences.clientId)
+        val scope = submissionScope(session)
+        check(draftPersistence.pending(scope) == null) { "Resolve the submitted transaction first" }
+        val current = refresh(session)
+        currentCoroutineContext().ensureActive()
+        check(current.canEditContent)
+        val journal = draftPersistence.restore(scope, draftId, current)
+        RestoredWorkspaceDraft(current, journal.operations)
+    }
+
+    override suspend fun dismissPendingDraft(session: WorkspaceSession, draftId: String): WorkspaceSession = submissionMutex.withLock {
+        check(session.clientId == preferences.clientId)
+        val scope = submissionScope(session)
+        check(draftPersistence.pending(scope) == null) { "Resolve the submitted transaction first" }
+        val current = refresh(session)
+        currentCoroutineContext().ensureActive()
+        check(current.userId == session.userId && current.clientId == session.clientId && current.workspace.id == session.workspace.id)
+        check(draftPersistence.remove(scope, draftId))
+        current
+    }
+
+    override suspend fun reviewPendingDraft(session: WorkspaceSession, draftId: String): WorkspaceDraftReview = submissionMutex.withLock {
+        check(session.clientId == preferences.clientId)
+        val scope = submissionScope(session)
+        check(draftPersistence.journal(scope)?.id == draftId)
+        val current = refresh(session) // Fresh read authorization; viewer may inspect, revoked access fails.
+        currentCoroutineContext().ensureActive()
+        check(current.userId == session.userId && current.clientId == session.clientId && current.workspace.id == session.workspace.id)
+        val journal = checkNotNull(draftPersistence.journal(scope))
+        check(journal.id == draftId)
+        WorkspaceDraftReview(journal.id, journal.baseVersion, journal.baseServerSeq,
+            current.workspaceVersion, current.lastServerSeq, journal.baseWorkspace, journal.replay(), current.workspace,
+            journal.operations, journal.quarantined, draftPersistence.pending(scope) != null || journal.headTransactionId != null)
+    }
+
+    override suspend fun pendingChange(session: WorkspaceSession): PendingWorkspaceChange? =
+        draftPersistence.pending(submissionScope(session))?.let {
+            PendingWorkspaceChange(it.request.transactionId, it.request.operations.size)
+        }
+
+    override suspend fun retryPendingChange(session: WorkspaceSession, transactionId: String): WorkspaceSession {
+        check(pendingChange(session)?.transactionId == transactionId) { "Pending change no longer matches" }
+        val current = refresh(session)
+        retryPendingSubmission(current)
+        return refresh(current)
+    }
+
+    override suspend fun dismissPendingChange(session: WorkspaceSession, transactionId: String): WorkspaceSession = submissionMutex.withLock {
+        check(pendingChange(session)?.transactionId == transactionId) { "Pending change no longer matches" }
+        val current = refresh(session)
+        draftPersistence.stop(submissionScope(session), transactionId)
+        current
+    }
+
+    /** Explicit recovery hook; not automatically called at startup until recovery UI is integrated.
+     * Reuses the persisted request without calling the UUID-allocating domain mapper again.
+     * A conflict/access error retains the record for deliberate resolution.
+     */
+    internal suspend fun retryPendingSubmission(session: WorkspaceSession): SubmitOutcome? = submissionMutex.withLock {
+        check(session.clientId == preferences.clientId) { "Pending submission belongs to another client" }
+        check(session.role == WorkspaceMemberRole.Owner || session.role == WorkspaceMemberRole.Editor) {
+            "Pending submission requires current edit permission"
+        }
+        val scope = PendingSubmissionScope(apiBase, session.userId, session.clientId, session.workspace.id.value)
+        val pending = draftPersistence.pending(scope) ?: return@withLock null
+        draftPersistence.stage(pending)
+        submitWireRequest(session, pending.request).also { outcome ->
+            if (outcome is SubmitOutcome.Accepted) {
+                sequenceAllocator?.advance(scope, pending.request.operations.last().clientSeq)
+                preferences.advanceClientSequence(pending.request.operations.last().clientSeq)
+                draftPersistence.acknowledge(pending, outcome.workspaceVersion, outcome.lastServerSeq)
+            }
+        }
+    }
+
+    private suspend fun submitWireRequest(session: WorkspaceSession, request: SubmitOperationsRequest): SubmitOutcome {
         val response = client.post("$apiBase/workspaces/${session.workspace.id.value}/operations") {
             contentType(ContentType.Application.Json)
             header(DevUserHeader, session.userId)
@@ -249,8 +397,8 @@ class BackendWorkspaceRepository(
 
         return when (response.status) {
             HttpStatusCode.OK -> {
-                preferences.clientSequence = clientSequence
                 val accepted = response.body<AcceptedOperationsDto>()
+                accepted.validateAcknowledgement(request, session.userId)
                 SubmitOutcome.Accepted(
                     workspaceVersion = accepted.workspaceVersion,
                     lastServerSeq = accepted.toServerSeq,
@@ -322,8 +470,8 @@ class BackendWorkspaceRepository(
         val state = client.get("$apiBase/workspaces/$workspaceId/state") {
             header(DevUserHeader, userId)
         }.requireSuccess().body<WorkspaceStateDto>()
-
-        return WorkspaceSession(
+        if (state.workspaceId != workspaceId) throw BackendContractException("Workspace projection scope mismatch")
+        val loaded = WorkspaceSession(
             userId = userId,
             clientId = preferences.clientId,
             role = role,
@@ -331,6 +479,9 @@ class BackendWorkspaceRepository(
             lastServerSeq = state.throughServerSeq,
             workspace = state.toDomainWorkspace(title),
         )
+        currentCoroutineContext().ensureActive()
+        projectionCache = ProjectionCache(loaded, state)
+        return loaded
     }
 
     private suspend fun HttpResponse.requireSuccess(): HttpResponse {
@@ -367,7 +518,13 @@ class BackendHttpException(
 ) : Exception("Backend request failed with HTTP ${status.value}: $responseBody")
 
 internal val BackendHttpException.isWorkspaceAccessLoss: Boolean
-    get() = status == HttpStatusCode.Unauthorized || status == HttpStatusCode.NotFound
+    get() = status == HttpStatusCode.Unauthorized || status == HttpStatusCode.Forbidden ||
+        status == HttpStatusCode.NotFound
+
+/** Failed reconciliation cannot leave old write permissions active after an access denial. */
+internal fun requiresWorkspaceReconnectAfterFailedSubmission(submitError: Throwable, refreshError: Throwable): Boolean =
+    submitError !is BackendHttpException || submitError.isWorkspaceAccessLoss ||
+        (refreshError as? BackendHttpException)?.isWorkspaceAccessLoss == true
 
 internal expect fun defaultBackendBaseUrl(): String
 
@@ -430,6 +587,7 @@ internal fun AssetDto.toDomain(): WorkspaceAsset {
             status = parsedStatus,
             createdAt = createdAt,
             thumbnailAssetId = thumbnailAssetId,
+            rejectionReason = cg.creamgod.boarderless.data.AssetRejectionReason.fromToken(rejectionReason),
         )
     } catch (error: IllegalArgumentException) {
         throw BackendContractException("Asset $id contains invalid metadata", error)
@@ -593,6 +751,24 @@ private fun WorkspaceOperation.toDto(clientSequence: Long): OperationDto = when 
         )
     }
 
+    is UpdateMediaReferenceOperation -> {
+        require(changes.size == 1)
+        val change = changes.single()
+        OperationDto(
+            operationId = randomUuid(), clientSeq = clientSequence, kind = "update_object",
+            expectedObjectVersions = mapOf(change.objectId.value to change.expectedVersion),
+            payload = buildJsonObject {
+                put("objectId", JsonPrimitive(change.objectId.value))
+                put("properties", buildJsonObject {
+                    put("assetId", JsonPrimitive(change.after.assetId))
+                    put("mediaKind", JsonPrimitive(change.after.mediaKind.token))
+                    // Explicit null clears the old thumbnail under the server's shallow merge.
+                    put("thumbnailAssetId", change.after.thumbnailAssetId?.let(::JsonPrimitive) ?: JsonNull)
+                })
+            },
+        )
+    }
+
     is UpdateMediaNodeAttributesOperation -> {
         require(changes.size == 1) { "Backend update_object mapping currently accepts one media change" }
         val change = changes.single()
@@ -655,6 +831,7 @@ private fun WorkspaceOperation.flattenAndExpand(): List<WorkspaceOperation> = fl
         is UpdateRelationAttributesOperation -> it.expand()
         is UpdateGroupFrameAttributesOperation -> it.expand()
         is UpdateMediaNodeAttributesOperation -> it.expand()
+        is UpdateMediaReferenceOperation -> it.changes.map { change -> it.copy(changes = listOf(change)) }
         is ReparentObjectsOperation -> it.expand()
         is EditTextOperation -> it.expand()
         else -> listOf(it)
@@ -774,7 +951,7 @@ internal fun WorkspaceStateDto.toDomainWorkspace(title: String): Workspace {
         } catch (error: IllegalArgumentException) {
             throw BackendContractException("Object ${dto.objectId} has an invalid transform", error)
         }
-        when (dto.objectType) {
+        try { when (dto.objectType) {
             "text" -> TextNode(
                 id = CanvasObjectId(dto.objectId),
                 version = dto.objectVersion,
@@ -819,6 +996,13 @@ internal fun WorkspaceStateDto.toDomainWorkspace(title: String): Workspace {
             else -> throw BackendContractException(
                 "Unsupported canvas object type '${dto.objectType}' for object ${dto.objectId}",
             )
+        } } catch (error: BackendContractException) {
+            throw error
+        } catch (error: IllegalArgumentException) {
+            // Domain constructors reject blank references and invalid object invariants. Keep
+            // malformed projections on the same fail-closed boundary as malformed JSON fields,
+            // without echoing arbitrary properties/credentials into the presentation message.
+            throw BackendContractException("Object ${dto.objectId} has invalid properties", error)
         }
     }
     val objectMap = domainObjects.associateBy { it.id }

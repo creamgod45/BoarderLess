@@ -89,22 +89,24 @@ class BrowserAssetPreviewLoader(
             val bytes = sink.takeVerifiedBytes()
             awaitBrowserImageDecoder()
             coroutineContext.ensureActive()
-            return decodePreview(bytes).also { coroutineContext.ensureActive() }
+            return decodeBrowserPreview(bytes).also { coroutineContext.ensureActive() }
         } finally { sink.release() }
     }
 
-    private fun decodePreview(bytes: ByteArray): ImageBitmap {
-        val data = Data.makeFromBytes(bytes)
+}
+
+internal fun decodeBrowserPreview(bytes: ByteArray): ImageBitmap {
+    require(bytes.isNotEmpty() && bytes.size <= AssetPreviewPolicy.MaxEncodedBytes)
+    val data = Data.makeFromBytes(bytes)
+    try {
+        val codec = Codec.makeFromData(data)
         try {
-            val codec = Codec.makeFromData(data)
-            try {
-                AssetPreviewPolicy.validateDimensions(codec.size.x, codec.size.y)
-                val bitmap = codec.readPixels()
-                try { return Image.makeFromBitmap(bitmap).toComposeImageBitmap() }
-                finally { bitmap.close() }
-            } finally { codec.close() }
-        } finally { data.close() }
-    }
+            AssetPreviewPolicy.validateDimensions(codec.size.x, codec.size.y)
+            val bitmap = codec.readPixels()
+            try { return Image.makeFromBitmap(bitmap).toComposeImageBitmap() }
+            finally { bitmap.close() }
+        } finally { codec.close() }
+    } finally { data.close() }
 }
 
 internal suspend fun awaitBrowserImageDecoder(): Unit = suspendCancellableCoroutine { pending ->

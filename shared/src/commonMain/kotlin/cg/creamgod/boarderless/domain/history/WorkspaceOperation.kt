@@ -1,5 +1,7 @@
 package cg.creamgod.boarderless.domain.history
 
+import kotlinx.serialization.Serializable
+
 import cg.creamgod.boarderless.domain.model.CanvasObject
 import cg.creamgod.boarderless.domain.model.CanvasObjectId
 import cg.creamgod.boarderless.domain.model.CanvasTransform
@@ -57,6 +59,7 @@ sealed interface OperationError {
     ) : OperationError
 }
 
+@Serializable
 sealed interface WorkspaceOperation {
     val operationId: String
 
@@ -65,6 +68,7 @@ sealed interface WorkspaceOperation {
     fun inverse(): WorkspaceOperation
 }
 
+@Serializable
 data class CreateObjectsOperation(
     override val operationId: String,
     val objects: List<CanvasObject>,
@@ -112,6 +116,7 @@ data class CreateObjectsOperation(
     )
 }
 
+@Serializable
 data class DeleteObjectsOperation(
     override val operationId: String,
     val objects: List<CanvasObject>,
@@ -204,6 +209,7 @@ data class DeleteObjectsOperation(
     }
 }
 
+@Serializable
 data class CreateRelationsOperation(
     override val operationId: String,
     val relations: List<Relation>,
@@ -244,6 +250,7 @@ data class CreateRelationsOperation(
     )
 }
 
+@Serializable
 data class DeleteRelationsOperation(
     override val operationId: String,
     val relations: List<Relation>,
@@ -277,6 +284,7 @@ data class DeleteRelationsOperation(
     )
 }
 
+@Serializable
 data class RelationAttributes(
     val direction: cg.creamgod.boarderless.domain.model.RelationDirection,
     val intent: String?,
@@ -284,6 +292,7 @@ data class RelationAttributes(
     val colorToken: String,
 )
 
+@Serializable
 data class RelationAttributesChange(
     val relationId: RelationId,
     val expectedVersion: Long,
@@ -297,6 +306,7 @@ data class RelationAttributesChange(
     )
 }
 
+@Serializable
 data class UpdateRelationAttributesOperation(
     override val operationId: String,
     val changes: List<RelationAttributesChange>,
@@ -347,6 +357,7 @@ data class UpdateRelationAttributesOperation(
     )
 }
 
+@Serializable
 data class TransformChange(
     val objectId: CanvasObjectId,
     val expectedVersion: Long,
@@ -360,6 +371,7 @@ data class TransformChange(
     )
 }
 
+@Serializable
 data class TransformObjectsOperation(
     override val operationId: String,
     val changes: List<TransformChange>,
@@ -405,6 +417,7 @@ data class TransformObjectsOperation(
     )
 }
 
+@Serializable
 data class ParentChange(
     val objectId: CanvasObjectId,
     val expectedVersion: Long,
@@ -418,6 +431,7 @@ data class ParentChange(
     )
 }
 
+@Serializable
 data class ReparentObjectsOperation(
     override val operationId: String,
     val changes: List<ParentChange>,
@@ -478,6 +492,7 @@ data class ReparentObjectsOperation(
     )
 }
 
+@Serializable
 data class TextChange(
     val objectId: CanvasObjectId,
     val expectedVersion: Long,
@@ -491,6 +506,7 @@ data class TextChange(
     )
 }
 
+@Serializable
 data class EditTextOperation(
     override val operationId: String,
     val changes: List<TextChange>,
@@ -542,6 +558,7 @@ data class EditTextOperation(
     )
 }
 
+@Serializable
 data class TextNodeAttributes(
     val zIndex: Long,
     val locked: Boolean,
@@ -549,6 +566,7 @@ data class TextNodeAttributes(
     val shape: NodeShape = NodeShape.RoundedRectangle,
 )
 
+@Serializable
 data class TextNodeAttributesChange(
     val objectId: CanvasObjectId,
     val expectedVersion: Long,
@@ -562,6 +580,7 @@ data class TextNodeAttributesChange(
     )
 }
 
+@Serializable
 data class UpdateTextNodeAttributesOperation(
     override val operationId: String,
     val changes: List<TextNodeAttributesChange>,
@@ -618,6 +637,7 @@ data class UpdateTextNodeAttributesOperation(
     )
 }
 
+@Serializable
 data class GroupFrameAttributes(
     val zIndex: Long,
     val locked: Boolean,
@@ -625,6 +645,7 @@ data class GroupFrameAttributes(
     val title: String,
 )
 
+@Serializable
 data class GroupFrameAttributesChange(
     val objectId: CanvasObjectId,
     val expectedVersion: Long,
@@ -638,6 +659,7 @@ data class GroupFrameAttributesChange(
     )
 }
 
+@Serializable
 data class UpdateGroupFrameAttributesOperation(
     override val operationId: String,
     val changes: List<GroupFrameAttributesChange>,
@@ -693,12 +715,14 @@ data class UpdateGroupFrameAttributesOperation(
     )
 }
 
+@Serializable
 data class MediaNodeAttributes(
     val zIndex: Long,
     val locked: Boolean,
     val altText: String,
 )
 
+@Serializable
 data class MediaNodeAttributesChange(
     val objectId: CanvasObjectId,
     val expectedVersion: Long,
@@ -712,6 +736,7 @@ data class MediaNodeAttributesChange(
     )
 }
 
+@Serializable
 data class UpdateMediaNodeAttributesOperation(
     override val operationId: String,
     val changes: List<MediaNodeAttributesChange>,
@@ -761,6 +786,7 @@ data class UpdateMediaNodeAttributesOperation(
     )
 }
 
+@Serializable
 data class TransactionOperation(
     override val operationId: String,
     val operations: List<WorkspaceOperation>,

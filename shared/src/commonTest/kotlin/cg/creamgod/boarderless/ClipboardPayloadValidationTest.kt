@@ -68,6 +68,22 @@ class ClipboardPayloadValidationTest {
     }
 
     @Test
+    fun acceptsRelationsBetweenMediaAndTextAndBetweenMedia() {
+        val payload = ClipboardPayload(
+            nodes = listOf(node("text")),
+            media = listOf(media("photo"), media("video", mediaKind = "video")),
+            relations = listOf(
+                ClipboardRelation(sourceId = "photo", targetId = "text", direction = "Forward"),
+                ClipboardRelation(sourceId = "video", targetId = "photo", direction = "Both"),
+            ),
+        )
+        assertNull(validateClipboardPayload(payload))
+        assertEquals(ClipboardPayloadIssue.InvalidRelation, validateClipboardPayload(payload.copy(
+            relations = listOf(ClipboardRelation(sourceId = "photo", targetId = "missing", direction = "Forward")),
+        )))
+    }
+
+    @Test
     fun rejectsWrongFormatUnsupportedVersionAndEmptySelection() {
         assertEquals(
             ClipboardPayloadIssue.UnsupportedFormat,

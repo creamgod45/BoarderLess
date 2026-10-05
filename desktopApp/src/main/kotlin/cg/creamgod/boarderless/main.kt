@@ -78,6 +78,8 @@ fun main(args: Array<String>) {
                 onDispose { mainWindow.compareAndSet(window, null) }
             }
             val qaRuntime = remember(window) { desktopQaRuntime(window) }
+            val draftBackupRuntime = remember(window) { desktopDraftBackupRuntime(window) }
+            val draftImportRuntime = remember(window) { desktopDraftImportRuntime(window) }
             val mediaLifecycle = remember(window) { DesktopMediaWindowLifecycle() }
             DisposableEffect(window, mediaLifecycle) {
                 val binding = mediaLifecycle.bind(window, closeHidesWindow)
@@ -86,6 +88,8 @@ fun main(args: Array<String>) {
             val mediaImportRuntime = remember(window, mediaLifecycle) { desktopMediaImportRuntime(window, mediaLifecycle.activity) }
             App(
                 qaRuntime = qaRuntime,
+                draftBackupRuntime = draftBackupRuntime,
+                draftImportRuntime = draftImportRuntime,
                 mediaImportRuntime = mediaImportRuntime,
                 menuBridge = menuBridge,
                 recentWorkspacesPublisher = recentWorkspacesPublisher,

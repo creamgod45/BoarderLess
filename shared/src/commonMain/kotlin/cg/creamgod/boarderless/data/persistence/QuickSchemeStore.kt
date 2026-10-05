@@ -10,19 +10,23 @@ class QuickSchemeStore(
         payload: String,
         name: String? = null,
         schemaVersion: Int = LegacySchemaVersion,
+        sourceWorkspaceId: String? = null,
     ): QuickScheme {
         require(schemaVersion > 0) { "Schema version must be positive" }
+        require(sourceWorkspaceId == null || sourceWorkspaceId.isNotBlank()) { "Source workspace must not be blank" }
         val nextIndex = settings.getInt(CountKey, 0) + 1
         val scheme = QuickScheme(
             id = nextIndex,
             name = name?.trim()?.takeIf { it.isNotEmpty() } ?: Strings.content.scheme(nextIndex),
             payload = payload,
             schemaVersion = schemaVersion,
+            sourceWorkspaceId = sourceWorkspaceId,
         )
         settings.putInt(CountKey, nextIndex)
         settings.putString("$ItemPrefix$nextIndex.name", scheme.name)
         settings.putString("$ItemPrefix$nextIndex.payload", scheme.payload)
         settings.putInt("$ItemPrefix$nextIndex.schemaVersion", scheme.schemaVersion)
+        scheme.sourceWorkspaceId?.let { settings.putString("$ItemPrefix$nextIndex.sourceWorkspaceId", it) }
         return scheme
     }
 
@@ -42,6 +46,7 @@ class QuickSchemeStore(
         settings.remove("$ItemPrefix$id.name")
         settings.remove("$ItemPrefix$id.payload")
         settings.remove("$ItemPrefix$id.schemaVersion")
+        settings.remove("$ItemPrefix$id.sourceWorkspaceId")
         return true
     }
 
@@ -52,6 +57,7 @@ class QuickSchemeStore(
             name = settings.getString("$ItemPrefix$index.name", Strings.content.scheme(index)),
             payload = payload,
             schemaVersion = settings.getInt("$ItemPrefix$index.schemaVersion", LegacySchemaVersion),
+            sourceWorkspaceId = settings.getStringOrNull("$ItemPrefix$index.sourceWorkspaceId")?.takeIf { it.isNotBlank() },
         )
     }
 
@@ -67,4 +73,6 @@ data class QuickScheme(
     val name: String,
     val payload: String,
     val schemaVersion: Int = 1,
+    /** Local provenance, not a transferable authorization grant. Null for old records. */
+    val sourceWorkspaceId: String? = null,
 )

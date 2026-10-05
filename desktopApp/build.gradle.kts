@@ -11,6 +11,7 @@ dependencies {
 
     implementation(compose.desktop.currentOs)
     implementation(libs.kotlinx.coroutinesSwing)
+    implementation(libs.ktor.client.core)
     // Native macOS menu bar parts that Swing cannot express (see MacNativeMenus).
     implementation("net.java.dev.jna:jna:5.17.0")
     // COM helpers for the Windows jump list (see WindowsJumpList).

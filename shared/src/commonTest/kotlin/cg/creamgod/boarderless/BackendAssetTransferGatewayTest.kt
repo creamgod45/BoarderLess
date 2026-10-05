@@ -1,6 +1,10 @@
 package cg.creamgod.boarderless
 
 import cg.creamgod.boarderless.data.AssetStatus
+import cg.creamgod.boarderless.data.AssetDownloadCoordinator
+import cg.creamgod.boarderless.data.AssetDownloadSink
+import cg.creamgod.boarderless.data.AssetDownloadStage
+import cg.creamgod.boarderless.data.LocalAssetReference
 import cg.creamgod.boarderless.data.AssetImportCoordinator
 import cg.creamgod.boarderless.data.AssetImportStage
 import cg.creamgod.boarderless.data.AssetTransferSource
@@ -11,6 +15,11 @@ import cg.creamgod.boarderless.data.remote.BackendAssetTransferGateway
 import cg.creamgod.boarderless.data.remote.BackendHttpException
 import cg.creamgod.boarderless.domain.model.Workspace
 import cg.creamgod.boarderless.domain.model.WorkspaceId
+import cg.creamgod.boarderless.domain.model.CanvasObjectId
+import cg.creamgod.boarderless.domain.model.MediaKind
+import cg.creamgod.boarderless.domain.model.Vec2
+import cg.creamgod.boarderless.feature.canvas.mediaNodeFromReadyAsset
+import org.kotlincrypto.hash.sha2.SHA256
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -39,6 +48,198 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class BackendAssetTransferGatewayTest {
+    /** Transfer/Node contract coverage only: these bytes are not a codec or real-storage fixture. */
+    @Test fun uploadConfirmNodeAndVerifiedDownloadComposeAcrossAllMediaKinds() = runTest {
+        for ((mime, kind) in listOf("image/png" to MediaKind.Image, "image/gif" to MediaKind.Gif, "video/mp4" to MediaKind.Video)) {
+            for (corrupt in listOf(false, true)) {
+                val original = byteArrayOf(1, 2, 3, 4)
+                val checksum = fixtureHash(original)
+                val transferSource = object : AssetTransferSource by source() {
+                    override val mediaType = mime
+                    override val checksum = checksum
+                }
+                fun metadata(status: String) = assetJson(status, "thumb-1")
+                    .replace("image/png", mime).replace("sha256:test", checksum)
+                val requests = mutableListOf<String>()
+                val http = client { request ->
+                    requests += "${request.method.value} ${request.url.encodedPath}"
+                    when {
+                        request.method == HttpMethod.Put -> {
+                            assertEquals(null, request.headers["x-user-id"], "Storage upload must not receive workspace identity headers")
+                            val channel = ByteChannel(autoFlush = true)
+                            (request.body as OutgoingContent.WriteChannelContent).writeTo(channel)
+                            channel.close()
+                            assertTrue(channel.readBuffer().readByteArray().contentEquals(original))
+                            respond("", HttpStatusCode.NoContent)
+                        }
+                        request.url.encodedPath.endsWith("/complete") -> jsonResponse("""{"asset":${metadata("ready")}}""")
+                        request.method == HttpMethod.Post -> jsonResponse("""{"asset":${metadata("pending")},"upload":{"method":"PUT","url":"https://objects.invalid/upload-1?signature=fixture-secret"}}""")
+                        request.url.encodedPath.endsWith("/content") -> {
+                            assertEquals("user-1", request.headers["x-user-id"])
+                            jsonResponse("""{"asset":${metadata("ready")},"download":{"method":"GET","url":"https://objects.invalid/download-1?signature=fixture-secret","headers":{"x-storage-ticket":"fixture-secret"}}}""")
+                        }
+                        request.url.encodedPath == "/download-1" -> {
+                            assertEquals("fixture-secret", request.headers["x-storage-ticket"])
+                            assertEquals(null, request.headers["x-user-id"], "Storage download must not receive workspace identity headers")
+                            respond(if (corrupt) byteArrayOf(1, 2, 3, 5) else original,
+                                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, mime))
+                        }
+                        else -> error("Unexpected lifecycle request")
+                    }
+                }
+                val gateway = gateway(http)
+                val sink = VerifiedFixtureSink(mime)
+                val stages = mutableListOf<AssetDownloadStage>()
+                try {
+                    val imported = AssetImportCoordinator(gateway).import(session(), transferSource)
+                    val node = mediaNodeFromReadyAsset(imported.asset, session().workspace.id,
+                        CanvasObjectId("media-node"), Vec2.Zero, 1f, 0, "Fixture", imported.thumbnailAssetId)
+                    assertEquals(kind, node.mediaKind)
+                    assertEquals("asset-1", node.assetId)
+                    assertEquals("thumb-1", node.thumbnailAssetId)
+                    assertTrue(!node.toString().contains("fixture-secret") && !node.toString().contains("https://"))
+                    if (corrupt) {
+                        assertFailsWith<IllegalStateException> {
+                            AssetDownloadCoordinator(gateway).download(session(), node.assetId, sink) { stages += it }
+                        }
+                        assertEquals(1, sink.abortCalls)
+                        assertTrue(stages.none { it is AssetDownloadStage.Ready })
+                        assertEquals(null, sink.published)
+                    } else {
+                        val local = AssetDownloadCoordinator(gateway).download(session(), node.assetId, sink) { stages += it }
+                        assertEquals(LocalAssetReference("verified-fixture", mime), local)
+                        assertEquals(local, sink.published)
+                        assertEquals(0, sink.abortCalls)
+                        assertTrue(stages.last() is AssetDownloadStage.Ready)
+                    }
+                    assertEquals(listOf("POST /api/v1/workspaces/workspace-1/assets", "PUT /upload-1",
+                        "POST /api/v1/workspaces/workspace-1/assets/asset-1/complete",
+                        "GET /api/v1/workspaces/workspace-1/assets/asset-1/content", "GET /download-1"), requests)
+                } finally { gateway.close() }
+            }
+        }
+    }
+
+    private class VerifiedFixtureSink(private val mime: String) : AssetDownloadSink {
+        private val bytes = mutableListOf<Byte>()
+        var published: LocalAssetReference? = null
+        var abortCalls = 0
+        override suspend fun writeChunk(offset: Long, bytes: ByteArray) {
+            assertEquals(this.bytes.size.toLong(), offset)
+            this.bytes += bytes.toList()
+        }
+        override suspend fun commit(expectedByteSize: Long, expectedChecksum: String): LocalAssetReference {
+            check(bytes.size.toLong() == expectedByteSize && fixtureHash(bytes.toByteArray()) == expectedChecksum)
+            return LocalAssetReference("verified-fixture", mime).also { published = it }
+        }
+        override suspend fun abort() { abortCalls++; bytes.clear() }
+    }
+    @Test fun foreignPollingMetadataNeverEmitsStatusOrContinuesPolling() = runTest {
+        listOf(
+            assetJson("pending").replace("\"workspaceId\":\"workspace-1\"", "\"workspaceId\":\"other\""),
+            assetJson("pending").replace("\"id\":\"asset-1\"", "\"id\":\"other\""),
+        ).forEach { metadata ->
+            var requests = 0
+            val gateway = gateway(client { requests++; jsonResponse(metadata) })
+            val statuses = mutableListOf<AssetStatus>()
+            try {
+                assertFailsWith<IllegalArgumentException> { gateway.awaitReady(session(), "asset-1") { statuses += it } }
+                assertEquals(1, requests)
+                assertTrue(statuses.isEmpty())
+            } finally { gateway.close() }
+        }
+    }
+
+    @Test fun thumbnailLookupRejectsForeignSourceAndNonReadySourceMetadata() = runTest {
+        listOf(
+            assetJson("ready", "thumb-1").replace("\"workspaceId\":\"workspace-1\"", "\"workspaceId\":\"other\""),
+            assetJson("ready", "thumb-1").replace("\"id\":\"asset-1\"", "\"id\":\"other\""),
+        ).forEach { metadata ->
+            val gateway = gateway(client { jsonResponse(metadata) })
+            try { assertFailsWith<IllegalArgumentException> { gateway.thumbnailAssetId(session(), "asset-1") } }
+            finally { gateway.close() }
+        }
+        listOf("pending", "rejected", "missing").forEach { status ->
+            val gateway = gateway(client { jsonResponse(assetJson(status, "thumb-1")) })
+            try { assertFailsWith<IllegalStateException> { gateway.thumbnailAssetId(session(), "asset-1") } }
+            finally { gateway.close() }
+        }
+    }
+
+    @Test fun thumbnailLookupValidatesMetadataAndIgnoresSelfReference() = runTest {
+        listOf("thumb-1", "asset-1").forEach { thumbnail ->
+            val gateway = gateway(client { jsonResponse(assetJson("ready", thumbnail)) })
+            try { assertEquals(thumbnail.takeUnless { it == "asset-1" }, gateway.thumbnailAssetId(session(), "asset-1")) }
+            finally { gateway.close() }
+        }
+    }
+
+    @Test fun failedCompleteResponseDoesNotTriggerDeleteOrReturnReady() = runTest {
+        val methods = mutableListOf<HttpMethod>()
+        val client = client { request ->
+            methods += request.method
+            when {
+                request.method == HttpMethod.Put -> {
+                    val channel = ByteChannel(autoFlush = true)
+                    (request.body as OutgoingContent.WriteChannelContent).writeTo(channel)
+                    channel.close()
+                    assertTrue(channel.readBuffer().readByteArray().contentEquals(byteArrayOf(1, 2, 3, 4)))
+                    respond("", HttpStatusCode.NoContent)
+                }
+                request.url.encodedPath.endsWith("/complete") -> jsonResponse("{\"error\":\"reply lost\"}", HttpStatusCode.ServiceUnavailable)
+                request.method == HttpMethod.Post -> jsonResponse(prepareResponse(""""upload":{"method":"PUT","url":"https://objects.invalid/upload-1"}"""))
+                else -> error("Unsafe cleanup or unexpected request")
+            }
+        }
+        val gateway = gateway(client)
+        val stages = mutableListOf<AssetImportStage>()
+        try {
+            val failure = assertFailsWith<BackendHttpException> { AssetImportCoordinator(gateway).import(session(), source()) { stages += it } }
+            assertEquals(HttpStatusCode.ServiceUnavailable, failure.status)
+            assertEquals(listOf(HttpMethod.Post, HttpMethod.Put, HttpMethod.Post), methods)
+            assertEquals(AssetImportStage.RecoveryRequired("asset-1"), stages.last())
+        } finally { gateway.close() }
+    }
+
+    @Test fun readyPrepareWithoutDirectiveIsNeverDeleted() = runTest {
+        val methods = mutableListOf<HttpMethod>()
+        val client = client { request ->
+            methods += request.method
+            jsonResponse("""{"asset":${assetJson("ready")},"uploadUrl":null}""")
+        }
+        val gateway = gateway(client)
+        try {
+            assertFailsWith<AssetTransferUnavailableException> { gateway.prepare(session(), source()) }
+            assertEquals(listOf(HttpMethod.Post), methods)
+        } finally { gateway.close() }
+    }
+
+    @Test fun mismatchedPendingPrepareWithoutDirectiveIsNotAuthorityToDeleteIt() = runTest {
+        listOf(assetJson("pending").replace("\"workspaceId\":\"workspace-1\"", "\"workspaceId\":\"other\""),
+            assetJson("pending").replace("\"byteSize\":4", "\"byteSize\":8")).forEach { metadata ->
+            val methods = mutableListOf<HttpMethod>()
+            val client = client { request -> methods += request.method; jsonResponse("""{"asset":$metadata,"uploadUrl":null}""") }
+            val gateway = gateway(client)
+            try {
+                assertFailsWith<AssetTransferUnavailableException> { gateway.prepare(session(), source()) }
+                assertEquals(listOf(HttpMethod.Post), methods)
+            } finally { gateway.close() }
+        }
+    }
+
+    @Test fun blankUploadUrlCleansValidatedPendingPreparationBeforeFailing() = runTest {
+        val methods = mutableListOf<HttpMethod>()
+        val client = client { request ->
+            methods += request.method
+            if (request.method == HttpMethod.Post) jsonResponse(prepareResponse(""""upload":{"method":"PUT","url":" "}""")) else jsonResponse("{}")
+        }
+        val gateway = gateway(client)
+        try {
+            assertFailsWith<AssetTransferUnavailableException> { withContext(Dispatchers.Default) { gateway.prepare(session(), source()) } }
+            assertEquals(listOf(HttpMethod.Post, HttpMethod.Delete), methods)
+        } finally { gateway.close() }
+    }
+
     @Test
     fun importCoordinatorCompletesHttpLifecycleBeforeReturningReadyMedia() = runTest {
         val requests = mutableListOf<String>()
@@ -96,7 +297,9 @@ class BackendAssetTransferGatewayTest {
         val gateway = gateway(client)
 
         val error = assertFailsWith<AssetTransferUnavailableException> {
-            gateway.prepare(session(), source())
+            // Cleanup has a real deadline. Do not let virtual time expire before MockEngine's
+            // response dispatcher can execute the DELETE.
+            withContext(Dispatchers.Default) { gateway.prepare(session(), source()) }
         }
 
         assertTrue(error.message.orEmpty().contains("without an upload directive"))
@@ -299,6 +502,9 @@ class BackendAssetTransferGatewayTest {
         override suspend fun readChunk(offset: Long, maximumBytes: Int) = byteArrayOf(1, 2, 3, 4)
     }
 }
+
+private fun fixtureHash(bytes: ByteArray): String = "sha256:" + SHA256().digest(bytes)
+    .joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
 
 private fun BackendAssetTransferGateway.prepareTicketForTest() = cg.creamgod.boarderless.data.AssetUploadTicket(
     asset = cg.creamgod.boarderless.data.WorkspaceAsset(

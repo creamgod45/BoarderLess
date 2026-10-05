@@ -18,6 +18,13 @@ class MediaImportRuntime(
     val loadVideo: (suspend (WorkspaceSession, String) -> VideoPlayback)? = null,
     val videoSurface: (@Composable (VideoPlayback, Modifier) -> Unit)? = null,
     val playbackActivity: StateFlow<MediaPlaybackActivity>? = null,
+    /** Progressive static-image tiles. Platforms without it retain their existing preview path. */
+    val loadImageTiles: (suspend (WorkspaceSession, String, ViewportImageRequest, suspend (ImagePreviewTile) -> Unit) -> Unit)? = null,
+    val giphyApiKey: String? = null,
+    /** Immediate display only; no file/cache reuse for GIPHY media. */
+    val loadGiphyStill: (suspend (String) -> ImageBitmap)? = null,
+    /** Explicit, display-only GIF preview. The caller owns and releases the returned decoder. */
+    val loadGiphyAnimation: (suspend (String) -> GifAnimation)? = null,
 ) {
     companion object {
         val Unavailable = MediaImportRuntime()

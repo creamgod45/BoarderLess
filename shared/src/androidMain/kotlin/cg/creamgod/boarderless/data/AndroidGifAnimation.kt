@@ -17,6 +17,10 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import cg.creamgod.boarderless.data.remote.loadGiphyAnimation
+
+suspend fun loadAndroidGiphyAnimation(url: String): GifAnimation =
+    loadGiphyAnimation(url) { AndroidGifAnimation.decode(it) }
 
 /** Decoder buffers are private; returned frames are never reused or recycled by this decoder. */
 class AndroidGifAnimation private constructor(

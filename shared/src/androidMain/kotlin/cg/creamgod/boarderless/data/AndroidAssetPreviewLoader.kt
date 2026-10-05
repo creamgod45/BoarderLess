@@ -64,5 +64,26 @@ class AndroidAssetPreviewLoader(private val cacheDirectory: File) {
 
     companion object {
         const val MaxPreviewEdge = 1024
+
+        /** Decode an ephemeral provider still without creating a cache file. */
+        suspend fun decodeBytes(bytes: ByteArray): ImageBitmap {
+            require(bytes.isNotEmpty() && bytes.size <= AssetPreviewPolicy.MaxEncodedBytes)
+            currentCoroutineContext().ensureActive()
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true; inScaled = false }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+            AssetPreviewPolicy.validateDimensions(bounds.outWidth, bounds.outHeight)
+            val options = BitmapFactory.Options().apply {
+                inScaled = false
+                inPreferredConfig = Bitmap.Config.ARGB_8888
+                inSampleSize = AssetPreviewPolicy.sampleSize(bounds.outWidth, bounds.outHeight, MaxPreviewEdge)
+            }
+            val bitmap = checkNotNull(BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options))
+            try {
+                currentCoroutineContext().ensureActive()
+                AssetPreviewPolicy.validateDimensions(bitmap.width, bitmap.height)
+                check(bitmap.width <= MaxPreviewEdge && bitmap.height <= MaxPreviewEdge)
+                return bitmap.asImageBitmap()
+            } catch (failed: Throwable) { bitmap.recycle(); throw failed }
+        }
     }
 }

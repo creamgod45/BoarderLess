@@ -74,6 +74,9 @@
         record.pendingOpen = finish;
         const listen = (name, handler) => { record.listeners.push([name, handler]); video.addEventListener(name, handler); };
         const ready = () => {
+            // loadeddata can fire again while discovering a WebM duration or resetting to zero.
+            // A finite duration alone does not mean the initial frame has been restored.
+            if (record.probing || record.resetting) return;
             if (video.duration === Infinity && !record.probed) {
                 // Browser-recorded WebM may omit Duration: a seek discovers the finite file end.
                 record.probed = true; record.probing = true; video.currentTime = 1e10; return;

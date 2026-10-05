@@ -1,7 +1,10 @@
 package cg.creamgod.boarderless.domain.model
 
+import kotlinx.serialization.Serializable
+
 import kotlin.math.max
 
+@Serializable
 data class Vec2(
     val x: Float,
     val y: Float,
@@ -23,6 +26,7 @@ data class Vec2(
     }
 }
 
+@Serializable
 data class CanvasSize(
     val width: Float,
     val height: Float,
@@ -38,6 +42,7 @@ data class CanvasSize(
     )
 }
 
+@Serializable
 data class CanvasTransform(
     val position: Vec2,
     val size: CanvasSize,

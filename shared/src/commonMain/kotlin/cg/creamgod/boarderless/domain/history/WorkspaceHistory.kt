@@ -125,6 +125,12 @@ private fun WorkspaceOperation.rebasedFor(workspace: Workspace): WorkspaceOperat
         },
     )
 
+    is UpdateMediaReferenceOperation -> copy(
+        changes = changes.map { change ->
+            change.copy(expectedVersion = workspace.objects[change.objectId]?.version ?: change.expectedVersion)
+        },
+    )
+
     is UpdateMediaNodeAttributesOperation -> copy(
         changes = changes.map { change ->
             change.copy(expectedVersion = workspace.objects[change.objectId]?.version ?: change.expectedVersion)

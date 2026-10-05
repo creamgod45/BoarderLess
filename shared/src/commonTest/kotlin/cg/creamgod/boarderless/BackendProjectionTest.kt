@@ -5,12 +5,27 @@ import cg.creamgod.boarderless.data.remote.CanvasObjectDto
 import cg.creamgod.boarderless.data.remote.RelationDto
 import cg.creamgod.boarderless.data.remote.WorkspaceStateDto
 import cg.creamgod.boarderless.data.remote.toDomainWorkspace
+import cg.creamgod.boarderless.data.remote.toExpandedDtos
+import cg.creamgod.boarderless.domain.history.CreateObjectsOperation
+import cg.creamgod.boarderless.domain.model.CanvasObjectId
+import cg.creamgod.boarderless.domain.model.CanvasTransform
+import cg.creamgod.boarderless.domain.model.CanvasSize
+import cg.creamgod.boarderless.domain.model.GroupFrame
+import cg.creamgod.boarderless.domain.model.Vec2
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.long
 import cg.creamgod.boarderless.domain.model.RelationDirection
 import cg.creamgod.boarderless.domain.model.NodeShape
 import cg.creamgod.boarderless.domain.model.TextNode
 import cg.creamgod.boarderless.domain.model.MediaKind
 import cg.creamgod.boarderless.domain.model.MediaNode
 import kotlin.test.Test
+import kotlin.test.assertTrue
+import kotlin.test.assertFalse
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
@@ -18,6 +33,56 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 class BackendProjectionTest {
+    @Test fun groupedMediaCreatePayloadsRoundTripThroughSerializedProjection() {
+        val parent = GroupFrame(CanvasObjectId("group"), zIndex = 2,
+            transform = CanvasTransform(Vec2(50f, 70f), CanvasSize(700f, 600f), 45f), title = "Assets")
+        val media = MediaKind.entries.mapIndexed { index, kind ->
+            MediaNode(CanvasObjectId("node-${kind.token}"), parentId = parent.id,
+                zIndex = 10L + index, locked = index % 2 == 0,
+                transform = CanvasTransform(Vec2(120f + index, -30f), CanvasSize(320f, 180f), 37f + index),
+                assetId = "asset-${kind.token}", mediaKind = kind, altText = "素材 ${kind.token}",
+                thumbnailAssetId = if (kind == MediaKind.Image) null else "poster-${kind.token}")
+        }
+        val operations = CreateObjectsOperation("media-roundtrip", listOf(parent) + media).toExpandedDtos(40)
+        assertEquals(listOf(41L, 42L, 43L, 44L), operations.map { it.clientSeq })
+        val projection = operations.map { dto ->
+            val payload = dto.payload
+            CanvasObjectDto(payload.getValue("objectId").jsonPrimitive.content,
+                payload.getValue("objectType").jsonPrimitive.content, objectVersion = 1,
+                parentId = payload["parentId"]?.jsonPrimitive?.content,
+                zIndex = payload.getValue("zIndex").jsonPrimitive.long,
+                locked = payload.getValue("locked").jsonPrimitive.boolean,
+                transform = payload.getValue("transform").jsonObject,
+                properties = payload.getValue("properties").jsonObject)
+        }
+        // A state response need not preserve create order; parent resolution uses the full map.
+        val wire = Json.encodeToString(state(projection.reversed()).copy(workspaceVersion = 4, throughServerSeq = 44))
+        val reopened = Json.decodeFromString<WorkspaceStateDto>(wire).toDomainWorkspace("Roundtrip")
+        assertEquals(parent, reopened.objects[parent.id])
+        media.forEach { assertEquals(it, reopened.objects[it.id]) }
+        assertEquals(4L, reopened.version)
+        assertEquals(4, reopened.objects.size)
+    }
+
+    @Test fun blankMediaReferencesBecomeSafeContractErrorsNotRawConstructorFailures() {
+        for ((asset, thumbnail) in listOf("" to null, " " to null, "asset" to "", "asset" to " ")) {
+            val media = textObject(firstId, "ignored").copy(objectType = "media", properties = buildJsonObject {
+                put("assetId", asset); put("mediaKind", "video")
+                put("altText", "https://private.invalid/?token=fixture-secret")
+                thumbnail?.let { put("thumbnailAssetId", it) }
+            })
+            val failure = assertFailsWith<BackendContractException> {
+                state(listOf(media)).toDomainWorkspace("Malformed media")
+            }
+            if (asset.isBlank()) {
+                assertEquals("Object $firstId requires non-blank property 'assetId'", failure.message)
+            } else {
+                assertEquals("Object $firstId has invalid properties", failure.message)
+                assertTrue(failure.cause is IllegalArgumentException)
+            }
+            assertFalse(failure.message.orEmpty().contains("fixture-secret"))
+        }
+    }
     private val firstId = "00000000-0000-0000-0000-000000000001"
     private val secondId = "00000000-0000-0000-0000-000000000002"
 
@@ -176,6 +241,21 @@ class BackendProjectionTest {
 
     @Test
     fun shapeTokenRoundTripsAndUnknownShapesFailExplicitly() {
+        NodeShape.entries.forEach { shape ->
+            val original = TextNode(CanvasObjectId(firstId), transform = CanvasTransform(Vec2(10f, 20f), CanvasSize(200f, 100f), 37f),
+                text = "形狀🙂", shape = shape)
+            val dto = CreateObjectsOperation("shape-roundtrip", listOf(original)).toExpandedDtos(40).single()
+            val payload = dto.payload
+            val objectDto = CanvasObjectDto(payload.getValue("objectId").jsonPrimitive.content,
+                payload.getValue("objectType").jsonPrimitive.content, objectVersion = 1,
+                zIndex = payload.getValue("zIndex").jsonPrimitive.long,
+                locked = payload.getValue("locked").jsonPrimitive.boolean,
+                transform = payload.getValue("transform").jsonObject,
+                properties = payload.getValue("properties").jsonObject)
+            val wire = Json.encodeToString(state(objects = listOf(objectDto)))
+            val reopened = Json.decodeFromString<WorkspaceStateDto>(wire).toDomainWorkspace("Shapes")
+            assertEquals(original, assertIs<TextNode>(reopened.objects.values.single()))
+        }
         val diamond = textObject(firstId, "Decision").copy(
             properties = buildJsonObject {
                 put("text", "Decision")

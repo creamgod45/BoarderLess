@@ -22,6 +22,8 @@ data class WorkspaceActivity(
     val committedAt: String,
 )
 
+data class PendingWorkspaceChange(val transactionId: String, val operationCount: Int)
+
 enum class WorkspaceMemberRole(val token: String) {
     Owner("owner"),
     Editor("editor"),
@@ -49,6 +51,9 @@ data class WorkspaceSession(
     val lastServerSeq: Long,
     val workspace: Workspace,
 )
+
+data class PendingWorkspaceDraft(val id: String, val operationCount: Int, val requiresReview: Boolean)
+data class RestoredWorkspaceDraft(val session: WorkspaceSession, val operations: List<WorkspaceOperation>)
 
 val WorkspaceSession.canEditContent: Boolean
     get() = role == WorkspaceMemberRole.Owner || role == WorkspaceMemberRole.Editor
@@ -100,6 +105,43 @@ interface WorkspaceRepository {
     /** Optional authenticated, session-scoped notification stream. Null keeps REST fallback. */
     fun observeRemoteChanges(session: WorkspaceSession): Flow<WorkspaceRemoteNotification>? = null
 
+    /** Authenticated ephemeral snapshots only; null means presence is unavailable.
+     * Echo this local subscription nonce, not a peer-supplied identity. Reconnect adapters must
+     * validate connection epoch and emit renewed full snapshots using server-confirmed liveness.
+     * This stream cannot change membership, content, acknowledgements or saved checkpoints.
+     */
+    fun observePresence(session: WorkspaceSession, subscriptionId: String): Flow<WorkspacePresenceSnapshot>? = null
+
+    /** Optional outgoing handle for an authenticated live room; null means unavailable.
+     * No guessed endpoint or automatic sharing. Must be opened only after trusted Live presence.
+     * The transport owns physical connection epoch validation, including at the final write.
+     */
+    fun openPresencePublisher(
+        session: WorkspaceSession,
+        subscriptionId: String,
+        roomEpoch: String,
+    ): WorkspacePresencePublisher? = null
+
+    suspend fun pendingChange(session: WorkspaceSession): PendingWorkspaceChange? = null
+
+    /** Save before optimistic publication. Default repositories may not support local journals. */
+    fun retainDraft(session: WorkspaceSession, before: Workspace, operation: WorkspaceOperation) {}
+    suspend fun pendingDraft(session: WorkspaceSession): PendingWorkspaceDraft? = null
+    suspend fun reviewPendingDraft(session: WorkspaceSession, draftId: String): WorkspaceDraftReview =
+        throw UnsupportedOperationException("Draft review is unavailable")
+    suspend fun restorePendingDraft(session: WorkspaceSession, draftId: String): RestoredWorkspaceDraft =
+        throw UnsupportedOperationException("Draft recovery is unavailable")
+    suspend fun dismissPendingDraft(session: WorkspaceSession, draftId: String): WorkspaceSession =
+        throw UnsupportedOperationException("Draft recovery is unavailable")
+
+    /** Explicit resend, followed by an authoritative refresh, never an optimistic old snapshot. */
+    suspend fun retryPendingChange(session: WorkspaceSession, transactionId: String): WorkspaceSession =
+        throw UnsupportedOperationException("Pending recovery is unavailable")
+
+    /** Stops local resend only. Does not undo/delete anything already accepted by the server. */
+    suspend fun dismissPendingChange(session: WorkspaceSession, transactionId: String): WorkspaceSession =
+        throw UnsupportedOperationException("Pending recovery is unavailable")
+
     suspend fun submit(
         session: WorkspaceSession,
         operation: WorkspaceOperation,
@@ -109,11 +151,20 @@ interface WorkspaceRepository {
 }
 
 internal fun WorkspaceSession.hasRemoteChangesComparedTo(current: WorkspaceSession): Boolean =
-    workspace.id == current.workspace.id &&
+    userId == current.userId && clientId == current.clientId && workspace.id == current.workspace.id &&
         workspaceVersion >= current.workspaceVersion &&
+        lastServerSeq >= current.lastServerSeq &&
         (
             workspaceVersion > current.workspaceVersion ||
                 lastServerSeq > current.lastServerSeq ||
                 role != current.role ||
                 workspace.title != current.workspace.title
             )
+
+/** A slow refresh cannot overwrite a changed owner or an advanced durable checkpoint. */
+internal fun shouldApplyRemoteRefresh(
+    requested: WorkspaceSession, current: WorkspaceSession, refreshed: WorkspaceSession,
+): Boolean = current.userId == requested.userId && current.clientId == requested.clientId &&
+    current.workspace.id == requested.workspace.id && current.workspaceVersion == requested.workspaceVersion &&
+    current.lastServerSeq == requested.lastServerSeq && current.role == requested.role &&
+    current.workspace.title == requested.workspace.title && refreshed.hasRemoteChangesComparedTo(current)

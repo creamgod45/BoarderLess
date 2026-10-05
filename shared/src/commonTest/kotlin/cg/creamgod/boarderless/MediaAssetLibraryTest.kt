@@ -6,6 +6,102 @@ import cg.creamgod.boarderless.feature.canvas.*
 import kotlin.test.*
 
 class MediaAssetLibraryTest {
+    @Test fun explicitPreviewRetryRequiresFailureAndAnAvailableSafePreview() {
+        val ready = MediaAssetLibraryEntry(asset(), "Photo")
+        assertTrue(canRetryLibraryPreview(ready, true, true, false))
+        assertFalse(canRetryLibraryPreview(ready, false, true, false))
+        assertFalse(canRetryLibraryPreview(ready, true, false, false))
+        assertFalse(canRetryLibraryPreview(ready, true, true, true))
+        AssetStatus.entries.filter { it != AssetStatus.Ready }.forEach {
+            assertFalse(canRetryLibraryPreview(MediaAssetLibraryEntry(asset(status = it), "Photo"), true, true, false))
+        }
+        assertFalse(canRetryLibraryPreview(MediaAssetLibraryEntry(asset(type = "video/mp4"), "Video"), true, true, false))
+        assertFalse(canRetryLibraryPreview(MediaAssetLibraryEntry(asset().copy(byteSize = AssetPreviewPolicy.MaxEncodedBytes + 1), "Large"), true, true, false))
+        assertTrue(canRetryLibraryPreview(MediaAssetLibraryEntry(asset(type = "video/mp4").copy(thumbnailAssetId = "poster"), "Video"), true, true, false))
+    }
+    @Test fun lateVideoThumbnailAppearsWithoutChangingThePersistedNode() {
+        val original = asset(type = "video/mp4")
+        val persisted = node(original)
+        val before = persisted.copy()
+        assertNull(persisted.thumbnailAssetId)
+        assertNull(mediaNodePreviewAssetId(persisted, original, workspaceId))
+        assertEquals("late-poster", mediaNodePreviewAssetId(persisted,
+            original.copy(thumbnailAssetId = "late-poster"), workspaceId))
+        assertEquals(before, persisted)
+    }
+
+    @Test fun latestReadyMetadataOverridesStalePersistedThumbnail() {
+        val original = asset(type = "video/mp4").copy(thumbnailAssetId = "old-poster")
+        val persisted = node(original)
+        assertEquals("new-poster", mediaNodePreviewAssetId(persisted,
+            original.copy(thumbnailAssetId = "new-poster"), workspaceId))
+        assertEquals("old-poster", mediaNodePreviewAssetId(persisted,
+            original.copy(thumbnailAssetId = null), workspaceId))
+        assertEquals("old-poster", persisted.thumbnailAssetId)
+    }
+
+    @Test fun previewReferencesRequireMatchingReadyWorkspaceAssetAndMediaKind() {
+        val original = asset(type = "video/mp4").copy(thumbnailAssetId = "poster")
+        val persisted = node(original)
+        assertNull(mediaNodePreviewAssetId(persisted, null, workspaceId))
+        assertNull(mediaNodePreviewAssetId(persisted, original, null))
+        assertNull(mediaNodePreviewAssetId(persisted, original, WorkspaceId("other")))
+        assertNull(mediaNodePreviewAssetId(persisted, original.copy(id = "other"), workspaceId))
+        assertNull(mediaNodePreviewAssetId(persisted, original.copy(mediaType = "image/png"), workspaceId))
+        AssetStatus.entries.filter { it != AssetStatus.Ready }.forEach {
+            assertNull(mediaNodePreviewAssetId(persisted, original.copy(status = it), workspaceId))
+        }
+    }
+
+    @Test fun invalidSelfThumbnailNeverDownloadsVideoOriginalAsPoster() {
+        val video = asset(type = "video/mp4").copy(thumbnailAssetId = "a")
+        assertNull(mediaNodePreviewAssetId(node(video).copy(thumbnailAssetId = "a"), video, workspaceId))
+        assertNull(mediaNodePreviewAssetId(node(video), video, workspaceId))
+    }
+
+    @Test fun stillAndGifRetainOriginalFallbackAndPreferLatestDerivative() {
+        for (type in listOf("image/png", "image/gif")) {
+            val original = asset(type = type)
+            val persisted = node(original)
+            assertEquals("a", mediaNodePreviewAssetId(persisted, original, workspaceId))
+            assertEquals("poster", mediaNodePreviewAssetId(persisted,
+                original.copy(thumbnailAssetId = "poster"), workspaceId))
+        }
+    }
+    @Test fun onlyRejectedEntriesDisplayLocalizedValidationReasonsAndNeverBecomeInsertable() {
+        AssetRejectionReason.entries.forEach { reason ->
+            assertTrue(assetRejectionReasonLabel(reason).isNotBlank())
+            AssetStatus.entries.forEach { status ->
+                val entry = MediaAssetLibraryEntry(asset(status = status).copy(rejectionReason = reason), "a")
+                assertEquals(reason.takeIf { status == AssetStatus.Rejected }, entry.rejectionReason)
+                if (status == AssetStatus.Rejected) assertFalse(entry.insertable)
+            }
+        }
+    }
+    @Test fun recoveryReadPreservesAllFormalStatusesWithoutGrantingInsertion() {
+        AssetStatus.entries.forEach { status ->
+            val metadata = asset(status = status)
+            val viewer = session(role = WorkspaceMemberRole.Viewer)
+            assertEquals(metadata, recoveredMediaAssetForSession(viewer, viewer, metadata.id, metadata))
+            assertFalse(canInsertMediaInSession(viewer, viewer, false))
+            assertEquals(status == AssetStatus.Ready, MediaAssetLibraryEntry(metadata, "a").insertable)
+        }
+    }
+
+    @Test fun recoveryReadNeverPublishesIntoChangedSession() {
+        val opened = session()
+        listOf(null, session(user = "other"), session(client = "other"), session(id = WorkspaceId("other"))).forEach {
+            assertNull(recoveredMediaAssetForSession(opened, it, "a", asset()))
+        }
+    }
+
+    @Test fun recoveryReadRejectsWrongMetadataResource() {
+        assertFailsWith<IllegalArgumentException> { recoveredMediaAssetForSession(session(), session(), "different", asset()) }
+        assertFailsWith<IllegalArgumentException> {
+            recoveredMediaAssetForSession(session(), session(), "a", asset().copy(workspaceId = WorkspaceId("other")))
+        }
+    }
+
     private val workspaceId = WorkspaceId("w")
     private fun asset(id: String = "a", type: String = "image/png", status: AssetStatus = AssetStatus.Ready) =
         WorkspaceAsset(id, workspaceId, "u", type, 123, "sha256:abc", 640, 480, null, status, "2026-10-02")
@@ -34,6 +130,7 @@ class MediaAssetLibraryTest {
         assertEquals("a", MediaAssetLibraryEntry(asset(), "a").previewAssetId)
         assertEquals("a", MediaAssetLibraryEntry(asset(type = "image/gif"), "a").previewAssetId)
         assertNull(MediaAssetLibraryEntry(asset(type = "video/mp4"), "a").previewAssetId)
+        assertNull(MediaAssetLibraryEntry(asset(type = "video/mp4").copy(thumbnailAssetId = "a"), "a").previewAssetId)
         assertNull(MediaAssetLibraryEntry(asset().copy(byteSize = AssetPreviewPolicy.MaxEncodedBytes + 1), "a").previewAssetId)
         assertEquals("poster", MediaAssetLibraryEntry(asset(type = "video/mp4").copy(thumbnailAssetId = "poster"), "a").previewAssetId)
         assertNull(MediaAssetLibraryEntry(asset(status = AssetStatus.Pending).copy(thumbnailAssetId = "poster"), "a").previewAssetId)

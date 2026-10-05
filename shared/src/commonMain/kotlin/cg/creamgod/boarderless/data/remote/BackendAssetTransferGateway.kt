@@ -6,6 +6,7 @@ import cg.creamgod.boarderless.data.AssetStatus
 import cg.creamgod.boarderless.data.AssetTransferGateway
 import cg.creamgod.boarderless.data.AssetTransferSource
 import cg.creamgod.boarderless.data.AssetUploadTicket
+import cg.creamgod.boarderless.data.AssetImportCleanupTimeoutMillis
 import cg.creamgod.boarderless.data.DefaultAssetUploadChunkBytes
 import cg.creamgod.boarderless.data.DirectAssetUploadSource
 import cg.creamgod.boarderless.data.WorkspaceAsset
@@ -32,6 +33,9 @@ import io.ktor.utils.io.ByteWriteChannel
 import io.ktor.utils.io.readAvailable
 import io.ktor.utils.io.writeFully
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -73,23 +77,28 @@ class BackendAssetTransferGateway(
                 ),
             )
         }.requireAssetSuccess().body<PrepareAssetResponse>()
+        val preparedAsset = response.asset.toDomain()
         val directive = response.upload ?: response.uploadUrl?.let { url ->
             AssetTransferDirective(method = "PUT", url = url)
         }
         if (directive == null) {
-            // The current backend creates a pending row but returns uploadUrl: null. Roll it back
-            // immediately so probing capability cannot accumulate unusable metadata.
-            runCatching { abandon(session, response.asset.id) }
+            // The current backend creates a pending row but returns uploadUrl: null. Attempt
+            // bounded cleanup only when metadata validates as this source's pending preparation.
+            cleanupPendingPreparation(session, source, preparedAsset)
             throw AssetTransferUnavailableException(
                 "Backend created asset ${response.asset.id} without an upload directive",
             )
         }
         if (!directive.method.equals("PUT", ignoreCase = true)) {
-            runCatching { abandon(session, response.asset.id) }
+            cleanupPendingPreparation(session, source, preparedAsset)
             throw AssetTransferUnavailableException("Unsupported signed upload method '${directive.method}'")
         }
+        if (directive.url.isBlank()) {
+            cleanupPendingPreparation(session, source, preparedAsset)
+            throw AssetTransferUnavailableException("Backend returned a blank signed upload URL")
+        }
         return AssetUploadTicket(
-            asset = response.asset.toDomain(),
+            asset = preparedAsset,
             uploadUrl = directive.url,
             requiredHeaders = directive.headers,
         )
@@ -149,8 +158,11 @@ class BackendAssetTransferGateway(
         return checkNotNull(latest)
     }
 
-    override suspend fun thumbnailAssetId(session: WorkspaceSession, assetId: String): String? =
-        getAssetDto(session, assetId).thumbnailAssetId
+    override suspend fun thumbnailAssetId(session: WorkspaceSession, assetId: String): String? {
+        val asset = getAssetDto(session, assetId).toDomain()
+        check(asset.status == AssetStatus.Ready) { "Thumbnail source asset is not ready" }
+        return asset.thumbnailAssetId?.takeUnless { it == asset.id }
+    }
 
     override suspend fun abandon(session: WorkspaceSession, assetId: String) {
         client.delete(assetUrl(session, assetId)) {
@@ -200,10 +212,25 @@ class BackendAssetTransferGateway(
         client.close()
     }
 
-    private suspend fun getAssetDto(session: WorkspaceSession, assetId: String): AssetDto =
-        client.get(assetUrl(session, assetId)) {
+    private suspend fun cleanupPendingPreparation(session: WorkspaceSession, source: AssetTransferSource, asset: WorkspaceAsset) {
+        // A malformed/deduplicated ready response is not authority to delete another resource.
+        if (asset.status != AssetStatus.Pending || asset.workspaceId != session.workspace.id ||
+            asset.mediaType != source.mediaType.trim().lowercase() || asset.byteSize != source.byteSize || asset.checksum != source.checksum) return
+        withContext(NonCancellable) {
+            withTimeoutOrNull(AssetImportCleanupTimeoutMillis) { runCatching { abandon(session, asset.id) } }
+        }
+    }
+
+    private suspend fun getAssetDto(session: WorkspaceSession, assetId: String): AssetDto {
+        val dto = client.get(assetUrl(session, assetId)) {
             header(DevUserHeader, session.userId)
-        }.requireAssetSuccess().body()
+        }.requireAssetSuccess().body<AssetDto>()
+        val asset = dto.toDomain()
+        require(asset.id == assetId && asset.workspaceId == session.workspace.id) {
+            "Asset metadata does not match the requested workspace resource"
+        }
+        return dto
+    }
 
     private fun assetCollectionUrl(session: WorkspaceSession) =
         "$apiBase/workspaces/${session.workspace.id.value}/assets"

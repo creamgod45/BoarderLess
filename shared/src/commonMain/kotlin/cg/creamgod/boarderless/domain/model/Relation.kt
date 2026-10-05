@@ -1,11 +1,15 @@
 package cg.creamgod.boarderless.domain.model
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class RelationId(val value: String) {
     init {
         require(value.isNotBlank()) { "Relation id must not be blank" }
     }
 }
 
+@Serializable
 enum class RelationDirection {
     None,
     Forward,
@@ -13,6 +17,7 @@ enum class RelationDirection {
     Both,
 }
 
+@Serializable
 data class Relation(
     val id: RelationId,
     val version: Long = 1,

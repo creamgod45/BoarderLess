@@ -1,11 +1,15 @@
 package cg.creamgod.boarderless.domain.model
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class WorkspaceId(val value: String) {
     init {
         require(value.isNotBlank()) { "Workspace id must not be blank" }
     }
 }
 
+@Serializable
 data class Workspace(
     val id: WorkspaceId,
     val title: String,

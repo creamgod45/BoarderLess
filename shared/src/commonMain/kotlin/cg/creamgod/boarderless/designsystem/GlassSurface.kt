@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -63,11 +64,12 @@ fun ShellButton(
     accent: Boolean = false,
     icon: ShellIcon? = null,
     showLabel: Boolean = true,
+    compact: Boolean = false,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = BoarderLessTheme.colors
-    val shape = RoundedCornerShape(12.dp)
+    val shape = RoundedCornerShape(if (compact) 8.dp else 12.dp)
     var focused by remember { mutableStateOf(false) }
     val background = when {
         !enabled -> Color.Transparent
@@ -94,14 +96,16 @@ fun ShellButton(
                 shape = shape,
             )
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .heightIn(min = 44.dp)
-            .padding(horizontal = 14.dp, vertical = 9.dp),
+            .then(if (compact) Modifier.size(28.dp) else Modifier)
+            .heightIn(min = if (compact) 28.dp else 44.dp)
+            .padding(horizontal = if (compact) 6.dp else 14.dp, vertical = if (compact) 6.dp else 9.dp),
     ) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            icon?.let { ShellIconGlyph(icon = it, tint = foreground) }
+            icon?.let { ShellIconGlyph(icon = it, tint = foreground,
+                modifier = if (compact) Modifier.size(14.dp) else Modifier) }
             if (showLabel) {
                 BasicText(
                     text = label,

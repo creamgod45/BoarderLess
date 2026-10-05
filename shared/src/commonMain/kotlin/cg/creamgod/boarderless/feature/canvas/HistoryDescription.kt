@@ -13,6 +13,7 @@ import cg.creamgod.boarderless.domain.history.UpdateGroupFrameAttributesOperatio
 import cg.creamgod.boarderless.domain.history.UpdateRelationAttributesOperation
 import cg.creamgod.boarderless.domain.history.UpdateTextNodeAttributesOperation
 import cg.creamgod.boarderless.domain.history.UpdateMediaNodeAttributesOperation
+import cg.creamgod.boarderless.domain.history.UpdateMediaReferenceOperation
 import cg.creamgod.boarderless.domain.history.WorkspaceOperation
 
 internal enum class HistoryDirection { Undo, Redo }
@@ -51,6 +52,8 @@ internal fun describeHistoryOperation(
             Strings.history.changedGroupSettingsForGroups(operation.changes.size)
         is UpdateMediaNodeAttributesOperation ->
             Strings.history.changedStyleForObjects(operation.changes.size)
+        is UpdateMediaReferenceOperation ->
+            Strings.history.changedItems(operation.changes.size)
         is UpdateRelationAttributesOperation -> Strings.history.changedConnectionSettingsForConnections(operation.changes.size)
         is TransactionOperation -> if ("move-reparent-" in operation.operationId) {
             Strings.history.operation.movedObjectAndChangedGroup()

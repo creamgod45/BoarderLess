@@ -152,21 +152,21 @@ internal fun relationPaletteEntries(
 
 internal fun connectionTargetPaletteEntries(
     sourceId: CanvasObjectId,
-    nodes: Collection<TextNode>,
+    nodes: Collection<cg.creamgod.boarderless.domain.model.CanvasObject>,
     enabled: Boolean,
     disabledReason: String,
-): List<PaletteEntry> = nodes
+): List<PaletteEntry> = nodes.connectableNodes()
     .asSequence()
     .filterNot { it.id == sourceId }
-    .sortedWith(compareByDescending<TextNode> { it.zIndex }.thenBy { it.id.value })
+    .sortedWith(compareByDescending<cg.creamgod.boarderless.domain.model.CanvasObject> { it.zIndex }.thenBy { it.id.value })
     .map { target ->
-        val targetTitle = target.text.lineSequence().firstOrNull()?.take(80).orEmpty()
+        val targetTitle = target.connectionTitle.lineSequence().firstOrNull()?.take(80).orEmpty()
             .ifBlank { Strings.content.untitledThought() }
         PaletteEntry(
             id = "connect-target:${target.id.value}",
             title = Strings.palette.connectToThought(targetTitle),
             subtitle = Strings.palette.createDirectedRelatedConnection(),
-            keywords = "${paletteKeywords(Strings.palette.keywords.connectRelationIntent)} ${target.text}",
+            keywords = "${paletteKeywords(Strings.palette.keywords.connectRelationIntent)} ${target.connectionTitle}",
             enabled = enabled,
             disabledReason = disabledReason,
         )
@@ -175,16 +175,16 @@ internal fun connectionTargetPaletteEntries(
 
 internal fun relationNavigationPaletteEntries(
     relations: Collection<Relation>,
-    nodesById: Map<CanvasObjectId, TextNode>,
+    nodesById: Map<CanvasObjectId, cg.creamgod.boarderless.domain.model.CanvasObject>,
 ): List<PaletteEntry> = relations
     .asSequence()
     .sortedWith(compareByDescending<Relation> { it.version }.thenBy { it.id.value })
     .mapNotNull { relation ->
         val source = nodesById[relation.sourceObjectId] ?: return@mapNotNull null
         val target = nodesById[relation.targetObjectId] ?: return@mapNotNull null
-        val sourceTitle = source.text.lineSequence().firstOrNull()?.take(60).orEmpty()
+        val sourceTitle = source.connectionTitle.lineSequence().firstOrNull()?.take(60).orEmpty()
             .ifBlank { Strings.content.untitledThought() }
-        val targetTitle = target.text.lineSequence().firstOrNull()?.take(60).orEmpty()
+        val targetTitle = target.connectionTitle.lineSequence().firstOrNull()?.take(60).orEmpty()
             .ifBlank { Strings.content.untitledThought() }
         val arrow = when (relation.direction) {
             RelationDirection.None -> "—"
@@ -208,9 +208,9 @@ internal fun relationNavigationPaletteEntries(
             keywords = buildString {
                 append(paletteKeywords(Strings.palette.keywords.findConnectionRelation))
                 append(' ')
-                append(source.text)
+                append(source.connectionTitle)
                 append(' ')
-                append(target.text)
+                append(target.connectionTitle)
                 append(' ')
                 append(relation.intent.orEmpty())
                 append(' ')

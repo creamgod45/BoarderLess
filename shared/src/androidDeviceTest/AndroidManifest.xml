@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <application android:usesCleartextTraffic="true">
+        <provider android:name="cg.creamgod.boarderless.AndroidMediaQaProvider"
+            android:authorities="${applicationId}.qa-media" android:exported="false" />
+    </application>
+</manifest>

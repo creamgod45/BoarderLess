@@ -9,13 +9,21 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class AssetContractTest {
+    @Test fun knownRejectionCodesMapWithoutPreservingArbitraryServerText() {
+        cg.creamgod.boarderless.data.AssetRejectionReason.entries.forEach { reason ->
+            assertEquals(reason, dto("rejected").copy(rejectionReason = reason.token).toDomain().rejectionReason)
+        }
+        assertEquals(cg.creamgod.boarderless.data.AssetRejectionReason.Unknown,
+            dto("rejected").copy(rejectionReason = "https://private.invalid/?token=secret").toDomain().rejectionReason)
+        assertEquals(null, dto("rejected").toDomain().rejectionReason)
+    }
     @Test fun derivativeReferenceSurvivesMetadataMappingWithoutStorageUrl() {
         assertEquals("poster", dto(status = "ready").copy(thumbnailAssetId = "poster").toDomain().thumbnailAssetId)
     }
 
-    @Test fun blankAndSelfReferencingThumbnailsFailClosed() {
+    @Test fun blankThumbnailFailsClosedButOriginalReferenceRemainsReadable() {
         assertFailsWith<BackendContractException> { dto(status = "ready").copy(thumbnailAssetId = " ").toDomain() }
-        assertFailsWith<BackendContractException> { dto(status = "ready").copy(thumbnailAssetId = "asset-1").toDomain() }
+        assertEquals("asset-1", dto(status = "ready").copy(thumbnailAssetId = "asset-1").toDomain().thumbnailAssetId)
     }
 
     @Test

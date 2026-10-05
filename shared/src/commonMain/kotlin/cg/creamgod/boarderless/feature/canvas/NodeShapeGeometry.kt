@@ -21,10 +21,16 @@ internal fun shapeBoundaryWorldPoint(
     toward: Vec2,
 ): Vec2 {
     val center = transform.position + Vec2(transform.size.width / 2f, transform.size.height / 2f)
-    val localDirection = rotateVector(toward - center, -transform.rotationDegrees)
+    val origin = shapeConnectionOriginWorldPoint(transform, shape)
+    val localDirection = rotateVector(toward - origin, -transform.rotationDegrees)
     val length = sqrt(localDirection.x * localDirection.x + localDirection.y * localDirection.y)
-    if (length < 0.001f) return center
+    if (length < 0.001f) return origin
     val unit = localDirection / length
+    shape.polygonVertices()?.let { vertices ->
+        val distance = polygonRayBoundary(vertices, unit, transform.size.width, transform.size.height,
+            rotateVector(origin - center, -transform.rotationDegrees))
+        if (distance != null) return origin + rotateVector(unit * distance, transform.rotationDegrees)
+    }
     var inside = 0f
     var outside = max(transform.size.width, transform.size.height) * 1.5f
     repeat(24) {
@@ -43,12 +49,22 @@ internal fun shapeBoundaryWorldPoint(
     return center + rotateVector(unit * inside, transform.rotationDegrees)
 }
 
+/** Bounding-box centre is on the hypotenuse of a right triangle; use its interior centroid. */
+internal fun shapeConnectionOriginWorldPoint(transform: CanvasTransform, shape: NodeShape): Vec2 {
+    val center = transform.position + Vec2(transform.size.width / 2f, transform.size.height / 2f)
+    val local = if (shape == NodeShape.RightTriangle) Vec2(-transform.size.width / 6f, transform.size.height / 6f) else Vec2.Zero
+    return center + rotateVector(local, transform.rotationDegrees)
+}
+
 internal fun NodeShape.containsLocalPoint(point: Vec2, halfWidth: Float, halfHeight: Float): Boolean {
-    if (halfWidth <= 0f || halfHeight <= 0f) return false
+    if (!halfWidth.isFinite() || !halfHeight.isFinite() || halfWidth <= 0f || halfHeight <= 0f ||
+        !point.x.isFinite() || !point.y.isFinite()) return false
     val x = point.x / halfWidth
     val y = point.y / halfHeight
+    if (abs(x) > 1f || abs(y) > 1f) return false
+    polygonVertices()?.let { return polygonContains(it, Vec2((x + 1f) / 2f, (y + 1f) / 2f)) }
     return when (this) {
-        NodeShape.RoundedRectangle, NodeShape.Rectangle -> abs(x) <= 1f && abs(y) <= 1f
+        NodeShape.RoundedRectangle, NodeShape.Rectangle, NodeShape.PlainText -> true
         NodeShape.Ellipse -> x * x + y * y <= 1f
         NodeShape.Diamond -> abs(x) + abs(y) <= 1f
         NodeShape.Pill -> {
@@ -72,5 +88,6 @@ internal fun NodeShape.containsLocalPoint(point: Vec2, halfWidth: Float, halfHei
             y > 0.7f -> x * x + ((y - 0.7f) / 0.3f).let { it * it } <= 1f
             else -> true
         }
+        else -> false // Polygon outlines handled above; unknown additions fail closed.
     }
 }

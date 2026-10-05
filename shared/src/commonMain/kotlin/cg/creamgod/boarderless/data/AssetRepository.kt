@@ -27,6 +27,7 @@ data class WorkspaceAsset(
     val status: AssetStatus,
     val createdAt: String,
     val thumbnailAssetId: String? = null,
+    val rejectionReason: AssetRejectionReason? = null,
 ) {
     init {
         require(id.isNotBlank()) { "asset id must not be blank" }
@@ -38,17 +39,33 @@ data class WorkspaceAsset(
         require(height == null || height > 0) { "asset height must be positive" }
         require(durationMs == null || durationMs >= 0) { "asset duration must not be negative" }
         require(createdAt.isNotBlank()) { "asset creation time must not be blank" }
-        require(thumbnailAssetId == null || (thumbnailAssetId.isNotBlank() && thumbnailAssetId != id)) {
-            "asset thumbnail must reference a distinct nonblank asset"
+        require(thumbnailAssetId?.isNotBlank() != false) { "asset thumbnail must not be blank" }
+    }
+}
+
+/** Only known machine codes reach presentation; never display arbitrary server error text. */
+enum class AssetRejectionReason(val token: String) {
+    UploadMissing("upload_missing"),
+    ByteSizeMismatch("byte_size_mismatch"),
+    ChecksumMismatch("checksum_mismatch"),
+    MediaTypeMismatch("media_type_mismatch"),
+    UnsupportedFormat("unsupported_format"),
+    UndecodableMedia("undecodable_media"),
+    DimensionsExceeded("dimensions_exceeded"),
+    InvalidDuration("invalid_duration"),
+    DurationExceeded("duration_exceeded"),
+    Unknown("unknown"),
+    ;
+
+    companion object {
+        fun fromToken(token: String?): AssetRejectionReason? = token?.let { value ->
+            entries.firstOrNull { it.token == value } ?: Unknown
         }
     }
 }
 
-/** Read-only metadata supported by the current backend.
- *
- * Binary upload, completion, derivatives, and authorized download are intentionally absent until
- * the server publishes those contracts. This prevents the app from treating a pending metadata
- * row as a completed upload.
+/** Read-only metadata boundary. Binary transfer belongs to AssetTransferGateway /
+ * AssetDownloadGateway; metadata alone is never evidence of a completed upload.
  */
 interface AssetRepository {
     suspend fun listAssets(session: WorkspaceSession): List<WorkspaceAsset>

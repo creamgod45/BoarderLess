@@ -18,6 +18,8 @@ import cg.creamgod.boarderless.designsystem.BoarderLessTheme
 import cg.creamgod.boarderless.feature.canvas.WorkspaceMenuBridge
 import cg.creamgod.boarderless.feature.canvas.WorkspaceScreen
 import cg.creamgod.boarderless.feature.qa.QaRuntime
+import cg.creamgod.boarderless.data.DraftBackupRuntime
+import cg.creamgod.boarderless.data.DraftImportRuntime
 import cg.creamgod.boarderless.feature.qa.QaWorkbenchHost
 import cg.creamgod.boarderless.i18n.Localization
 import cg.creamgod.boarderless.i18n.activateLanguage
@@ -31,6 +33,8 @@ fun App(
     mediaImportRuntime: MediaImportRuntime = MediaImportRuntime.Unavailable,
     menuBridge: WorkspaceMenuBridge? = null,
     recentWorkspacesPublisher: RecentWorkspacesPublisher = RecentWorkspacesPublisher.None,
+    draftBackupRuntime: DraftBackupRuntime = DraftBackupRuntime.Unavailable,
+    draftImportRuntime: DraftImportRuntime = DraftImportRuntime.Unavailable,
 ) {
     val uiPreferences = remember { UiPreferences() }
     var reduceTransparency by remember { mutableStateOf(uiPreferences.reduceTransparency) }
@@ -49,6 +53,8 @@ fun App(
         Box(modifier = Modifier.fillMaxSize()) {
             WorkspaceScreen(
                 mediaImportRuntime = mediaImportRuntime,
+                draftBackupRuntime = draftBackupRuntime,
+                draftImportRuntime = draftImportRuntime,
                 menuBridge = menuBridge,
                 recentWorkspacesPublisher = recentWorkspacesPublisher,
                 reduceTransparency = reduceTransparency,

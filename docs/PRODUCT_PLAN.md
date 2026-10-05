@@ -1,5 +1,7 @@
 # BoarderLess 產品與介面計畫書
 
+目前 loop 執行清單：[CURRENT_LOOP_GOAL.md](CURRENT_LOOP_GOAL.md)。區分已實作 APP、待真實驗收及未完成產品能力；已完成實作不重做，原六項順序與範圍不變。
+
 版本：0.2
 狀態：產品假設草案，供設計與 MVP 開發使用
 
@@ -272,6 +274,7 @@ Canvas 輸入採明確互動狀態，不讓各元件各自解讀指標事件：
 - 鋼筆工具建立 BoarderLess 自有的版本化向量路徑。路徑以有限且通過驗證的 move／line／quadratic／cubic／close commands 保存，不接受可執行 script 或未驗證的任意 SVG；建立、節點編輯、關閉路徑、填色與描邊均可 Undo。
 - 「快速方案簿」保存使用者建立的物件或群組模板；使用者層級 API 讓同一帳號跨裝置同步，並以 revision／ETag 防止靜默覆蓋。
 - 插入快速方案時預設建立具新 ID 的副本；模板本身具有 schema version，避免日後模型升級破壞既有方案。
+- 跨裝置交付合約見 [BACKEND_QUICK_SCHEME_API_SPEC.md](BACKEND_QUICK_SCHEME_API_SPEC.md)（Proposal）。resource envelope v2 與 selection v4 分層；素材方案需要 source binding、授權保留與 destination materialization，不能將使用者方案所有權當成跨畫布素材權限。保留本機原件、revision 衝突確認與 migration journal 為上線門檻，不以文件或本機 tests 代表後端已完成。
 - 第一階段先支援本機圖片；GIF、影片播放與線上 GIF Browser 在資產保存及生命週期穩定後加入。
 
 ### 9.7 後端與協作邊界
@@ -281,6 +284,8 @@ Node.js 後端、正式儲存、多核心處理、WebSocket 協定與多人協�
 ## 10. 里程碑
 
 目前執行順序以圖片／GIF／影片素材為第一優先、多人即時協作為第二優先，其後依序補 Quick Scheme 跨裝置同步、共用 Canvas 樣式、AI transport 與物件庫／鋼筆工具。視覺辨識與遮擋依 [`產品 QA 品質檢驗 SOP.md`](產品%20QA%20品質檢驗%20SOP.md) 交由產品負責人最終簽核；效能量測在核心功能、後端整合與主要回歸穩定後才進入最後階段。
+
+共用 Canvas 樣式的雙端交付規範見 [BACKEND_CANVAS_STYLE_API_SPEC.md](BACKEND_CANVAS_STYLE_API_SPEC.md)（Proposal）：正式 style CAS／snapshot／replay／Undo，個人 viewport 與顯示偏好隔離、remote-state guard 及舊資料 migration 都是完成門檻；不能只把本機色票改成 REST 設定就視為共享功能完成。
 
 ### M0：Foundation 與領域契約
 

@@ -19,11 +19,12 @@ class BrowserVideoPlaybackTest {
             val gateway = Gateway(fixture())
             val player = loadBrowserVideo(gateway, session(), "video") as BrowserVideoPlayback
             try {
-                assertEquals(1, gateway.downloads); assertEquals(1, gateway.authorizations)
-                assertEquals(32, player.state.value.width); assertEquals(32, player.state.value.height)
+                assertEquals(1, gateway.downloads, "One verified download"); assertEquals(1, gateway.authorizations, "One authorization")
+                assertEquals(32, player.state.value.width, "Prepared width"); assertEquals(32, player.state.value.height, "Prepared height")
                 assertTrue(player.state.value.durationMs > 0); assertTrue(player.state.value.muted); assertFalse(player.state.value.playing, "Initial player must be paused")
+                assertEquals(0L, player.state.value.positionMs, "Duration probe must restore the initial position")
                 val first = player.frame(); val white = IntArray(1); first.readPixels(white, width = 1, height = 1)
-                assertEquals(0xffffffff.toInt(), white[0])
+                assertEquals(0xffffffff.toInt(), white[0], "Initial paused frame must be white")
                 coroutineScope {
                     val capture = async(start = CoroutineStart.UNDISPATCHED) { player.frame() }
                     assertFalse(capture.isCompleted, "Capture cancellation must target a pending native frame")
@@ -37,8 +38,8 @@ class BrowserVideoPlaybackTest {
                 player.seekTo(player.state.value.durationMs / 2)
                 delay(150)
                 val next = player.frame(); val blue = IntArray(1); next.readPixels(blue, width = 1, height = 1)
-                assertTrue(blue[0] != white[0])
-                first.readPixels(white, width = 1, height = 1); assertEquals(0xffffffff.toInt(), white[0])
+                assertTrue(blue[0] != white[0], "Seek must capture a later blue frame")
+                first.readPixels(white, width = 1, height = 1); assertEquals(0xffffffff.toInt(), white[0], "Previous frame must remain immutable")
                 player.setPlaying(true)
                 withTimeout(5000) { player.state.first { it.ended } }
                 player.setPlaying(true)
@@ -46,7 +47,7 @@ class BrowserVideoPlaybackTest {
                 player.attached(false); assertFalse(player.state.value.playing, "Detach must publish paused state")
             } finally { player.release() }
             player.release(); assertTrue(player.state.value.released)
-            assertEquals("{\"created\":1,\"revoked\":1}", browserVideoAccounting(false))
+            assertEquals("{\"created\":1,\"revoked\":1}", browserVideoAccounting(false), "Release must revoke the verified Blob once")
             assertFails { player.frame() }
         }
     }
@@ -129,12 +130,17 @@ class BrowserVideoPlaybackTest {
             } finally { sink.abort() }
         }
     }
-    private suspend fun fixture(): ByteArray = suspendCancellableCoroutine { pending ->
+    private suspend fun fixture(): ByteArray = suspendCancellableCoroutine<ByteArray> { pending ->
         recordBrowserVideoFixture { bytes, error ->
             if (pending.isActive) {
                 if (bytes != null) pending.resume(Base64.decode(bytes)) else pending.resumeWithException(IllegalStateException(error))
             }
         }
+    }.also { bytes ->
+        assertEquals(730, bytes.size, "Fixed codec fixture byte size")
+        val hash = SHA256().digest(bytes).joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
+        assertEquals("ee13b6c257d11c080e0489977bfa9779ad1220f2552189ca8052dec11b7431ab", hash,
+            "Known white/blue input must not depend on recorder scheduling")
     }
     private fun session() = WorkspaceSession("viewer", "client", WorkspaceMemberRole.Viewer, 0, 0, Workspace(WorkspaceId("w"), "Video"))
     private class Gateway(private val bytes: ByteArray, private val badHash: Boolean = false, private val cancel: Boolean = false,

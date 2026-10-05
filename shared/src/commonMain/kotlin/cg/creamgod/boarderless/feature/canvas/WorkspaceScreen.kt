@@ -13,6 +13,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
+import kotlinx.coroutines.isActive
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -84,6 +86,7 @@ import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -124,6 +127,16 @@ import cg.creamgod.boarderless.data.persistence.UiPreferences
 import cg.creamgod.boarderless.i18n.LanguagePreference
 import cg.creamgod.boarderless.i18n.Localization
 import cg.creamgod.boarderless.data.WorkspaceSession
+import cg.creamgod.boarderless.data.PendingWorkspaceChange
+import cg.creamgod.boarderless.data.PendingWorkspaceDraft
+import cg.creamgod.boarderless.data.WorkspaceDraftReview
+import cg.creamgod.boarderless.data.inspectWorkspaceDraftBackup
+import cg.creamgod.boarderless.data.checkDraftMergeProposal
+import cg.creamgod.boarderless.data.refreshDraftMergeReview
+import cg.creamgod.boarderless.data.DraftImportRuntime
+import cg.creamgod.boarderless.data.selectWorkspaceDraftBackup
+import cg.creamgod.boarderless.data.toBackupJson
+import cg.creamgod.boarderless.data.canPublishDraftReview
 import cg.creamgod.boarderless.data.WorkspaceSummary
 import cg.creamgod.boarderless.data.WorkspaceActivity
 import cg.creamgod.boarderless.data.WorkspaceMember
@@ -145,12 +158,26 @@ import cg.creamgod.boarderless.data.remote.AssetTransferUnavailableException
 import cg.creamgod.boarderless.data.WorkspaceSubmissionQueue
 import cg.creamgod.boarderless.data.WorkspaceSubmissionStep
 import cg.creamgod.boarderless.data.canEditContent
-import cg.creamgod.boarderless.data.hasRemoteChangesComparedTo
+import cg.creamgod.boarderless.data.shouldApplyRemoteRefresh
+import cg.creamgod.boarderless.data.awaitActiveWorkspaceRefresh
 import cg.creamgod.boarderless.data.submitNextWorkspaceChange
 import cg.creamgod.boarderless.data.remote.BackendWorkspaceRepository
 import cg.creamgod.boarderless.data.remote.BackendHttpException
 import cg.creamgod.boarderless.data.remote.BackendContractException
 import cg.creamgod.boarderless.data.remote.isWorkspaceAccessLoss
+import cg.creamgod.boarderless.data.remote.requiresWorkspaceReconnectAfterFailedSubmission
+import cg.creamgod.boarderless.data.WorkspacePresenceState
+import cg.creamgod.boarderless.data.acceptWorkspacePresence
+import cg.creamgod.boarderless.data.collectActiveWorkspacePresence
+import cg.creamgod.boarderless.data.presencePublicationIsLive
+import cg.creamgod.boarderless.data.publishWorkspacePresence
+import cg.creamgod.boarderless.data.workspacePresenceIntent
+import cg.creamgod.boarderless.data.mediaActivityAllowsPublication
+import cg.creamgod.boarderless.data.DraftBackupRuntime
+import cg.creamgod.boarderless.data.DraftBackupResult
+import cg.creamgod.boarderless.data.exportWorkspaceDraftBackup
+import kotlinx.coroutines.coroutineScope
+import kotlin.time.TimeSource
 import cg.creamgod.boarderless.data.remote.randomUuid
 import cg.creamgod.boarderless.data.persistence.CanvasPreferences
 import cg.creamgod.boarderless.data.persistence.CanvasDisplaySettings
@@ -212,6 +239,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.currentCoroutineContext
 import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
@@ -458,7 +486,7 @@ private data class LibraryDragPreview(
     val screenPosition: Vec2,
 )
 
-private val ClipboardJson = Json {
+internal val ClipboardJson = Json {
     encodeDefaults = true
     ignoreUnknownKeys = true
     explicitNulls = false
@@ -541,6 +569,7 @@ internal fun validateClipboardPayload(payload: ClipboardPayload): ClipboardPaylo
     if (groupIds.any(::hasParentCycle)) return ClipboardPayloadIssue.ParentCycle
 
     val nodeIds = payload.nodes.mapTo(mutableSetOf(), ClipboardNode::originalId)
+    nodeIds += payload.media.map { it.originalId }
     if (payload.relations.any { relation ->
             relation.sourceId !in nodeIds || relation.targetId !in nodeIds ||
                 relation.sourceId == relation.targetId ||
@@ -961,7 +990,14 @@ private fun builtInComponents(density: Float): List<BuiltInComponent> {
                 ),
             ),
         ),
-    )
+    ) + listOf(NodeShape.PlainText, NodeShape.Triangle, NodeShape.Pentagon, NodeShape.Octagon,
+        NodeShape.Trapezoid, NodeShape.Plus, NodeShape.ArrowRight, NodeShape.ArrowLeft,
+        NodeShape.ArrowUp, NodeShape.ArrowDown, NodeShape.TriangleDown, NodeShape.RightTriangle,
+        NodeShape.Chevron, NodeShape.DoubleArrow, NodeShape.Star, NodeShape.ManualInput).map { shape ->
+        shapeComponent("${shape.token}-node", nodeShapeLabel(shape),
+            if (shape == NodeShape.PlainText) Strings.library.plainTextDescription() else Strings.library.geometryDescription(),
+            nodeShapeLabel(shape), "paper", shape)
+    }
 }
 
 private fun orderClipboardGroups(groups: List<ClipboardGroup>): List<ClipboardGroup> {
@@ -1036,12 +1072,11 @@ private fun QuickSchemePreview(
             )
         }
 
-        val nodesById = payload.nodes.associateBy { it.originalId }
+        val centersById = payload.nodes.associate { it.originalId to project(it.x + it.width / 2f, it.y + it.height / 2f) } +
+            payload.media.associate { it.originalId to project(it.x + it.width / 2f, it.y + it.height / 2f) }
         payload.relations.forEach { relation ->
-            val source = nodesById[relation.sourceId] ?: return@forEach
-            val target = nodesById[relation.targetId] ?: return@forEach
-            val start = project(source.x + source.width / 2f, source.y + source.height / 2f)
-            val end = project(target.x + target.width / 2f, target.y + target.height / 2f)
+            val start = centersById[relation.sourceId] ?: return@forEach
+            val end = centersById[relation.targetId] ?: return@forEach
             drawLine(
                 color = when (relation.intent) {
                     "conflicts" -> colors.danger
@@ -1060,9 +1095,11 @@ private fun QuickSchemePreview(
                 width = (node.width * scale).coerceAtLeast(8f * density),
                 height = (node.height * scale).coerceAtLeast(6f * density),
             )
-            val nodeColor = nodeFillColor(node.colorToken, colors)
+            val nodeShape = NodeShape.fromToken(node.shapeToken) ?: NodeShape.RoundedRectangle
+            val nodeColor = if (nodeShape == NodeShape.PlainText) nodeTextColors(node.colorToken, colors, nodeShape).text
+                else nodeFillColor(node.colorToken, colors)
             drawNodePreviewShape(
-                shape = NodeShape.fromToken(node.shapeToken) ?: NodeShape.RoundedRectangle,
+                shape = nodeShape,
                 color = nodeColor,
                 borderColor = colors.contentBorder,
                 topLeft = topLeft,
@@ -1105,6 +1142,8 @@ fun WorkspaceScreen(
     onLanguagePreferenceChange: (LanguagePreference) -> Unit = {},
     menuBridge: WorkspaceMenuBridge? = null,
     recentWorkspacesPublisher: RecentWorkspacesPublisher = RecentWorkspacesPublisher.None,
+    draftBackupRuntime: DraftBackupRuntime = DraftBackupRuntime.Unavailable,
+    draftImportRuntime: DraftImportRuntime = DraftImportRuntime.Unavailable,
 ) {
     val colors = BoarderLessTheme.colors
     val density = LocalDensity.current.density
@@ -1128,6 +1167,14 @@ fun WorkspaceScreen(
     var mediaImportLabel by remember { mutableStateOf("") }
     val canvasPreferences = remember { CanvasPreferences() }
     val quickSchemeStore = remember { QuickSchemeStore() }
+    val libraryPreferences = remember { cg.creamgod.boarderless.data.persistence.ComponentLibraryPreferences() }
+    var libraryFavorites by remember { mutableStateOf(libraryPreferences.favorites()) }
+    var libraryRecent by remember { mutableStateOf(libraryPreferences.recent()) }
+    var libraryCategory by remember { mutableStateOf(ComponentLibraryCategory.fromToken(runCatching { libraryPreferences.selectedCategory() }.getOrDefault("all"))) }
+    var libraryCategoriesExpanded by remember { mutableStateOf(runCatching { libraryPreferences.categoriesExpanded() }.getOrDefault(true)) }
+    val mediaRecoveryStore = remember { cg.creamgod.boarderless.data.persistence.MediaRecoveryStore() }
+    val mediaRecoveryWriteMutex = remember { kotlinx.coroutines.sync.Mutex() }
+    var mediaRecoveryRevision by remember { mutableStateOf(0) }
     DisposableEffect(repository) {
         onDispose { repository.close() }
     }
@@ -1172,6 +1219,8 @@ fun WorkspaceScreen(
     var showCanvasBackgroundPicker by remember { mutableStateOf(false) }
     var canvasBackgroundPreview by remember { mutableStateOf<String?>(null) }
     var workspaceFormEditing by remember { mutableStateOf(false) }
+    var componentLibraryFocused by remember { mutableStateOf(false) }
+    var giphyTextEditing by remember { mutableStateOf(false) }
     var editingId by remember { mutableStateOf<CanvasObjectId?>(null) }
     var pendingNewNode by remember { mutableStateOf<TextNode?>(null) }
     var dragPreviews by remember { mutableStateOf<Map<CanvasObjectId, Vec2>>(emptyMap()) }
@@ -1187,7 +1236,40 @@ fun WorkspaceScreen(
     var submissionQueue by remember { mutableStateOf(WorkspaceSubmissionQueue()) }
     var syncInProgress by remember { mutableStateOf(false) }
     var connectionFailed by remember { mutableStateOf(false) }
+    var presenceState by remember { mutableStateOf(WorkspacePresenceState()) }
+    val presenceClock = remember { TimeSource.Monotonic.markNow() }
+    var pendingRecovery by remember { mutableStateOf<PendingWorkspaceChange?>(null) }
+    var pendingDraftRecovery by remember { mutableStateOf<PendingWorkspaceDraft?>(null) }
+    val draftReviewScopeId = remember(session?.userId, session?.clientId, session?.workspace?.id, connectionFailed) { randomUuid() }
+    val latestDraftReviewScopeId by rememberUpdatedState(draftReviewScopeId)
+    var draftReview by remember(draftReviewScopeId) { mutableStateOf<WorkspaceDraftReview?>(null) }
+    var draftReviewOwner by remember(draftReviewScopeId) { mutableStateOf<WorkspaceSession?>(null) }
+    var draftReviewMessage by remember(draftReviewScopeId) { mutableStateOf<String?>(null) }
+    var showDraftImport by remember(draftReviewScopeId) { mutableStateOf(false) }
+    var showPenDraft by remember(draftReviewScopeId) { mutableStateOf(false) }
+    LaunchedEffect(showPenDraft, session?.canEditContent) {
+        if (showPenDraft && session?.canEditContent != true) showPenDraft = false
+    }
+    var pendingRecoveryChecking by remember { mutableStateOf(false) }
+    var pendingRecoveryBusy by remember { mutableStateOf(false) }
+    var pendingRecoveryDismissArmed by remember { mutableStateOf(false) }
+    var pendingRecoveryRevision by remember { mutableStateOf(0) }
     var connectionAttempt by remember { mutableStateOf(0) }
+    val presenceSubscriptionId = remember(repository, session?.userId, session?.clientId, session?.workspace?.id,
+        session?.role, connectionAttempt, connectionFailed) { randomUuid() }
+    // Gate synchronously in composition, before cancellation/reset effects run for a new owner.
+    val visiblePresence = if (connectionFailed) WorkspacePresenceState() else presenceState.visibleFor(
+        session, presenceSubscriptionId, presenceClock.elapsedNow().inWholeMilliseconds)
+    val presenceActivityFlow = remember(mediaImportRuntime) {
+        mediaImportRuntime.playbackActivity ?: MutableStateFlow(MediaPlaybackActivity())
+    }
+    val presenceActivity by presenceActivityFlow.collectAsState()
+    val presencePublicationOwnerId = remember(presenceSubscriptionId, visiblePresence.roomEpoch,
+        visiblePresence.connected, presenceActivity.available, presenceActivity.epoch) { randomUuid() }
+    // Consent and samples do not survive account, room, reconnect or background transitions.
+    var sharePresence by remember(presencePublicationOwnerId) { mutableStateOf(false) }
+    var presencePublisherReady by remember(presencePublicationOwnerId) { mutableStateOf(false) }
+    var presenceScreenCursor by remember(presencePublicationOwnerId) { mutableStateOf<Vec2?>(null) }
     var statusMessage by remember { mutableStateOf(Strings.status.connectingToWorkspace()) }
     var schemes by remember { mutableStateOf(quickSchemeStore.list()) }
     var showSchemeLibrary by remember { mutableStateOf(false) }
@@ -1219,8 +1301,14 @@ fun WorkspaceScreen(
     var commandPaletteQuery by remember { mutableStateOf("") }
     var selectedSchemeId by remember { mutableStateOf<Int?>(schemes.lastOrNull()?.id) }
     var schemeNameDraft by remember { mutableStateOf(schemes.lastOrNull()?.name.orEmpty()) }
-    val canvasInteractionBlocked = session == null || connectionFailed || workspaceSwitchInProgress
-    val inputBlocked = canvasInteractionBlocked || session?.canEditContent != true || mediaImportBusy
+    val draftReviewVisible = showPenDraft || showDraftImport || (draftReview != null && !connectionFailed && draftReviewOwner != null &&
+        session?.userId == draftReviewOwner?.userId && session?.clientId == draftReviewOwner?.clientId &&
+        session?.workspace?.id == draftReviewOwner?.workspace?.id && pendingDraftRecovery?.id == draftReview?.draftId)
+    val latestDraftImportAllowed by rememberUpdatedState(showDraftImport && !connectionFailed && !workspaceSwitchInProgress)
+    val canvasInteractionBlocked = session == null || connectionFailed || workspaceSwitchInProgress || draftReviewVisible ||
+        pendingRecovery != null || pendingDraftRecovery != null || pendingRecoveryChecking || pendingRecoveryBusy
+    val inputBlocked = canvasInteractionBlocked || session?.canEditContent != true || mediaImportBusy ||
+        pendingRecovery != null || pendingDraftRecovery != null || pendingRecoveryChecking || pendingRecoveryBusy
     val libraryComponents = remember(density, Localization.language) { builtInComponents(density) }
     val compactLayout = usesCompactCanvasLayout(canvasSize.width, canvasSize.height, density)
     val inspectorWidth = if (compactLayout && canvasSize.width > 0) {
@@ -1253,11 +1341,42 @@ fun WorkspaceScreen(
         if (!compactLayout || editingId != null) multiSelectionMode = false
     }
     val latestSession by rememberUpdatedState(session)
+    val latestPresenceSubscriptionId by rememberUpdatedState(presenceSubscriptionId)
+    val latestPresencePublicationOwnerId by rememberUpdatedState(presencePublicationOwnerId)
+    val latestPresenceState by rememberUpdatedState(presenceState)
+    val latestPresenceConnectionFailed by rememberUpdatedState(connectionFailed)
+    val latestPresenceIntent by rememberUpdatedState(session?.let {
+        workspacePresenceIntent(it, viewport, presenceScreenCursor, selectedIds,
+            sharePresence && presencePublisherReady && presenceActivity.available && !draftReviewVisible && !workspaceSwitchInProgress)
+    })
+    LaunchedEffect(repository, session?.userId, session?.clientId, session?.workspace?.id,
+        submissionQueue.isEmpty, pendingRecoveryRevision) {
+        pendingRecovery = null
+        pendingDraftRecovery = null
+        pendingRecoveryDismissArmed = false
+        val opened = session ?: return@LaunchedEffect
+        if (!submissionQueue.isEmpty) return@LaunchedEffect
+        pendingRecoveryChecking = true
+        try {
+            val pending = repository.pendingChange(opened)
+            val draft = repository.pendingDraft(opened)
+            currentCoroutineContext().ensureActive()
+            pendingRecovery = pending
+            pendingDraftRecovery = draft
+            if (pending != null) statusMessage = Strings.status.pendingRecoveryRequired()
+            else if (draft != null) statusMessage = Strings.status.pendingDraftRequired(draft.operationCount)
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Throwable) {
+            connectionFailed = true
+            statusMessage = Strings.status.pendingRecoveryUnavailable()
+        } finally { pendingRecoveryChecking = false }
+    }
     val remoteCatchUpAllowed by rememberUpdatedState(
         session != null &&
             !connectionFailed &&
             !workspaceSwitchInProgress &&
             !mediaImportBusy &&
+            !pendingRecoveryBusy &&
             !syncInProgress &&
             submissionQueue.isEmpty &&
             editingId == null &&
@@ -1274,7 +1393,7 @@ fun WorkspaceScreen(
         sessionAvailable = session != null,
         connectionFailed = connectionFailed,
         switchInProgress = workspaceSwitchInProgress,
-        syncInProgress = syncInProgress,
+        syncInProgress = syncInProgress || pendingRecoveryBusy,
         pendingSaveCount = submissionQueue.size,
         nodeEditing = editingId != null,
         contentInspectorEditing = inspectorTextEditing,
@@ -1327,6 +1446,120 @@ fun WorkspaceScreen(
         statusMessage = message
         recentWorkspaces.recordOpened(opened.workspace.id, opened.workspace.title)
         publishRecentWorkspaces()
+    }
+
+    fun recoverPendingChange(dismiss: Boolean) {
+        val opened = session ?: return
+        val pending = pendingRecovery ?: return
+        if (pendingRecoveryBusy || !submissionQueue.isEmpty) return
+        pendingRecoveryBusy = true
+        uiScope.launch {
+            try {
+                val refreshed = if (dismiss) repository.dismissPendingChange(opened, pending.transactionId)
+                    else repository.retryPendingChange(opened, pending.transactionId)
+                currentCoroutineContext().ensureActive()
+                val current = latestSession
+                if (current != null && current.userId == opened.userId && current.clientId == opened.clientId &&
+                    current.workspace.id == opened.workspace.id) {
+                    adoptWorkspace(refreshed, Strings.status.pendingRecoveryReviewed())
+                    pendingRecoveryRevision++
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Throwable) { statusMessage = Strings.status.pendingRecoveryUnavailable() }
+            finally { pendingRecoveryBusy = false }
+        }
+    }
+
+    fun reviewPendingDraft(copyBackup: Boolean = false, saveBackup: Boolean = false) {
+        val opened = session ?: return
+        val draft = pendingDraftRecovery ?: return
+        if (pendingRecoveryBusy || !submissionQueue.isEmpty || connectionFailed) return
+        pendingRecoveryBusy = true
+        uiScope.launch {
+            fun stillCurrent(): Boolean {
+                val current = latestSession
+                return canPublishDraftReview(opened, current, draftReviewScopeId, latestDraftReviewScopeId, draft.id,
+                    pendingDraftRecovery?.id) && !connectionFailed &&
+                    (!(copyBackup || saveBackup) || (draftReview?.draftId == draft.id && draftReviewOwner?.userId == opened.userId &&
+                        draftReviewOwner?.clientId == opened.clientId && draftReviewOwner?.workspace?.id == opened.workspace.id))
+            }
+            try {
+                if (saveBackup) {
+                    val result = exportWorkspaceDraftBackup(draftBackupRuntime, draft.id, ::stillCurrent) {
+                        repository.reviewPendingDraft(opened, draft.id)
+                    }
+                    currentCoroutineContext().ensureActive()
+                    if (stillCurrent()) draftReviewMessage = when (result) {
+                        DraftBackupResult.Saved -> Strings.draftReview.saved()
+                        DraftBackupResult.DownloadRequested -> Strings.draftReview.downloadRequested()
+                        DraftBackupResult.Cancelled -> Strings.draftReview.saveCancelled()
+                    }
+                    return@launch
+                }
+                val reviewed = repository.reviewPendingDraft(opened, draft.id)
+                currentCoroutineContext().ensureActive()
+                if (stillCurrent()) {
+                    draftReviewOwner = opened
+                    draftReview = reviewed
+                    draftReviewMessage = null
+                    if (copyBackup) {
+                        clipboardManager.setText(AnnotatedString(reviewed.toBackupJson()))
+                        draftReviewMessage = Strings.draftReview.copied()
+                    }
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) {
+                if (stillCurrent()) {
+                    if (saveBackup) draftReviewMessage = if (draftBackupRuntime.usesBrowserDownload)
+                        Strings.draftReview.downloadFailed() else Strings.draftReview.saveFailed()
+                    else if (copyBackup) draftReviewMessage = Strings.draftReview.unavailable()
+                    else statusMessage = Strings.draftReview.unavailable()
+                    if ((error as? BackendHttpException)?.isWorkspaceAccessLoss == true) connectionFailed = true
+                }
+            } finally { pendingRecoveryBusy = false }
+        }
+    }
+
+    fun recoverPendingDraft(dismiss: Boolean) {
+        val opened = session ?: return
+        val draft = pendingDraftRecovery ?: return
+        if (pendingRecovery != null || pendingRecoveryBusy || !submissionQueue.isEmpty) return
+        pendingRecoveryBusy = true
+        uiScope.launch {
+            try {
+                if (dismiss) {
+                    val refreshed = repository.dismissPendingDraft(opened, draft.id)
+                    currentCoroutineContext().ensureActive()
+                    val current = latestSession
+                    if (current != null && current.userId == opened.userId && current.clientId == opened.clientId && current.workspace.id == opened.workspace.id) {
+                        pendingDraftRecovery = null
+                        adoptWorkspace(refreshed, Strings.status.pendingDraftDismissed())
+                        pendingRecoveryRevision++
+                    }
+                } else {
+                    val restored = repository.restorePendingDraft(opened, draft.id)
+                    currentCoroutineContext().ensureActive()
+                    val current = latestSession
+                    if (current != null && current.userId == opened.userId && current.clientId == opened.clientId && current.workspace.id == opened.workspace.id) {
+                        var restoredHistory = WorkspaceHistory(restored.session.workspace)
+                        var restoredQueue = WorkspaceSubmissionQueue()
+                        restored.operations.forEach { operation ->
+                            val result = restoredHistory.execute(operation)
+                            check(result.succeeded && result.appliedOperation != null)
+                            restoredHistory = result.history
+                            restoredQueue = restoredQueue.enqueue(operation, restoredHistory.workspace)
+                        }
+                        adoptWorkspace(restored.session, Strings.status.queuedChanges(restoredQueue.size))
+                        history = restoredHistory
+                        submissionQueue = restoredQueue
+                        pendingDraftRecovery = null
+                        pendingRecoveryRevision++
+                    }
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Throwable) { statusMessage = Strings.status.pendingDraftReviewRequired() }
+            finally { pendingRecoveryBusy = false }
+        }
     }
 
     suspend fun refreshWorkspaceSummaries(activeSession: WorkspaceSession) {
@@ -1611,17 +1844,28 @@ fun WorkspaceScreen(
         val loadEpoch = ++workspaceAssetsLoadEpoch
         workspaceAssetsLoading = true
         workspaceAssetsUnavailable = false
-        workspaceAssets = try {
-            val listed = repository.listAssets(activeSession)
-            coroutineContext.ensureActive()
-            listed.associateBy(WorkspaceAsset::id)
+        try {
+            refreshMediaMetadata(
+                read = { repository.listAssets(activeSession) },
+                publish = { listed ->
+                    if (loadEpoch != workspaceAssetsLoadEpoch) false else {
+                        workspaceAssets = listed.associateBy(WorkspaceAsset::id)
+                        workspaceAssetsLoading = false
+                        true
+                    }
+                },
+                needsFollowUp = { listed -> needsMediaMetadataFollowUp(activeSession.workspace.id,
+                    listed, history.workspace.objects.values.filterIsInstance<MediaNode>()) },
+            )
         } catch (error: CancellationException) {
             throw error
         } catch (_: Throwable) {
             // Editing remains available when metadata is temporarily unreachable. Media cards
             // show an explicit unavailable state instead of pretending that a preview loaded.
-            workspaceAssetsUnavailable = true
-            emptyMap()
+            if (loadEpoch == workspaceAssetsLoadEpoch) {
+                workspaceAssetsUnavailable = true
+                workspaceAssets = emptyMap()
+            }
         } finally {
             if (loadEpoch == workspaceAssetsLoadEpoch) workspaceAssetsLoading = false
         }
@@ -1668,6 +1912,60 @@ fun WorkspaceScreen(
         }
     }
 
+    LaunchedEffect(repository, presenceSubscriptionId) {
+        presenceState = WorkspacePresenceState()
+        val opened = session ?: return@LaunchedEffect
+        if (connectionFailed) return@LaunchedEffect
+        val subscriptionId = presenceSubscriptionId
+        coroutineScope {
+            val expiry = launch {
+                while (isActive) {
+                    delay(1_000)
+                    if (presenceState.belongsTo(opened, subscriptionId)) {
+                        presenceState = presenceState.expire(presenceClock.elapsedNow().inWholeMilliseconds)
+                    }
+                }
+            }
+            try {
+                collectActiveWorkspacePresence({ repository.observePresence(opened, subscriptionId) }) { snapshot ->
+                    acceptWorkspacePresence(opened, subscriptionId, presenceState, snapshot,
+                        presenceClock.elapsedNow().inWholeMilliseconds)?.let { presenceState = it }
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { /* No fabricated online peers when transport fails. */ }
+            finally {
+                expiry.cancel()
+                if (presenceState.belongsTo(opened, subscriptionId)) presenceState = WorkspacePresenceState()
+            }
+        }
+    }
+
+    LaunchedEffect(repository, presencePublicationOwnerId) {
+        val opened = session ?: return@LaunchedEffect
+        val subscriptionId = presenceSubscriptionId
+        val roomEpoch = visiblePresence.roomEpoch ?: return@LaunchedEffect
+        val ownerId = presencePublicationOwnerId
+        val activityEpoch = presenceActivity.epoch
+        // Read the StateFlow directly: a backgrounded UI may not have recomposed yet.
+        fun liveOwner(): Boolean = !latestPresenceConnectionFailed &&
+            mediaActivityAllowsPublication(presenceActivityFlow.value, activityEpoch) &&
+            ownerId == latestPresencePublicationOwnerId && presencePublicationIsLive(opened, latestSession,
+                subscriptionId, latestPresenceSubscriptionId, roomEpoch, latestPresenceState,
+                presenceClock.elapsedNow().inWholeMilliseconds)
+        if (!liveOwner()) return@LaunchedEffect
+        try {
+            currentCoroutineContext().ensureActive()
+            val publisher = repository.openPresencePublisher(opened, subscriptionId, roomEpoch) ?: return@LaunchedEffect
+            // Runner always takes ownership of cleanup, including a now-cancelled coroutine.
+            presencePublisherReady = liveOwner()
+            publishWorkspacePresence(publisher, {
+                if (liveOwner()) latestPresenceIntent else null
+            }, { presenceClock.elapsedNow().inWholeMilliseconds })
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { /* No retry or false "sharing" state on a failed transport. */ }
+        finally { presencePublisherReady = false }
+    }
+
     LaunchedEffect(repository, session?.userId, session?.clientId, session?.workspace?.id, connectionAttempt) {
         val observedSession = session ?: return@LaunchedEffect
         var consecutiveFailures = 0
@@ -1675,13 +1973,12 @@ fun WorkspaceScreen(
             if (!remoteCatchUpAllowed) return@collect
             val requestedFrom = latestSession ?: return@collect
             try {
-                val refreshed = repository.refresh(requestedFrom)
+                val refreshed = awaitActiveWorkspaceRefresh { repository.refresh(requestedFrom) }
                 val current = latestSession
                 if (
                     remoteCatchUpAllowed &&
                     current != null &&
-                    current.workspaceVersion == requestedFrom.workspaceVersion &&
-                    refreshed.hasRemoteChangesComparedTo(current)
+                    shouldApplyRemoteRefresh(requestedFrom, current, refreshed)
                 ) {
                     session = refreshed
                     history = WorkspaceHistory(refreshed.workspace)
@@ -1791,7 +2088,7 @@ fun WorkspaceScreen(
                     session = step.session
                     history = WorkspaceHistory(step.session.workspace)
                     submissionQueue = submissionQueue.clear()
-                    connectionFailed = step.submitError !is BackendHttpException
+                    connectionFailed = requiresWorkspaceReconnectAfterFailedSubmission(step.submitError, step.refreshError)
                     selectedIds = emptySet()
                     selectedRelationId = null
                     editingId = null
@@ -1808,23 +2105,29 @@ fun WorkspaceScreen(
         }
     }
 
-    fun synchronize(result: HistoryResult) {
-        history = result.history
+    fun synchronize(result: HistoryResult): Boolean {
         val operation = result.appliedOperation
         if (!result.succeeded || operation == null || session == null) {
             statusMessage = if (result.succeeded) statusMessage else Strings.status.thatChangeCouldNotBe()
-            return
+            return false
         }
+        try {
+            repository.retainDraft(checkNotNull(session), history.workspace, operation)
+        } catch (_: Exception) {
+            statusMessage = Strings.status.pendingDraftSaveFailed()
+            return false
+        }
+        history = result.history
         workspaceDeleteArmed = false
         submissionQueue = submissionQueue.enqueue(operation, result.history.workspace)
         statusMessage = Strings.status.queuedChanges(submissionQueue.size)
+        return true
     }
 
     fun execute(operation: WorkspaceOperation): Boolean {
         if (session == null || connectionFailed) return false
         val result = history.execute(operation)
-        synchronize(result)
-        return result.succeeded && result.appliedOperation != null
+        return synchronize(result)
     }
 
     fun addTextNode(
@@ -1863,6 +2166,34 @@ fun WorkspaceScreen(
         )
     }
 
+    fun checkRecoveredMedia(assetId: String) {
+        val opened = session ?: return
+        if (mediaImportBusy || assetId.isBlank()) return
+        mediaImportBusy = true
+        mediaImportLabel = Strings.media.checkingAsset()
+        mediaImportJob = uiScope.launch {
+            try {
+                val asset = awaitActiveMediaRead { repository.getAsset(opened, assetId) }
+                val recovered = recoveredMediaAssetForSession(opened, latestSession, assetId, asset) ?: return@launch
+                // An older list request must not overwrite the explicit, newer per-ID read.
+                workspaceAssetsLoadEpoch++
+                workspaceAssetsLoading = false
+                workspaceAssetsUnavailable = false
+                workspaceAssets = workspaceAssets + (recovered.id to recovered)
+            } catch (error: CancellationException) { throw error }
+            catch (_: Exception) {
+                val current = latestSession
+                if (current?.userId == opened.userId && current.clientId == opened.clientId && current.workspace.id == opened.workspace.id) {
+                    statusMessage = Strings.media.metadataUnavailable()
+                }
+            } finally {
+                mediaImportBusy = false
+                mediaImportJob = null
+                mediaImportLabel = ""
+            }
+        }
+    }
+
     fun insertStoredMedia(entry: MediaAssetLibraryEntry) {
         val openedSession = session ?: return
         if (inputBlocked || !workspaceChangeAllowed || connectionFailed || !entry.insertable) return
@@ -1870,7 +2201,7 @@ fun WorkspaceScreen(
         mediaImportLabel = Strings.media.checkingAsset()
         mediaImportJob = uiScope.launch {
             try {
-                val asset = repository.getAsset(openedSession, entry.asset.id)
+                val asset = awaitActiveMediaRead { repository.getAsset(openedSession, entry.asset.id) }
                 coroutineContext.ensureActive()
                 val current = latestSession
                 if (!canInsertMediaInSession(openedSession, current, connectionFailed)) return@launch
@@ -1905,28 +2236,50 @@ fun WorkspaceScreen(
         mediaImportLabel = Strings.media.selecting()
         mediaImportJob = uiScope.launch {
             var selectedSource: AssetTransferSource? = null
+            var recoveryAssetId: String? = null
+            var lastImportStage: AssetImportStage? = null
+            fun currentImportScope(): Boolean = latestSession?.let {
+                it.userId == importSession.userId && it.clientId == importSession.clientId && it.workspace.id == importSession.workspace.id
+            } == true
             try {
                 val source = picker()
                 selectedSource = source
                 if (source == null) {
-                    statusMessage = Strings.media.importCancelled()
+                    if (currentImportScope()) statusMessage = Strings.media.importCancelled()
                     return@launch
                 }
-                val imported = AssetImportCoordinator(gateway).import(importSession, source) { stage ->
-                    mediaImportLabel = when (stage) {
+                val imported = AssetImportCoordinator(gateway, beforeComplete = { assetId ->
+                    mediaRecoveryWriteMutex.lock()
+                    try {
+                        withContext(kotlinx.coroutines.Dispatchers.Default) {
+                            mediaRecoveryStore.record(importSession.userId, importSession.workspace.id.value, assetId)
+                        }
+                    } finally { mediaRecoveryWriteMutex.unlock() }
+                    mediaRecoveryRevision++
+                }).import(importSession, source) { stage ->
+                    lastImportStage = stage
+                    val label = when (stage) {
                         AssetImportStage.Validating, AssetImportStage.Preparing -> Strings.media.preparing()
                         is AssetImportStage.Uploading -> Strings.media.uploading(
                             (stage.uploadedBytes * 100 / stage.totalBytes).toString(),
                         )
                         AssetImportStage.Confirming -> Strings.media.confirming()
                         is AssetImportStage.Processing -> Strings.media.processing()
-                        is AssetImportStage.Ready -> Strings.media.confirming()
+                        is AssetImportStage.Ready -> {
+                            recoveryAssetId = stage.imported.asset.id
+                            Strings.media.confirming()
+                        }
+                        is AssetImportStage.RecoveryRequired -> {
+                            recoveryAssetId = stage.assetId
+                            Strings.media.importRecoveryRequired(stage.assetId)
+                        }
                     }
+                    if (currentImportScope()) mediaImportLabel = label
                 }
                 coroutineContext.ensureActive()
                 val current = latestSession
                 if (!canInsertMediaInSession(importSession, current, connectionFailed)) {
-                    statusMessage = Strings.media.importNotInserted()
+                    if (currentImportScope()) statusMessage = Strings.media.importNotInserted()
                     return@launch
                 }
                 checkNotNull(current)
@@ -1944,13 +2297,15 @@ fun WorkspaceScreen(
                     statusMessage = Strings.media.importNotInserted()
                 }
             } catch (error: CancellationException) {
-                statusMessage = Strings.media.importCancelled()
+                if (currentImportScope()) statusMessage = recoveryAssetId?.let { Strings.media.importRecoveryRequired(it) } ?: Strings.media.importCancelled()
                 throw error
             } catch (_: AssetTransferUnavailableException) {
-                statusMessage = Strings.media.transferUnavailable()
-            } catch (_: Exception) {
-                statusMessage = Strings.media.importFailed()
+                if (currentImportScope()) statusMessage = recoveryAssetId?.let { Strings.media.importRecoveryRequired(it) } ?: Strings.media.transferUnavailable()
+            } catch (error: Exception) {
+                if (currentImportScope()) statusMessage = recoveryAssetId?.let { Strings.media.importRecoveryRequired(it) }
+                    ?: mediaImportFailure(error, lastImportStage).message()
             } finally {
+                if (recoveryAssetId != null && currentImportScope()) workspaceAssetsRefreshAttempt++
                 withContext(NonCancellable) {
                     runCatching { selectedSource?.release() }
                 }
@@ -2237,8 +2592,8 @@ fun WorkspaceScreen(
     }
 
     fun connectNodes(
-        source: TextNode,
-        target: TextNode,
+        source: CanvasObject,
+        target: CanvasObject,
         intent: String,
         direction: RelationDirection,
     ): RelationId? {
@@ -2269,7 +2624,7 @@ fun WorkspaceScreen(
     }
 
     fun connectSelected(intent: String, direction: RelationDirection) {
-        val nodes = selectedIds.mapNotNull { history.workspace.objectById(it) as? TextNode }
+        val nodes = selectedIds.mapNotNull { history.workspace.objectById(it) }.connectableNodes()
             .sortedBy { it.zIndex }
         if (nodes.size != 2) return
         connectNodes(nodes[0], nodes[1], intent, direction)?.let { relationId ->
@@ -2290,7 +2645,7 @@ fun WorkspaceScreen(
         val media = objects.filterIsInstance<MediaNode>()
         val minimumZ = objects.minOf(CanvasObject::zIndex)
         val includedIdSet = objects.mapTo(mutableSetOf()) { it.id }
-        val nodeIds = nodes.mapTo(mutableSetOf()) { it.id }
+        val nodeIds = objects.connectableNodes().mapTo(mutableSetOf()) { it.id }
         val relations = history.workspace.relations.values.filter {
             it.sourceObjectId in nodeIds && it.targetObjectId in nodeIds
         }
@@ -2366,6 +2721,11 @@ fun WorkspaceScreen(
 
     fun cutSelection() {
         if (inputBlocked) return
+        val payload = selectionClipboardPayload() ?: return
+        if (!selectionMediaAvailable(payload, session?.workspace?.id, workspaceAssets)) {
+            statusMessage = Strings.media.selectionAssetsUnavailable()
+            return
+        }
         if (copySelection() != null) deleteSelection()
     }
 
@@ -2387,6 +2747,10 @@ fun WorkspaceScreen(
                 statusMessage = Strings.status.clipboardSelectionIsInvalid()
                 return
             }
+        }
+        if (!selectionMediaAvailable(payload, session?.workspace?.id, workspaceAssets)) {
+            statusMessage = Strings.media.selectionAssetsUnavailable()
+            return
         }
         val nodeShapes = payload.nodes.associate { copied ->
             copied.originalId to checkNotNull(NodeShape.fromToken(copied.shapeToken))
@@ -2518,6 +2882,7 @@ fun WorkspaceScreen(
         val saved = quickSchemeStore.save(
             payload = ClipboardJson.encodeToString(payload),
             schemaVersion = payload.version,
+            sourceWorkspaceId = history.workspace.id.value.takeIf { payload.media.isNotEmpty() },
         )
         schemes = quickSchemeStore.list()
         selectedSchemeId = saved.id
@@ -2526,20 +2891,26 @@ fun WorkspaceScreen(
     }
 
     fun insertScheme(scheme: QuickScheme) {
-        val payload = runCatching {
-            ClipboardJson.decodeFromString<ClipboardPayload>(scheme.payload)
-        }.getOrNull()
+        val payload = decodeQuickSchemePayload(scheme)
         if (payload == null) {
             statusMessage = Strings.status.quickSchemeCouldNotBe()
+        } else if (!quickSchemeMediaAvailable(scheme, payload, session?.workspace?.id, workspaceAssets)) {
+            statusMessage = Strings.schemes.mediaSourceUnavailable()
         } else {
             pastePayload(payload)
         }
     }
 
-    fun insertLibraryComponent(entry: ComponentLibraryEntry, screenPosition: Vec2) {
-        val component = libraryComponents.firstOrNull { it.entry.id == entry.id } ?: return
+    fun insertLibraryComponent(entry: ComponentLibraryEntry, screenPosition: Vec2): Boolean {
+        if (inputBlocked) return false
+        val component = libraryComponents.firstOrNull { it.entry.id == entry.id } ?: return false
+        val previousIds = history.workspace.objects.keys.toSet()
         pastePayload(component.payload, viewport.screenToWorld(screenPosition))
+        if (history.workspace.objects.keys == previousIds) return false
         statusMessage = Strings.status.inserted(entry.title)
+        runCatching { libraryRecent = libraryPreferences.recordInsertion(entry.id) }
+            .onFailure { statusMessage = Strings.library.preferencesUnavailable() }
+        return true
     }
 
     fun finishLibraryDrag(entry: ComponentLibraryEntry, screenPosition: Vec2) {
@@ -2786,6 +3157,12 @@ fun WorkspaceScreen(
     }
 
     val commandPaletteEntries = buildList {
+        add(PaletteEntry(id = "pen-path-draft", title = Strings.penDraft.title(), subtitle = Strings.penDraft.warning(),
+            keywords = "pen anchor bezier vector custom path 鋼筆 自訂 圖形 曲線 控制點",
+            enabled = !inputBlocked && session?.canEditContent == true))
+        add(PaletteEntry(id = "inspect-draft-backup", title = Strings.draftImport.title(),
+            subtitle = Strings.draftImport.previewWarning(), keywords = "draft backup json import inspect 草稿 備份 匯入 檢視",
+            enabled = session != null && !connectionFailed && !workspaceSwitchInProgress && !pendingRecoveryBusy && submissionQueue.isEmpty))
         if (mediaImportRuntime.selectSource != null) {
             add(
                 PaletteEntry(
@@ -2914,7 +3291,7 @@ fun WorkspaceScreen(
             ),
         )
         val canConnectSelected = selectedIds.size == 2 &&
-            selectedIds.all { history.workspace.objectById(it) is TextNode } &&
+            selectedIds.all { history.workspace.objectById(it).let { node -> node is TextNode || node is MediaNode } } &&
             !inputBlocked
         addAll(
             relationPaletteEntries(
@@ -2923,12 +3300,12 @@ fun WorkspaceScreen(
             ),
         )
         val selectedConnectionSource = selectedIds.singleOrNull()
-            ?.let(history.workspace::objectById) as? TextNode
+            ?.let(history.workspace::objectById)?.takeIf { it is TextNode || it is MediaNode }
         if (selectedConnectionSource != null) {
             addAll(
                 connectionTargetPaletteEntries(
                     sourceId = selectedConnectionSource.id,
-                    nodes = history.workspace.objects.values.filterIsInstance<TextNode>(),
+                    nodes = history.workspace.objects.values.connectableNodes(),
                     enabled = !inputBlocked,
                     disabledReason = Strings.palette.waitForWorkspaceToFinish(),
                 ),
@@ -3191,7 +3568,7 @@ fun WorkspaceScreen(
         addAll(
             relationNavigationPaletteEntries(
                 relations = history.workspace.relations.values,
-                nodesById = history.workspace.objects.values.filterIsInstance<TextNode>().associateBy { it.id },
+                nodesById = history.workspace.objects.values.connectableNodes().associateBy { it.id },
             ),
         )
     }
@@ -3200,6 +3577,8 @@ fun WorkspaceScreen(
         showCommandPalette = false
         commandPaletteQuery = ""
         when (entry.id) {
+            "inspect-draft-backup" -> showDraftImport = true
+            "pen-path-draft" -> showPenDraft = true
             "new-thought" -> addTextNodeAtCenter()
             "import-media" -> startMediaImport()
             "cancel-media-import" -> mediaImportJob?.cancel()
@@ -3314,9 +3693,9 @@ fun WorkspaceScreen(
 
                 entry.id.startsWith("connect-target:") -> {
                     val source = selectedIds.singleOrNull()
-                        ?.let(history.workspace::objectById) as? TextNode
+                        ?.let(history.workspace::objectById)?.takeIf { it is TextNode || it is MediaNode }
                     val targetId = CanvasObjectId(entry.id.removePrefix("connect-target:"))
-                    val target = history.workspace.objectById(targetId) as? TextNode
+                    val target = history.workspace.objectById(targetId)?.takeIf { it is TextNode || it is MediaNode }
                     if (source != null && target != null) {
                         connectNodes(source, target, "relates", RelationDirection.Forward)?.let { relationId ->
                             selectedIds = emptySet()
@@ -3328,8 +3707,8 @@ fun WorkspaceScreen(
                 entry.id.startsWith("find-relation:") -> {
                     val relationId = RelationId(entry.id.removePrefix("find-relation:"))
                     val relation = history.workspace.relationById(relationId)
-                    val source = relation?.sourceObjectId?.let(history.workspace::objectById) as? TextNode
-                    val target = relation?.targetObjectId?.let(history.workspace::objectById) as? TextNode
+                    val source = relation?.sourceObjectId?.let(history.workspace::objectById)
+                    val target = relation?.targetObjectId?.let(history.workspace::objectById)
                     if (relation != null && source != null && target != null) {
                         if (canvasSize != IntSize.Zero) {
                             val sourceCenter = source.transform.position +
@@ -3421,12 +3800,13 @@ fun WorkspaceScreen(
     }
 
     if (menuBridge != null) {
-        val textEditing = editingId != null || inspectorTextEditing || workspaceFormEditing
+        val textEditing = draftReviewVisible || editingId != null || inspectorTextEditing || workspaceFormEditing ||
+            (showComponentLibrary && (componentLibraryFocused || giphyTextEditing))
         val hasSelection = selectedIds.isNotEmpty()
         val paletteById = commandPaletteEntries.associateBy(PaletteEntry::id)
         val menuCommands = buildMap {
             commandPaletteEntries.forEach { put(it.id, it.enabled && !textEditing) }
-            put(WorkspaceMenuCommands.CommandPalette, true)
+            put(WorkspaceMenuCommands.CommandPalette, !textEditing)
             put(WorkspaceMenuCommands.Cut, hasSelection && !inputBlocked && !textEditing)
             put(WorkspaceMenuCommands.Copy, hasSelection && !textEditing)
             put(WorkspaceMenuCommands.Paste, !inputBlocked && !textEditing)
@@ -3436,7 +3816,7 @@ fun WorkspaceScreen(
         SideEffect {
             menuBridge.commands = menuCommands
             menuBridge.handler = { id ->
-                when (id) {
+                if (menuCommands[id] == true) when (id) {
                     WorkspaceMenuCommands.CommandPalette -> toggleCommandPalette()
                     WorkspaceMenuCommands.Cut -> cutSelection()
                     WorkspaceMenuCommands.Copy -> copySelection()
@@ -3464,18 +3844,24 @@ fun WorkspaceScreen(
             .fillMaxSize()
             .background(canvasBackgroundColor(canvasBackgroundPreview ?: displaySettings.backgroundToken, colors))
             .onSizeChanged { canvasSize = it }
-            .onPreviewKeyEvent { event ->
+            .onKeyEvent { event ->
                 val command = event.isMetaPressed || event.isCtrlPressed
+                // Bubble only: focused text fields process editing before canvas shortcuts.
+                // The focus guard also protects keys a field intentionally leaves unhandled.
+                if (draftReviewVisible || editingId != null || inspectorTextEditing || workspaceFormEditing ||
+                    (showComponentLibrary && (componentLibraryFocused || giphyTextEditing))) {
+                    return@onKeyEvent false
+                }
                 if (event.type == KeyEventType.KeyDown && command && event.key == Key.K) {
                     toggleCommandPalette()
-                    return@onPreviewKeyEvent true
+                    return@onKeyEvent true
                 }
                 if (
                     event.type != KeyEventType.KeyDown || editingId != null || inspectorTextEditing ||
                     workspaceFormEditing ||
                     showCommandPalette
                 ) {
-                    return@onPreviewKeyEvent false
+                    return@onKeyEvent false
                 }
                 when {
                     !command && event.key == Key.N -> {
@@ -3605,6 +3991,12 @@ fun WorkspaceScreen(
             .focusRequester(canvasFocusRequester)
             .focusable(),
     ) {
+        Box(Modifier.fillMaxSize().presenceCursorObserver(
+            enabled = sharePresence && presencePublisherReady && visiblePresence.connected &&
+                presenceActivity.available && !draftReviewVisible && !workspaceSwitchInProgress,
+            ownerId = presencePublicationOwnerId,
+            onSample = { presenceScreenCursor = it },
+        )) {
         GridCanvas(
             viewport = viewport,
             density = density,
@@ -3617,7 +4009,7 @@ fun WorkspaceScreen(
                 val relationHit = findRelationAt(
                     screenPosition = screenPosition,
                     relations = history.workspace.relations.values,
-                    nodes = history.workspace.objects.values.filterIsInstance<TextNode>().associateBy { it.id },
+                    nodes = history.workspace.objects.values.connectableNodes().associateBy { it.id },
                     viewport = viewport,
                     tolerance = 10f * density,
                 )
@@ -3761,7 +4153,7 @@ fun WorkspaceScreen(
                         val relationHit = findRelationAt(
                             screenPosition = groupScreenPosition + localPosition,
                             relations = history.workspace.relations.values,
-                            nodes = history.workspace.objects.values.filterIsInstance<TextNode>().associateBy { it.id },
+                            nodes = history.workspace.objects.values.connectableNodes().associateBy { it.id },
                             viewport = viewport,
                             tolerance = 10f * density,
                         )
@@ -3817,7 +4209,7 @@ fun WorkspaceScreen(
 
         RelationCanvas(
             relations = history.workspace.relations.values,
-            nodes = history.workspace.objects.values.filterIsInstance<TextNode>().associateBy { it.id },
+            nodes = history.workspace.objects.values.connectableNodes().associateBy { it.id },
             viewport = viewport,
             density = density,
             dragPreviews = dragPreviews,
@@ -3833,7 +4225,7 @@ fun WorkspaceScreen(
             val label = relation.label?.takeIf(String::isNotBlank) ?: return@forEach
             val segment = relationSegment(
                 relation = relation,
-                nodes = history.workspace.objects.values.filterIsInstance<TextNode>().associateBy { it.id },
+                nodes = history.workspace.objects.values.connectableNodes().associateBy { it.id },
                 viewport = viewport,
                 dragPreviews = dragPreviews,
                 transformPreviews = transformPreviews,
@@ -4146,7 +4538,7 @@ fun WorkspaceScreen(
                         onConnectionPreview = { start, end ->
                             val sourceId = node.id
                             val targetId = connectorDropTargetId(
-                                nodes = history.workspace.objects.values.filterIsInstance<TextNode>(),
+                                nodes = history.workspace.objects.values.connectableNodes(),
                                 sourceId = sourceId,
                                 worldPoint = viewport.screenToWorld(end),
                             )
@@ -4171,12 +4563,12 @@ fun WorkspaceScreen(
                         },
                         onConnectionCommit = { end ->
                             val targetId = connectorDropTargetId(
-                                nodes = history.workspace.objects.values.filterIsInstance<TextNode>(),
+                                nodes = history.workspace.objects.values.connectableNodes(),
                                 sourceId = node.id,
                                 worldPoint = viewport.screenToWorld(end),
                             )
                             connectionDragPreview = null
-                            val target = targetId?.let(history.workspace::objectById) as? TextNode
+                            val target = targetId?.let(history.workspace::objectById)
                             if (target == null) {
                                 statusMessage = Strings.status.dropConnectorOnAnotherThought()
                             } else {
@@ -4188,6 +4580,7 @@ fun WorkspaceScreen(
                         },
                     )
                 }
+            WorkspacePresenceOverlay(visiblePresence.peers, viewport, history.workspace)
             selectedIds.singleOrNull()
                 ?.let(history.workspace::objectById)
                 ?.let { it as? MediaNode }
@@ -4196,7 +4589,7 @@ fun WorkspaceScreen(
                     NodeTransformHandles(
                         node = node,
                         objectLabel = node.altText.ifBlank { node.mediaKind.name },
-                        connectionEnabled = false,
+                        connectionEnabled = true,
                         previewTransform = transformPreviews[node.id] ?: node.transform,
                         viewport = viewport,
                         largeTouchTargets = compactLayout,
@@ -4228,13 +4621,37 @@ fun WorkspaceScreen(
                                 )
                             }
                         },
-                        onConnectionPreview = { _, _ -> },
-                        onConnectionCancel = {},
-                        onConnectionOpenPicker = {},
-                        onConnectionCommit = {},
+                        onConnectionPreview = { start, end ->
+                            connectionDragPreview = ConnectionDragPreview(
+                                sourceId = node.id,
+                                startScreen = start,
+                                endScreen = end,
+                                targetId = connectorDropTargetId(history.workspace.objects.values, node.id, viewport.screenToWorld(end)),
+                            )
+                        },
+                        onConnectionCancel = { connectionDragPreview = null },
+                        onConnectionOpenPicker = {
+                            showCommandPalette = true
+                            commandPaletteQuery = Strings.palette.connectionSearchQuery()
+                        },
+                        onConnectionCommit = { end ->
+                            val targetId = connectorDropTargetId(history.workspace.objects.values, node.id, viewport.screenToWorld(end))
+                            connectionDragPreview = null
+                            val target = targetId?.let(history.workspace::objectById)
+                            if (target == null) {
+                                statusMessage = Strings.status.dropConnectorOnAnotherThought()
+                            } else {
+                                connectNodes(node, target, "relates", RelationDirection.Forward)?.let { relationId ->
+                                    selectedIds = emptySet()
+                                    selectedRelationId = relationId
+                                }
+                            }
+                        },
                     )
                 }
         }
+
+        } // Canvas-only observer excludes all sibling panels and input fields below.
 
         val compactInspectorAvailable = compactLayout && editingId == null &&
             (selectedRelationId != null || selectedIds.isNotEmpty())
@@ -5294,6 +5711,26 @@ fun WorkspaceScreen(
                             fontWeight = FontWeight.SemiBold,
                         ),
                     )
+                    BasicText(if (visiblePresence.connected) Strings.presence.connections(visiblePresence.peers.size)
+                        else Strings.presence.unavailable(), modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
+                        style = TextStyle(color = colors.contentMuted, fontSize = 11.sp))
+                    visiblePresence.peers.take(8).forEach { peer ->
+                        BasicText(peer.displayName, modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
+                            maxLines = 1, style = TextStyle(color = colors.accent, fontSize = 11.sp))
+                    }
+                    ShellButton(
+                        label = if (sharePresence && presencePublisherReady) Strings.presence.stopSharing()
+                            else Strings.presence.startSharing(),
+                        icon = ShellIcon.AreaSelect,
+                        accent = sharePresence && presencePublisherReady,
+                        enabled = presencePublisherReady && visiblePresence.connected && presenceActivity.available,
+                        onClick = { presenceScreenCursor = null; sharePresence = !sharePresence },
+                        modifier = Modifier.width(inspectorWidth - 16.dp),
+                    )
+                    BasicText(if (presencePublisherReady) Strings.presence.sharingHint()
+                        else Strings.presence.sharingUnavailable(),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
+                        style = TextStyle(color = colors.contentMuted, fontSize = 10.sp))
                     activeSession?.let { opened ->
                         BasicText(
                             text = Strings.members.yourUserId(opened.userId),
@@ -5452,11 +5889,59 @@ fun WorkspaceScreen(
         if (showComponentLibrary) {
             ComponentLibrary(
                 entries = libraryComponents.map(BuiltInComponent::entry),
+                favorites = libraryFavorites,
+                recent = libraryRecent,
+                category = libraryCategory,
+                categoriesExpanded = libraryCategoriesExpanded,
+                onCategoryChange = { selected ->
+                    libraryCategory = selected
+                    runCatching { libraryPreferences.setSelectedCategory(selected.token) }
+                        .onFailure { statusMessage = Strings.library.preferencesUnavailable() }
+                },
+                onCategoriesExpandedChange = { expanded ->
+                    libraryCategoriesExpanded = expanded
+                    runCatching { libraryPreferences.setCategoriesExpanded(expanded) }
+                        .onFailure { statusMessage = Strings.library.preferencesUnavailable() }
+                },
+                onToggleFavorite = { entry ->
+                    runCatching { libraryFavorites = libraryPreferences.toggleFavorite(entry.id) }
+                        .onFailure { statusMessage = Strings.library.preferencesUnavailable() }
+                },
+                onFocusWithinChange = { componentLibraryFocused = it },
+                giphyContent = {
+                    GiphyBrowserContent(mediaImportRuntime, reduceMotion,
+                        onTextEditingChange = { giphyTextEditing = it })
+                },
                 workspaceMediaContent = {
+                    val recoveryIds = remember(session?.userId, session?.workspace?.id, mediaRecoveryRevision) {
+                        session?.let { runCatching { mediaRecoveryStore.list(it.userId, it.workspace.id.value) }.getOrNull() }
+                    }
                     MediaAssetLibraryContent(session, workspaceAssets.values, history.workspace.objects.values,
                         mediaImportRuntime, workspaceAssetsLoading, workspaceAssetsUnavailable,
                         !inputBlocked && workspaceChangeAllowed && !connectionFailed,
-                        onRefresh = { workspaceAssetsRefreshAttempt++ }, onInsert = ::insertStoredMedia)
+                        onRefresh = { workspaceAssetsRefreshAttempt++ }, onInsert = ::insertStoredMedia,
+                        recoveryAssetIds = recoveryIds.orEmpty(), recoveryUnavailable = session != null && recoveryIds == null,
+                        recoveryChecking = mediaImportBusy, onCheckRecovery = ::checkRecoveredMedia,
+                        onDismissRecovery = { assetId ->
+                            session?.let { active ->
+                                uiScope.launch {
+                                    try {
+                                        mediaRecoveryWriteMutex.lock()
+                                        try {
+                                            withContext(kotlinx.coroutines.Dispatchers.Default) {
+                                                mediaRecoveryStore.dismiss(active.userId, active.workspace.id.value, assetId)
+                                            }
+                                        } finally { mediaRecoveryWriteMutex.unlock() }
+                                        mediaRecoveryRevision++
+                                    } catch (cancelled: CancellationException) { throw cancelled }
+                                    catch (_: Exception) {
+                                        if (latestSession?.userId == active.userId && latestSession?.workspace?.id == active.workspace.id) {
+                                            statusMessage = Strings.media.recoveryUnavailable()
+                                        }
+                                    }
+                                }
+                            }
+                        })
                 },
                 modifier = Modifier
                     .then(
@@ -5470,11 +5955,11 @@ fun WorkspaceScreen(
                         },
                     ),
                 onInsert = { entry ->
-                    insertLibraryComponent(
+                    val inserted = insertLibraryComponent(
                         entry,
                         Vec2(canvasSize.width / 2f, canvasSize.height / 2f),
                     )
-                    if (compactLayout) showComponentLibrary = false
+                    if (inserted && compactLayout) showComponentLibrary = false
                 },
                 onDragStart = { entry, position ->
                     libraryDragPreview = LibraryDragPreview(entry.title, position)
@@ -5531,14 +6016,12 @@ fun WorkspaceScreen(
                         )
                     }
                     schemes.asReversed().forEach { scheme ->
-                        val preview = runCatching {
-                            ClipboardJson.decodeFromString<ClipboardPayload>(scheme.payload)
-                        }.getOrNull()
+                        val preview = decodeQuickSchemePayload(scheme)
                         val summary = preview?.let {
-                            val objectCount = it.nodes.size + it.groups.size
+                            val objectCount = it.nodes.size + it.groups.size + it.media.size
                             val linkCount = it.relations.size
                             Strings.schemes.objects(objectCount) + " • " +
-                                Strings.schemes.links(linkCount) + " • v${scheme.schemaVersion}"
+                                Strings.schemes.links(linkCount) + " • v${it.version}"
                         }
                         ShellButton(
                             label = scheme.name,
@@ -5559,9 +6042,10 @@ fun WorkspaceScreen(
                         )
                     }
                     selectedScheme?.let { scheme ->
-                        runCatching {
-                            ClipboardJson.decodeFromString<ClipboardPayload>(scheme.payload)
-                        }.getOrNull()?.let { payload ->
+                        val payload = decodeQuickSchemePayload(scheme)
+                        val mediaAvailable = payload != null &&
+                            quickSchemeMediaAvailable(scheme, payload, session?.workspace?.id, workspaceAssets)
+                        payload?.let { payload ->
                             QuickSchemePreview(
                                 payload = payload,
                                 modifier = Modifier
@@ -5594,12 +6078,22 @@ fun WorkspaceScreen(
                         )
                         ShellButton(
                             label = Strings.schemes.insert(),
-                            enabled = !inputBlocked,
+                            enabled = !inputBlocked && payload != null && mediaAvailable,
                             onClick = {
                                 insertScheme(scheme)
                                 if (compactLayout) showSchemeLibrary = false
                             },
                         )
+                        if (payload != null && !mediaAvailable) {
+                            BasicText(Strings.schemes.mediaSourceUnavailable(),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                style = TextStyle(color = colors.contentMuted, fontSize = 11.sp))
+                            if (scheme.sourceWorkspaceId == null || scheme.sourceWorkspaceId == session?.workspace?.id?.value) {
+                                ShellButton(label = Strings.media.refreshAssets(), icon = ShellIcon.Retry,
+                                    enabled = session != null && !workspaceAssetsLoading,
+                                    onClick = { workspaceAssetsRefreshAttempt++ })
+                            }
+                        }
                         ShellButton(
                             label = Strings.schemes.rename(),
                             icon = ShellIcon.Rename,
@@ -6446,6 +6940,14 @@ fun WorkspaceScreen(
                     }
                         }
                     }
+                    if (selectedMedia.isNotEmpty() && selectedNodes.size + selectedMedia.size == 2 && selectedIds.size == 2) {
+                        ShellButton(label = Strings.inspector.relate(), enabled = !inputBlocked,
+                            onClick = { connectSelected("relates", RelationDirection.Forward) })
+                        ShellButton(label = Strings.inspector.supports(), enabled = !inputBlocked,
+                            onClick = { connectSelected("supports", RelationDirection.Forward) })
+                        ShellButton(label = Strings.inspector.conflicts(), enabled = !inputBlocked,
+                            onClick = { connectSelected("conflicts", RelationDirection.Both) })
+                    }
                     CollapsibleSectionHeader(
                         label = Strings.common.reuseAndActions(),
                         collapsed = isSectionCollapsed(InspectorSection.Reuse),
@@ -6546,6 +7048,7 @@ fun WorkspaceScreen(
                     .padding(bottom = 18.dp),
             ) {
                 GlassSurface {
+                    Column {
                     BasicText(
                         text = statusMessage,
                         modifier = Modifier
@@ -6564,6 +7067,48 @@ fun WorkspaceScreen(
                         maxLines = if (compactLayout) 1 else Int.MAX_VALUE,
                         overflow = TextOverflow.Ellipsis,
                     )
+                    if (pendingRecovery == null && pendingDraftRecovery != null) {
+                        if (pendingRecoveryDismissArmed) BasicText(Strings.status.pendingDraftDismissWarning(),
+                            modifier = Modifier.widthIn(max = 320.dp).padding(horizontal = 14.dp, vertical = 4.dp),
+                            style = TextStyle(color = colors.contentMuted, fontSize = 11.sp))
+                        FlowRow(Modifier.widthIn(max = 360.dp).padding(horizontal = 10.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            ShellButton(label = Strings.draftReview.review(), enabled = !pendingRecoveryBusy && !connectionFailed,
+                                onClick = { reviewPendingDraft() })
+                            ShellButton(label = Strings.status.pendingDraftRestore(), icon = ShellIcon.Retry,
+                                enabled = !pendingRecoveryBusy && pendingDraftRecovery?.requiresReview == false && session?.canEditContent == true,
+                                onClick = { recoverPendingDraft(false) })
+                            ShellButton(label = if (pendingRecoveryDismissArmed) Strings.status.pendingDraftConfirmDismiss()
+                                else Strings.status.pendingDraftDismiss(), enabled = !pendingRecoveryBusy,
+                                onClick = { if (pendingRecoveryDismissArmed) recoverPendingDraft(true) else pendingRecoveryDismissArmed = true })
+                            if (pendingRecoveryDismissArmed) ShellButton(label = Strings.common.cancel(),
+                                enabled = !pendingRecoveryBusy, onClick = { pendingRecoveryDismissArmed = false })
+                        }
+                        if (pendingDraftRecovery?.requiresReview == true) BasicText(Strings.status.pendingDraftReviewRequired(),
+                            modifier = Modifier.widthIn(max = 320.dp).padding(horizontal = 14.dp, vertical = 4.dp),
+                            style = TextStyle(color = colors.contentMuted, fontSize = 11.sp))
+                    }
+                    if (pendingRecovery != null) {
+                        if (pendingDraftRecovery != null) ShellButton(label = Strings.draftReview.review(),
+                            enabled = !pendingRecoveryBusy && !connectionFailed,
+                            onClick = { reviewPendingDraft() })
+                        if (pendingRecoveryDismissArmed) BasicText(Strings.status.pendingRecoveryDismissWarning(),
+                            modifier = Modifier.widthIn(max = 320.dp).padding(horizontal = 14.dp, vertical = 4.dp),
+                            style = TextStyle(color = colors.contentMuted, fontSize = 11.sp))
+                        FlowRow(Modifier.widthIn(max = 360.dp).padding(horizontal = 10.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            ShellButton(label = Strings.status.pendingRecoveryRetry(), icon = ShellIcon.Retry,
+                                enabled = !pendingRecoveryBusy && session?.canEditContent == true && submissionQueue.isEmpty,
+                                onClick = { recoverPendingChange(false) })
+                            ShellButton(label = if (pendingRecoveryDismissArmed) Strings.status.pendingRecoveryConfirmDismiss()
+                                else Strings.status.pendingRecoveryDismiss(),
+                                enabled = !pendingRecoveryBusy && submissionQueue.isEmpty,
+                                onClick = { if (pendingRecoveryDismissArmed) recoverPendingChange(true) else pendingRecoveryDismissArmed = true })
+                            if (pendingRecoveryDismissArmed) ShellButton(label = Strings.common.cancel(),
+                                enabled = !pendingRecoveryBusy, onClick = { pendingRecoveryDismissArmed = false })
+                        }
+                    }
+                    }
                 }
             }
         }
@@ -6689,6 +7234,61 @@ fun WorkspaceScreen(
                 },
                 fieldSize = if (compactLayout) (inspectorWidth - 148.dp).coerceIn(140.dp, 188.dp) else 188.dp,
             )
+        }
+
+        if (showPenDraft && session?.canEditContent == true && !connectionFailed && !workspaceSwitchInProgress) {
+            PenEditorDialog(onDismiss = { showPenDraft = false })
+        }
+        if (showDraftImport && !connectionFailed && !workspaceSwitchInProgress) {
+            val opened = session
+            if (opened != null) WorkspaceDraftImportDialog(onInspect = { content ->
+                fun stillCurrent(): Boolean = latestDraftImportAllowed && latestDraftReviewScopeId == draftReviewScopeId &&
+                    latestSession?.userId == opened.userId && latestSession?.clientId == opened.clientId &&
+                    latestSession?.workspace?.id == opened.workspace.id
+                try {
+                    inspectWorkspaceDraftBackup(content, opened, ::stillCurrent) { repository.refresh(it) }
+                } catch (error: Exception) {
+                    if (stillCurrent() && (error as? BackendHttpException)?.isWorkspaceAccessLoss == true) connectionFailed = true
+                    throw error
+                }
+            }, onSelectJson = if (draftImportRuntime.selectJson != null) ({
+                selectWorkspaceDraftBackup(draftImportRuntime) {
+                    latestDraftImportAllowed && latestDraftReviewScopeId == draftReviewScopeId &&
+                        latestSession?.userId == opened.userId && latestSession?.clientId == opened.clientId &&
+                        latestSession?.workspace?.id == opened.workspace.id
+                }
+            }) else null, onCheckMerge = { plan, choices ->
+                fun stillCurrent(): Boolean =
+                    latestDraftImportAllowed && latestDraftReviewScopeId == draftReviewScopeId &&
+                        latestSession?.userId == opened.userId && latestSession?.clientId == opened.clientId &&
+                        latestSession?.workspace?.id == opened.workspace.id
+                suspend fun <T> read(block: suspend () -> T): T = try { block() } catch (error: Exception) {
+                    if (stillCurrent() && (error as? BackendHttpException)?.isWorkspaceAccessLoss == true) connectionFailed = true
+                    throw error
+                }
+                checkDraftMergeProposal(plan, choices, opened, ::stillCurrent,
+                    refresh = { read { repository.refresh(it) } }, pendingChange = { read { repository.pendingChange(it) } },
+                    pendingDraft = { read { repository.pendingDraft(it) } }, getAsset = { owner, id -> read { repository.getAsset(owner, id) } })
+            }, onReloadReview = { review, current ->
+                val allowed = latestDraftImportAllowed && latestDraftReviewScopeId == draftReviewScopeId &&
+                    latestSession?.userId == opened.userId && latestSession?.clientId == opened.clientId &&
+                    latestSession?.workspace?.id == opened.workspace.id
+                if (allowed) refreshDraftMergeReview(review, current, opened)
+                else { showDraftImport = false; review }
+            }, onDismiss = { showDraftImport = false })
+        }
+
+        val reviewOwner = draftReviewOwner
+        val reviewed = draftReview
+        if (!showDraftImport && reviewed != null && reviewOwner != null && !connectionFailed &&
+            session?.userId == reviewOwner.userId && session?.clientId == reviewOwner.clientId &&
+            session?.workspace?.id == reviewOwner.workspace.id && pendingDraftRecovery?.id == reviewed.draftId) {
+            WorkspaceDraftReviewDialog(reviewed, pendingRecoveryBusy, draftReviewMessage,
+                onCopyBackup = { reviewPendingDraft(copyBackup = true) },
+                onSaveBackup = if (draftBackupRuntime.chooseDestination != null) ({ reviewPendingDraft(saveBackup = true) }) else null,
+                saveChoosesFolder = draftBackupRuntime.choosesFolder,
+                saveUsesBrowserDownload = draftBackupRuntime.usesBrowserDownload,
+                onDismiss = { draftReview = null; draftReviewOwner = null; draftReviewMessage = null })
         }
 
         if (showCommandPalette) {
@@ -6985,7 +7585,7 @@ private fun GroupFrameCard(
                             if (dragAmount != Offset.Zero && !group.locked && mutationEnabled) {
                                 moved = true
                                 change.consume()
-                                accumulated += Vec2(dragAmount.x, dragAmount.y) / viewport.zoom
+                                accumulated += objectLocalDragToWorld(Vec2(dragAmount.x, dragAmount.y), group.transform.rotationDegrees, viewport.zoom)
                                 onDragPreview(accumulated)
                             }
                         }
@@ -7018,7 +7618,7 @@ private fun GroupFrameCard(
 @Composable
 private fun RelationCanvas(
     relations: Collection<Relation>,
-    nodes: Map<CanvasObjectId, TextNode>,
+    nodes: Map<CanvasObjectId, CanvasObject>,
     viewport: Viewport,
     density: Float,
     dragPreviews: Map<CanvasObjectId, Vec2>,
@@ -7100,7 +7700,7 @@ private data class RelationPath(val points: List<Vec2>)
 
 private fun relationSegment(
     relation: Relation,
-    nodes: Map<CanvasObjectId, TextNode>,
+    nodes: Map<CanvasObjectId, CanvasObject>,
     viewport: Viewport,
     dragPreviews: Map<CanvasObjectId, Vec2> = emptyMap(),
     transformPreviews: Map<CanvasObjectId, CanvasTransform> = emptyMap(),
@@ -7133,7 +7733,7 @@ private fun relationSegment(
 private fun findRelationAt(
     screenPosition: Vec2,
     relations: Collection<Relation>,
-    nodes: Map<CanvasObjectId, TextNode>,
+    nodes: Map<CanvasObjectId, CanvasObject>,
     viewport: Viewport,
     tolerance: Float,
 ): Relation? = relations
@@ -7690,6 +8290,9 @@ private fun NodeTransformHandles(
                     true
                 }
             }
+            .pointerInput(node.id, "connector-picker") {
+                detectTapGestures(onTap = { onConnectionOpenPicker() })
+            }
             .pointerInput(node.id, node.version, viewport.zoom, "connector-handle") {
                 var latestEnd = currentConnectionCenter
                 detectDragGestures(
@@ -7800,14 +8403,17 @@ private fun TextNodeCard(
     val shape = node.shape.composeShape()
     val horizontalContentPadding = node.shape.horizontalContentPadding(screenWidth)
     val verticalContentPadding = node.shape.verticalContentPadding(screenHeight)
-    val centeredContent = node.shape != NodeShape.RoundedRectangle
-    val textColors = nodeTextColors(node.colorToken, colors)
+    val plainText = node.shape == NodeShape.PlainText
+    val centeredContent = node.shape != NodeShape.RoundedRectangle && !plainText
+    val textColors = nodeTextColors(node.colorToken, colors, node.shape)
     var draft by remember(node.id, node.text) { mutableStateOf(node.text) }
     val targetScale = if (selected) 1.012f else 1f
     val animatedScale by animateFloatAsState(targetValue = targetScale, label = "node-selection-scale")
     val targetElevation = if (selected) 12f else 5f
     val animatedElevation by animateFloatAsState(targetValue = targetElevation, label = "node-selection-shadow")
     val selectionScale = if (reduceMotion) targetScale else animatedScale
+    val currentSelectionScale by rememberUpdatedState(selectionScale)
+    val currentDragRotation by rememberUpdatedState(renderedTransform.rotationDegrees)
     val selectionElevation = if (reduceMotion) targetElevation else animatedElevation
 
     Box(
@@ -7818,12 +8424,12 @@ private fun TextNodeCard(
                 scaleX = selectionScale,
                 scaleY = selectionScale,
             )
-            .shadow(elevation = selectionElevation.dp, shape = shape)
+            .shadow(elevation = if (plainText) 0.dp else selectionElevation.dp, shape = shape)
             .clip(shape)
-            .background(nodeFillColor(node.colorToken, colors))
+            .background(if (plainText) Color.Transparent else nodeFillColor(node.colorToken, colors))
             .border(
-                width = if (selected) 2.dp else 1.dp,
-                color = if (selected) colors.selection else colors.contentBorder,
+                width = if (selected) 2.dp else if (plainText) 0.dp else 1.dp,
+                color = if (selected) colors.selection else if (plainText) Color.Transparent else colors.contentBorder,
                 shape = shape,
             )
             .semantics {
@@ -7881,7 +8487,7 @@ private fun TextNodeCard(
                                     moved = true
                                     bypassSnapping = currentEvent.keyboardModifiers.isAltPressed
                                     change.consume()
-                                    accumulated += Vec2(dragAmount.x, dragAmount.y) / viewport.zoom
+                                    accumulated += objectLocalDragToWorld(Vec2(dragAmount.x, dragAmount.y), currentDragRotation, viewport.zoom, currentSelectionScale)
                                     onDragPreview(accumulated, bypassSnapping)
                                 }
                             }
@@ -7984,7 +8590,7 @@ private fun MediaNodeCard(
     val screenPosition = viewport.worldToScreen(renderedTransform.position + previewDelta)
     val screenWidth = with(density) { (renderedTransform.size.width * viewport.zoom).toDp() }
     val screenHeight = with(density) { (renderedTransform.size.height * viewport.zoom).toDp() }
-    val previewAssetId = node.thumbnailAssetId ?: node.assetId.takeIf { node.mediaKind != MediaKind.Video }
+    val previewAssetId = mediaNodePreviewAssetId(node, asset, session?.workspace?.id)
     val radius = kotlin.math.hypot(renderedTransform.size.width, renderedTransform.size.height) * viewport.zoom
     val visible = screenPosition.x + radius >= 0 && screenPosition.y + radius >= 0 &&
         screenPosition.x - radius <= canvasSize.width && screenPosition.y - radius <= canvasSize.height
@@ -7995,6 +8601,9 @@ private fun MediaNodeCard(
     var previewLoading by remember(session?.userId, session?.workspace?.id, previewAssetId, asset) { mutableStateOf(false) }
     var previewFailed by remember(session?.userId, session?.workspace?.id, previewAssetId, asset) { mutableStateOf(false) }
     var previewAttempt by remember(session?.userId, session?.workspace?.id, previewAssetId, asset) { mutableStateOf(0) }
+    var imageTiles by remember(session?.userId, session?.workspace?.id, node.assetId, asset) {
+        mutableStateOf<List<cg.creamgod.boarderless.data.ImagePreviewTile>>(emptyList())
+    }
     val activityFlow = remember(mediaRuntime) { mediaRuntime.playbackActivity ?: MutableStateFlow(MediaPlaybackActivity()) }
     val playbackActivity by activityFlow.collectAsState()
     var gifActivated by remember(session?.userId, session?.workspace?.id, node.assetId, playbackActivity.epoch) { mutableStateOf(false) }
@@ -8006,7 +8615,8 @@ private fun MediaNodeCard(
         previewFailed = false
         previewLoading = false
         val loader = mediaRuntime.loadPreview
-        if (visible && playbackActivity.available && asset?.status == AssetStatus.Ready && session != null && previewAssetId != null && loader != null) {
+        if (visible && playbackActivity.available && asset?.status == AssetStatus.Ready && session != null && previewAssetId != null && loader != null &&
+            !(node.mediaKind == MediaKind.Image && mediaRuntime.loadImageTiles != null)) {
             previewLoading = true
             var animation: GifAnimation? = null
             try {
@@ -8039,6 +8649,34 @@ private fun MediaNodeCard(
             }
         }
     }
+    val imageRequest = if (node.mediaKind == MediaKind.Image && mediaRuntime.loadImageTiles != null) {
+        viewportImageRequest(renderedTransform.copy(position = renderedTransform.position + previewDelta), viewport,
+            canvasSize.width, canvasSize.height, asset?.width, asset?.height)
+    } else null
+    LaunchedEffect(session?.userId, session?.workspace?.id, node.assetId, asset, imageRequest, previewAttempt, playbackActivity, mediaRuntime) {
+        if (node.mediaKind != MediaKind.Image || mediaRuntime.loadImageTiles == null) return@LaunchedEffect
+        if (imageRequest == null || !playbackActivity.available || session == null || asset?.status != AssetStatus.Ready) {
+            imageTiles = emptyList()
+            previewLoading = false
+            return@LaunchedEffect
+        }
+        imageTiles = imageTiles.take(1) // Retain the coarse image while the new viewport is being prepared.
+        val consumer = kotlinx.coroutines.currentCoroutineContext()
+        previewLoading = true
+        previewFailed = false
+        try {
+            kotlinx.coroutines.delay(120) // Avoid decoding every intermediate pan/zoom pointer event.
+            var receivedBase = false
+            mediaRuntime.loadImageTiles.invoke(session, node.assetId, imageRequest) { tile ->
+                consumer.ensureActive()
+                imageTiles = if (!receivedBase) listOf(tile) else imageTiles + tile
+                receivedBase = true
+                previewLoading = false
+            }
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { consumer.ensureActive(); imageTiles = emptyList(); previewFailed = true }
+        finally { if (consumer.isActive) previewLoading = false }
+    }
     val kindLabel = when (node.mediaKind) {
         MediaKind.Image -> Strings.objects.image()
         MediaKind.Gif -> Strings.objects.gif()
@@ -8048,7 +8686,7 @@ private fun MediaNodeCard(
         AssetStatus.Pending -> Strings.media.pending()
         AssetStatus.Ready -> when {
             previewFailed -> Strings.media.retryPreview()
-            preview != null -> Strings.media.previewReady()
+            preview != null || imageTiles.isNotEmpty() -> Strings.media.previewReady()
             previewLoading -> Strings.media.loadingPreview()
             else -> if (mediaRuntime.loadPreview == null) Strings.media.readyDownloadUnavailable()
                 else Strings.media.previewUnavailable()
@@ -8100,7 +8738,7 @@ private fun MediaNodeCard(
                             if (dragAmount != Offset.Zero && !node.locked && mutationEnabled) {
                                 moved = true
                                 change.consume()
-                                accumulated += Vec2(dragAmount.x, dragAmount.y) / viewport.zoom
+                                accumulated += objectLocalDragToWorld(Vec2(dragAmount.x, dragAmount.y), renderedTransform.rotationDegrees, viewport.zoom)
                                 onDragPreview(accumulated)
                             }
                         }
@@ -8117,7 +8755,21 @@ private fun MediaNodeCard(
             },
     ) {
         val displayedPreview = preview
-        if (displayedPreview != null) {
+        if (imageTiles.isNotEmpty()) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                imageTiles.forEach { tile ->
+                    val fit = min(size.width / tile.sourceWidth, size.height / tile.sourceHeight)
+                    val fittedW = tile.sourceWidth * fit
+                    val fittedH = tile.sourceHeight * fit
+                    val x = (size.width - fittedW) / 2 + tile.left * fittedW
+                    val y = (size.height - fittedH) / 2 + tile.top * fittedH
+                    drawImage(tile.bitmap,
+                        dstOffset = IntOffset(x.roundToInt(), y.roundToInt()),
+                        dstSize = IntSize(((size.width - fittedW) / 2 + tile.right * fittedW).roundToInt().minus(x.roundToInt()).coerceAtLeast(1),
+                            ((size.height - fittedH) / 2 + tile.bottom * fittedH).roundToInt().minus(y.roundToInt()).coerceAtLeast(1)))
+                }
+            }
+        } else if (displayedPreview != null) {
             Image(
                 bitmap = displayedPreview,
                 contentDescription = null, // The outer object owns its accessible name and selection.
@@ -8182,9 +8834,12 @@ private fun MediaNodeCard(
         if (selected && node.mediaKind == MediaKind.Gif && mediaRuntime.loadGif != null) {
             ShellButton(
                 label = if (gifPlaying && !reduceMotion) Strings.media.pauseAnimation() else Strings.media.playAnimation(),
+                icon = if (gifPlaying && !reduceMotion) ShellIcon.Pause else ShellIcon.Play,
+                showLabel = false,
+                compact = true,
                 enabled = interactionEnabled && playbackActivity.available && asset?.status == AssetStatus.Ready && !reduceMotion,
                 accent = true,
-                modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
+                modifier = Modifier.align(Alignment.BottomEnd).padding(4.dp),
                 onClick = {
                     if (gifFinished) previewAttempt++
                     gifActivated = true
@@ -8258,15 +8913,22 @@ private fun androidx.compose.foundation.layout.BoxScope.MediaVideoContent(
         runtime.videoSurface?.invoke(player, Modifier.fillMaxSize())
     }
     if (selected) {
-        Column(
-            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(BoarderLessTheme.colors.contentSurface.copy(alpha = .9f)).padding(4.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+        Row(
+            modifier = Modifier.align(Alignment.BottomCenter).padding(4.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(BoarderLessTheme.colors.contentSurface.copy(alpha = .9f))
+                .horizontalScroll(rememberScrollState()).padding(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            if (playback != null) BasicText(
-                text = "${state.positionMs / 1000} / ${state.durationMs / 1000} s",
-                style = TextStyle(color = BoarderLessTheme.colors.contentText, fontSize = 10.sp),
-            )
             ShellButton(
+                compact = true,
+                showLabel = false,
+                icon = when {
+                    failed || state.failed || state.released -> ShellIcon.Retry
+                    state.playing -> ShellIcon.Pause
+                    else -> ShellIcon.Play
+                },
                 label = when {
                     loading -> Strings.media.videoLoading()
                     failed || state.failed || state.released -> Strings.media.videoFailed()
@@ -8283,13 +8945,14 @@ private fun androidx.compose.foundation.layout.BoxScope.MediaVideoContent(
                 },
             )
             if (playback != null && !state.failed && !state.released) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    ShellButton(label = Strings.media.videoBack(), enabled = interactionEnabled,
-                        onClick = { command { seekTo(state.positionMs - 10_000) } })
-                    ShellButton(label = Strings.media.videoForward(), enabled = interactionEnabled,
-                        onClick = { command { seekTo(state.positionMs + 10_000) } })
-                }
+                ShellButton(label = Strings.media.videoBack(), enabled = interactionEnabled,
+                    icon = ShellIcon.SeekBack, showLabel = false, compact = true,
+                    onClick = { command { seekTo(state.positionMs - 10_000) } })
+                ShellButton(label = Strings.media.videoForward(), enabled = interactionEnabled,
+                    icon = ShellIcon.SeekForward, showLabel = false, compact = true,
+                    onClick = { command { seekTo(state.positionMs + 10_000) } })
                 ShellButton(label = if (state.muted) Strings.media.unmuteVideo() else Strings.media.muteVideo(), enabled = interactionEnabled,
+                    icon = if (state.muted) ShellIcon.Muted else ShellIcon.Volume, showLabel = false, compact = true,
                     onClick = { command { setMuted(!state.muted) } })
             }
         }

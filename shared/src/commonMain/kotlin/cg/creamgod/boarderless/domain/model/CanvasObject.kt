@@ -1,11 +1,15 @@
 package cg.creamgod.boarderless.domain.model
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class CanvasObjectId(val value: String) {
     init {
         require(value.isNotBlank()) { "Canvas object id must not be blank" }
     }
 }
 
+@Serializable
 sealed interface CanvasObject {
     val id: CanvasObjectId
     val version: Long
@@ -15,6 +19,7 @@ sealed interface CanvasObject {
     val transform: CanvasTransform
 }
 
+@Serializable
 enum class NodeShape(val token: String) {
     RoundedRectangle("rounded"),
     Rectangle("rectangle"),
@@ -25,6 +30,22 @@ enum class NodeShape(val token: String) {
     Hexagon("hexagon"),
     Document("document"),
     Database("database"),
+    PlainText("plain-text"),
+    Triangle("triangle"),
+    Pentagon("pentagon"),
+    Octagon("octagon"),
+    Trapezoid("trapezoid"),
+    Plus("plus"),
+    ArrowRight("arrow-right"),
+    ArrowLeft("arrow-left"),
+    ArrowUp("arrow-up"),
+    ArrowDown("arrow-down"),
+    TriangleDown("triangle-down"),
+    RightTriangle("right-triangle"),
+    Chevron("chevron"),
+    DoubleArrow("double-arrow"),
+    Star("star"),
+    ManualInput("manual-input"),
     ;
 
     companion object {
@@ -32,6 +53,7 @@ enum class NodeShape(val token: String) {
     }
 }
 
+@Serializable
 data class TextNode(
     override val id: CanvasObjectId,
     override val version: Long = 1,
@@ -48,6 +70,7 @@ data class TextNode(
     }
 }
 
+@Serializable
 data class GroupFrame(
     override val id: CanvasObjectId,
     override val version: Long = 1,
@@ -69,6 +92,7 @@ data class GroupFrame(
  * device-specific. A MediaNode can therefore survive clipboard, history, sync, and reopening the
  * Workspace without leaking a signed URL into the canvas projection.
  */
+@Serializable
 enum class MediaKind(val token: String) {
     Image("image"),
     Gif("gif"),
@@ -80,6 +104,7 @@ enum class MediaKind(val token: String) {
     }
 }
 
+@Serializable
 data class MediaNode(
     override val id: CanvasObjectId,
     override val version: Long = 1,

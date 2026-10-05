@@ -44,6 +44,12 @@ enum class ShellIcon {
     Menu,
     Members,
     Paste,
+    Play,
+    Pause,
+    SeekBack,
+    SeekForward,
+    Volume,
+    Muted,
     QaChecklist,
     Redo,
     Radial,
@@ -85,6 +91,42 @@ private fun DrawScope.drawShellIcon(icon: ShellIcon, color: Color) {
     }
 
     when (icon) {
+        ShellIcon.Play -> path {
+            moveTo(6f * unit, 3.5f * unit)
+            lineTo(16f * unit, 10f * unit)
+            lineTo(6f * unit, 16.5f * unit)
+            close()
+        }
+        ShellIcon.Pause -> {
+            line(7f, 4f, 7f, 16f)
+            line(13f, 4f, 13f, 16f)
+        }
+        ShellIcon.SeekBack, ShellIcon.SeekForward -> {
+            fun x(v: Float) = if (icon == ShellIcon.SeekBack) 20f - v else v
+            for (start in listOf(3f, 10f)) path {
+                moveTo(x(start) * unit, 5f * unit)
+                lineTo(x(start + 6f) * unit, 10f * unit)
+                lineTo(x(start) * unit, 15f * unit)
+            }
+        }
+        ShellIcon.Volume, ShellIcon.Muted -> {
+            path {
+                moveTo(3f * unit, 7f * unit)
+                lineTo(7f * unit, 7f * unit)
+                lineTo(11f * unit, 4f * unit)
+                lineTo(11f * unit, 16f * unit)
+                lineTo(7f * unit, 13f * unit)
+                lineTo(3f * unit, 13f * unit)
+                close()
+            }
+            if (icon == ShellIcon.Muted) {
+                line(14f, 7f, 18f, 13f)
+                line(18f, 7f, 14f, 13f)
+            } else path {
+                moveTo(14f * unit, 6f * unit)
+                cubicTo(18f * unit, 8f * unit, 18f * unit, 12f * unit, 14f * unit, 14f * unit)
+            }
+        }
         ShellIcon.Add -> {
             line(10f, 4f, 10f, 16f)
             line(4f, 10f, 16f, 10f)

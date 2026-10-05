@@ -7,6 +7,7 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.yield
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.kotlincrypto.hash.sha2.SHA256
@@ -16,10 +17,22 @@ import kotlin.coroutines.resumeWithException
 import kotlin.io.encoding.Base64
 
 /** JS and Wasm share a small DOM bridge; browser File handles never enter canvas payloads. */
-fun browserMediaImportRuntime(): MediaImportRuntime {
+fun browserMediaImportRuntime(activity: StateFlow<MediaPlaybackActivity>? = null): MediaImportRuntime {
     val previewPermits = Semaphore(2)
     val previewCache = bitmapPreviewCache()
-    return MediaImportRuntime(clearPreviewCache = previewCache::clear, selectSource = {
+    return MediaImportRuntime(clearPreviewCache = previewCache::clear, playbackActivity = activity,
+    loadGiphyAnimation = { url ->
+        cg.creamgod.boarderless.data.remote.loadGiphyAnimation(url) {
+            awaitBrowserImageDecoder()
+            BrowserGifAnimation.decode(it)
+        }
+    },
+    loadGiphyStill = { url ->
+        cg.creamgod.boarderless.data.remote.loadGiphyStill(url) {
+            awaitBrowserImageDecoder()
+            decodeBrowserPreview(it)
+        }
+    }, selectSource = {
     val selection = pickBrowserFile()
     selection?.let { metadata ->
         val source = BrowserAssetTransferSource(metadata)

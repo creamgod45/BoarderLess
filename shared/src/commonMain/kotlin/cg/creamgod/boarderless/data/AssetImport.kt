@@ -4,9 +4,13 @@ import cg.creamgod.boarderless.domain.model.MediaKind
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withTimeoutOrNull
 
 const val MaxWorkspaceAssetBytes: Long = 200L * 1024L * 1024L
 const val DefaultAssetUploadChunkBytes: Int = 1024 * 1024
+internal const val AssetImportCleanupTimeoutMillis: Long = 5_000
 
 private val SupportedAssetMediaTypes = mapOf(
     "image/png" to MediaKind.Image,
@@ -64,6 +68,8 @@ sealed interface AssetImportStage {
     data object Confirming : AssetImportStage
     data class Processing(val status: AssetStatus) : AssetImportStage
     data class Ready(val imported: ImportedMedia) : AssetImportStage
+    /** Completion may have been accepted; reconcile metadata instead of deleting or re-uploading. */
+    data class RecoveryRequired(val assetId: String) : AssetImportStage
 }
 
 enum class AssetImportIssue {
@@ -108,12 +114,15 @@ interface AssetTransferGateway {
 
     suspend fun thumbnailAssetId(session: WorkspaceSession, assetId: String): String?
 
-    /** Best-effort cleanup for a prepared upload that did not become ready. */
+    /** Best-effort cleanup only before completion is requested, for a validated pending upload.
+     * Callers must not use an unconditional DELETE to undo an uncertain completion request.
+     */
     suspend fun abandon(session: WorkspaceSession, assetId: String)
 }
 
 class AssetImportCoordinator(
     private val gateway: AssetTransferGateway,
+    private val beforeComplete: suspend (assetId: String) -> Unit = {},
 ) {
     suspend fun import(
         session: WorkspaceSession,
@@ -124,11 +133,16 @@ class AssetImportCoordinator(
         val mediaKind = validateAssetTransferSource(source)
         onStage(AssetImportStage.Preparing)
         var ticket: AssetUploadTicket? = null
-        var becameReady = false
+        var preparedValidated = false
+        var completionRequested = false
         try {
             ticket = gateway.prepare(session, source)
             requireTicketMatchesSource(ticket, session, source)
+            preparedValidated = true
             var latestProgress = 0L
+            // Mark the boundary before connecting, not only after the first bytes are written.
+            onStage(AssetImportStage.Uploading(0, source.byteSize))
+            currentCoroutineContext().ensureActive()
             gateway.upload(ticket, source) { uploadedBytes ->
                 val normalized = uploadedBytes.coerceIn(latestProgress, source.byteSize)
                 latestProgress = normalized
@@ -141,7 +155,13 @@ class AssetImportCoordinator(
                 )
             }
             onStage(AssetImportStage.Confirming)
+            currentCoroutineContext().ensureActive()
+            beforeComplete(ticket.asset.id)
+            currentCoroutineContext().ensureActive()
+            // Set before invoking transport: a lost response does not prove the server rejected it.
+            completionRequested = true
             var asset = gateway.confirm(session, ticket)
+            currentCoroutineContext().ensureActive()
             validateReturnedAsset(asset, session, source)
             requireSameAssetId(asset, ticket.asset.id)
             if (asset.status == AssetStatus.Pending) {
@@ -149,6 +169,7 @@ class AssetImportCoordinator(
                 asset = gateway.awaitReady(session, asset.id) { status ->
                     onStage(AssetImportStage.Processing(status))
                 }
+                currentCoroutineContext().ensureActive()
                 validateReturnedAsset(asset, session, source)
                 requireSameAssetId(asset, ticket.asset.id)
             }
@@ -167,26 +188,33 @@ class AssetImportCoordinator(
                     "Asset ${asset.id} did not become ready",
                 )
             }
-            becameReady = true
             val imported = ImportedMedia(
                 asset = asset,
                 mediaKind = mediaKind,
-                // Thumbnail metadata is recoverable on the next asset refresh. A transient
-                // derivative lookup failure must not delete or orphan an already-ready original.
-                thumbnailAssetId = try {
-                    gateway.thumbnailAssetId(session, asset.id)
+                // The validated ready response already contains derivative metadata on modern
+                // servers. Do not issue a second GET (or lose it to a transient lookup failure).
+                // This reference never substitutes for authorization/checksum on download.
+                thumbnailAssetId = asset.thumbnailAssetId?.takeUnless { it == asset.id } ?: try {
+                    gateway.thumbnailAssetId(session, asset.id)?.takeIf { it.isNotBlank() && it != asset.id }
                 } catch (error: CancellationException) {
                     throw error
                 } catch (_: Exception) {
                     null
                 },
             )
+            currentCoroutineContext().ensureActive()
             onStage(AssetImportStage.Ready(imported))
             return imported
         } catch (error: Throwable) {
-            ticket?.takeUnless { becameReady }?.let { prepared ->
+            if (completionRequested) {
+                // Notification is best-effort; neither UI failure nor cancellation may mask the
+                // original error. The server's processing / expiry policy owns retained uploads.
+                runCatching { onStage(AssetImportStage.RecoveryRequired(checkNotNull(ticket).asset.id)) }
+            } else if (preparedValidated) ticket?.let { prepared ->
                 withContext(NonCancellable) {
-                    runCatching { gateway.abandon(session, prepared.asset.id) }
+                    withTimeoutOrNull(AssetImportCleanupTimeoutMillis) {
+                        runCatching { gateway.abandon(session, prepared.asset.id) }
+                    }
                 }
             }
             if (error is CancellationException) throw error

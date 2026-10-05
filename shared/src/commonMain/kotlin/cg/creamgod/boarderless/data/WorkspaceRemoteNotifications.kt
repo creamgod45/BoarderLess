@@ -10,6 +10,19 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+
+/** Transport callbacks can return or throw after the observing session was cancelled. */
+internal suspend fun awaitActiveWorkspaceRefresh(read: suspend () -> WorkspaceSession): WorkspaceSession {
+    currentCoroutineContext().ensureActive()
+    val refreshed = try { read() } catch (error: Exception) {
+        currentCoroutineContext().ensureActive()
+        throw error
+    }
+    currentCoroutineContext().ensureActive()
+    return refreshed
+}
 
 /** Transport-neutral signals, not mutations or durable acknowledgements. */
 sealed interface WorkspaceRemoteNotification {

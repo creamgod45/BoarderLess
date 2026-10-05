@@ -3,6 +3,11 @@ package cg.creamgod.boarderless.data
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withTimeoutOrNull
+
+internal const val AssetDownloadCleanupTimeoutMillis: Long = 5_000
 
 data class AssetDownloadTicket(
     val asset: WorkspaceAsset,
@@ -76,13 +81,19 @@ class AssetDownloadCoordinator(
         if (assetId.isBlank()) {
             throw AssetDownloadException(AssetDownloadIssue.BlankAssetId, "Asset id must not be blank")
         }
+        val ownerContext = currentCoroutineContext()
         var committed = false
         try {
+            currentCoroutineContext().ensureActive()
             onStage(AssetDownloadStage.Authorizing)
+            currentCoroutineContext().ensureActive()
             val ticket = gateway.authorize(session, assetId.trim())
+            currentCoroutineContext().ensureActive()
             validateTicket(ticket, session, assetId.trim())
             var offset = 0L
             gateway.download(ticket) { bytes ->
+                // Check the consumer, not a native transport's potentially NonCancellable callback.
+                ownerContext.ensureActive()
                 if (bytes.isEmpty()) {
                     throw AssetDownloadException(AssetDownloadIssue.EmptyChunk, "Download returned an empty data chunk")
                 }
@@ -94,9 +105,11 @@ class AssetDownloadCoordinator(
                     )
                 }
                 sink.writeChunk(offset, bytes)
+                ownerContext.ensureActive()
                 offset = nextOffset
                 onStage(AssetDownloadStage.Downloading(offset, ticket.asset.byteSize))
             }
+            currentCoroutineContext().ensureActive()
             if (offset != ticket.asset.byteSize) {
                 throw AssetDownloadException(
                     AssetDownloadIssue.Truncated,
@@ -104,13 +117,24 @@ class AssetDownloadCoordinator(
                 )
             }
             onStage(AssetDownloadStage.Verifying)
+            currentCoroutineContext().ensureActive()
             val local = sink.commit(ticket.asset.byteSize, ticket.asset.checksum)
             committed = true
+            // A native commit can finish after cancellation. Keep its verified cache entry,
+            // but do not hand it to a cancelled consumer or emit Ready.
+            currentCoroutineContext().ensureActive()
             onStage(AssetDownloadStage.Ready(local))
+            currentCoroutineContext().ensureActive()
             return local
         } catch (error: Throwable) {
             if (!committed) {
-                withContext(NonCancellable) { runCatching { sink.abort() } }
+                withContext(NonCancellable) {
+                    // Give cancellation-safe cleanup a bounded wait, without replacing the
+                    // transfer/verification error or publishing a partially written entry.
+                    withTimeoutOrNull(AssetDownloadCleanupTimeoutMillis) {
+                        runCatching { sink.abort() }
+                    }
+                }
             }
             if (error is CancellationException) throw error
             throw error

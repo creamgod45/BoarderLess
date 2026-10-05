@@ -1,7 +1,7 @@
 package cg.creamgod.boarderless.feature.canvas
 
 import cg.creamgod.boarderless.domain.model.CanvasTransform
-import cg.creamgod.boarderless.domain.model.TextNode
+import cg.creamgod.boarderless.domain.model.CanvasObject
 import cg.creamgod.boarderless.domain.model.Vec2
 import kotlin.math.abs
 import kotlin.math.max
@@ -16,9 +16,9 @@ private data class RoutingBounds(
 )
 
 internal fun orthogonalRelationRoute(
-    source: TextNode,
+    source: CanvasObject,
     sourceTransform: CanvasTransform,
-    target: TextNode,
+    target: CanvasObject,
     targetTransform: CanvasTransform,
     obstacles: Collection<CanvasTransform> = emptyList(),
     clearance: Float = 24f,
@@ -43,8 +43,8 @@ internal fun orthogonalRelationRoute(
     } else {
         Vec2(targetCenter.x, sourceCenter.y)
     }
-    val start = shapeBoundaryWorldPoint(sourceTransform, source.shape, sourceToward)
-    val end = shapeBoundaryWorldPoint(targetTransform, target.shape, targetToward)
+    val start = shapeBoundaryWorldPoint(sourceTransform, source.connectionShape, sourceToward)
+    val end = shapeBoundaryWorldPoint(targetTransform, target.connectionShape, targetToward)
     val obstacleBounds = obstacles.map { it.routingBounds(clearance) }
     val relevantBounds = obstacleBounds.filter { bounds ->
         bounds.right >= min(start.x, end.x) - clearance * 2f &&

@@ -1,5 +1,6 @@
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeSimulatorTest
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -7,6 +8,13 @@ plugins {
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.kotlinSerialization)
+}
+
+// Foundation integration (NSFileCoordinator) needs the simulator's system services.
+// Boot a simulator first and optionally select it using iosSimulatorArm64Test --device <UUID>.
+// Standalone spawn lacks these services; do not skip native coordination tests to hide that.
+tasks.withType<KotlinNativeSimulatorTest>().configureEach {
+    standalone.set(false)
 }
 
 /**
@@ -139,6 +147,7 @@ kotlin {
     
     sourceSets {
         androidMain.dependencies {
+            implementation(libs.androidx.startup.runtime)
             implementation(libs.glide.gifdecoder)
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.compose.uiTooling)
@@ -162,6 +171,7 @@ kotlin {
             implementation(libs.ktor.client.engineDefaults)
             implementation(libs.ktor.serialization.kotlinxJson)
             implementation(libs.multiplatform.settings.noArg)
+            implementation(libs.kotlincrypto.sha2)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
@@ -171,14 +181,41 @@ kotlin {
         jsMain.dependencies {
             implementation(libs.wrappers.browser)
         }
-        webMain.dependencies {
-            implementation(libs.kotlincrypto.sha2)
-        }
     }
 }
 
 dependencies {
     androidRuntimeClasspath(libs.compose.uiTooling)
+}
+
+// Gradle's test worker need not expose URLClassLoader URLs. Separate JVM fixtures must
+// use the actual test runtime classpath, not the worker bootstrap jar or production prefs.
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    if (name == "testAndroidHostTest") {
+        val appApk = project(":androidApp").layout.buildDirectory.file("outputs/apk/debug/androidApp-debug.apk")
+        dependsOn(":androidApp:assembleDebug")
+        inputs.file(appApk)
+        doFirst {
+            (this as org.gradle.api.tasks.testing.Test).systemProperty("boarderless.test.android.apk", appApk.get().asFile.absolutePath)
+        }
+    }
+    if (name == "jvmTest") {
+        val liveMedia = providers.environmentVariable("BOARDERLESS_MEDIA_LIVE_ACCEPTANCE").orElse("false")
+        inputs.property("mediaLiveAcceptance", liveMedia)
+        inputs.property("mediaLiveBaseUrl", providers.environmentVariable("BOARDERLESS_MEDIA_LIVE_BASE_URL").orElse("unset"))
+        listOf("USER", "WORKSPACE", "ASSET").forEach { field ->
+            inputs.property("mediaLiveDownload$field", providers.environmentVariable("BOARDERLESS_MEDIA_LIVE_DOWNLOAD_$field").orElse("unset"))
+        }
+        inputs.files(rootProject.fileTree("backend/tests/fixtures/media"))
+        // The backend's current state is not a Gradle input: a cached test report can never
+        // certify a new live run. Ordinary runs leave the opt-in case explicitly skipped.
+        outputs.upToDateWhen { liveMedia.get() != "true" }
+        outputs.doNotCacheIf("Live media acceptance must actually contact the backend") { liveMedia.get() == "true" }
+    }
+    if (name == "jvmTest") doFirst {
+        val testTask = this as org.gradle.api.tasks.testing.Test
+        testTask.systemProperty("boarderless.test.classpath", testTask.classpath.asPath)
+    }
 }
 
 // Karma loads these scripts outside the compiled Kotlin test bundle.

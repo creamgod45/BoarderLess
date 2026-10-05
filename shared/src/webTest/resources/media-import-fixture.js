@@ -1,23 +1,12 @@
 globalThis.boarderlessMediaFixture = {
     recordVideo(done) {
-        const canvas = document.createElement("canvas");
-        canvas.width = 32; canvas.height = 32;
-        const paint = color => { const context = canvas.getContext("2d"); context.fillStyle = color; context.fillRect(0, 0, 32, 32); };
-        paint("white");
-        const stream = canvas.captureStream(10);
-        const recorder = new MediaRecorder(stream, { mimeType: "video/webm;codecs=vp8" });
-        const parts = []; let timer;
-        recorder.ondataavailable = event => { if (event.data.size) parts.push(event.data); };
-        recorder.onerror = () => { clearInterval(timer); stream.getTracks().forEach(track => track.stop()); done(null, "Recorder failed"); };
-        recorder.onstop = () => {
-            clearInterval(timer); stream.getTracks().forEach(track => track.stop());
-            const reader = new FileReader();
-            reader.onload = () => done(String(reader.result).split(",")[1], null);
-            reader.readAsDataURL(new Blob(parts, { type: "video/webm" }));
-        };
-        const started = performance.now();
-        recorder.start();
-        timer = setInterval(() => { paint(performance.now() - started < 300 ? "white" : "blue"); if (performance.now() - started > 800) recorder.stop(); }, 100);
+        // Historical bridge name: this returns a fixed codec fixture, NOT a live recording.
+        // 32x32 VP8, 10fps: 3 white frames then 6 blue frames. Streaming WebM deliberately
+        // omits Duration, retaining the native player's duration-probe/reset coverage.
+        // Timer-driven canvas capture requests do not acknowledge encoded frames; keeping
+        // the input fixed prevents recorder scheduling from changing the pixel oracle.
+        const encoded = "GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQJChYECGFOAZwH/////////EU2bdKtNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHLTbuMU6uEElTDZ1OsggEY7AEAAAAAAABoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVSalmpSrXsYMPQkBNgIxMYXZmNjMuMS4xMDJXQYxMYXZmNjMuMS4xMDIWVK5ryK4BAAAAAAAAP9eBAXPFiPSq4ziT6508nIEAIrWcg3VuZIiBAIaFVl9WUDiDgQEj44OEBfXhAOCQsIEguoEgmoECVbCEVbmBARJUw2fWc3OfY8CAZ8iZRaOHRU5DT0RFUkSHjExhdmY2My4xLjEwMnNzsWPAi2PFiPSq4ziT6508Z8igRaOHRU5DT0RFUkSHk0xhdmM2My4xLjEwMiBsaWJ2cHgfQ7Z1QTHngQCjpIEAAIAwAgCdASogACAAAEcIhYWIhYSIAgIAB5DzycD+/6PeAKOVgQBkALEBAAUQrAAYABhYL/QACHAAo5WBAMgAsQEABRCsABgAGFgv9AAIcACjvYEBLIDQAgCdASogACAAAEcIhYWIhYSIAgICdaoD+AIIIQg9AP7/TRL//FhX8WFfxYV/8WFf/PzO7cX85gCjlYEBkACxAQAFEKwAGAAYWC/0AAhwAKOVgQH0ALEBAAUQrAAYABhYL/QACHAAo72BAliA0AIAnQEqIAAgAABHCIWFiIWEiAICAnWqA/gCCCEIPQD+/00S//xYV/FhX8WFf/FhX/z8zu3F/OYAo5WBArwAsQEABRCsABgAGFgv9AAIcACjlYEDIACxAQAFEKwAGAAYWC/0AAhwAA==";
+        setTimeout(() => done(encoded, null), 0);
     },
     videoAccounting(reset) {
         if (!this.videoStats) {

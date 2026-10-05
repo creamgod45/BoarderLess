@@ -135,11 +135,38 @@ internal data class CatchUpOperationsDto(
     val hasMore: Boolean,
 )
 
+/** The same REST route, decoded as full records only when replay is required. */
+@Serializable
+internal data class FullCatchUpOperationsDto(
+    val operations: List<CommittedWorkspaceOperationDto>,
+    val lastServerSeq: Long,
+    val hasMore: Boolean,
+)
+
 @Serializable
 internal data class AcceptedOperationsDto(
     val status: String,
     val workspaceVersion: Long,
+    val fromServerSeq: Long,
     val toServerSeq: Long,
+    val operations: List<CommittedWorkspaceOperationDto>,
+)
+
+/** Full durable REST record. The activity-only CommittedOperationDto is not a replay record. */
+@Serializable
+internal data class CommittedWorkspaceOperationDto(
+    val serverSeq: Long,
+    val operationId: String,
+    val transactionId: String,
+    val actorId: String,
+    val clientId: String,
+    val clientSeq: Long,
+    val baseVersion: Long,
+    val workspaceVersion: Long,
+    val operationType: String,
+    val payload: JsonObject,
+    val schemaVersion: Int,
+    val committedAt: String,
 )
 
 @Serializable

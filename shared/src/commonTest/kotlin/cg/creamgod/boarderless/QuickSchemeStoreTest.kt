@@ -61,9 +61,23 @@ class QuickSchemeStoreTest {
         assertEquals(1, scheme?.schemaVersion)
         assertNull(QuickSchemeStore(InMemorySettings()).latest())
     }
+
+    @Test
+    fun preservesSourceAcrossRestartAndRenameWithoutInventingLegacyProvenance() {
+        val settings = InMemorySettings()
+        val saved = QuickSchemeStore(settings).save("media", schemaVersion = 4, sourceWorkspaceId = "source")
+        val reopened = QuickSchemeStore(settings)
+        assertEquals("source", reopened.latest()?.sourceWorkspaceId)
+        assertEquals("source", reopened.rename(saved.id, "Renamed")?.sourceWorkspaceId)
+        val legacy = reopened.save("legacy")
+        assertNull(legacy.sourceWorkspaceId)
+        assertTrue(reopened.delete(saved.id))
+        assertFalse(settings.hasKey("quickScheme.item.${saved.id}.sourceWorkspaceId"))
+        assertEquals(listOf(legacy), reopened.list())
+    }
 }
 
-private class InMemorySettings : Settings {
+internal class InMemorySettings : Settings {
     private val values = mutableMapOf<String, Any>()
 
     override val keys: Set<String> get() = values.keys

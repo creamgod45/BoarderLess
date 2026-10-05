@@ -6,7 +6,10 @@ PRODUCT_BUNDLE_IDENTIFIER=cg.creamgod.boarderless.BoarderLess$(TEAM_ID)
 CURRENT_PROJECT_VERSION=1
 MARKETING_VERSION=1.0
 
-// Simulator default. For a physical iPhone, replace this with the Mac's LAN IPv4 address or local hostname.
+// Local development only. Simulator loopback reaches the Mac; device loopback reaches the iPhone.
+// Keep the physical-device host aligned with the current Android / Kotlin LAN development host.
+// Override these build settings for another development network or a production HTTPS service.
 BOARDERLESS_BACKEND_SCHEME=http
 BOARDERLESS_BACKEND_HOST=127.0.0.1
+BOARDERLESS_BACKEND_HOST[sdk=iphoneos*]=192.168.68.67
 BOARDERLESS_BACKEND_PORT=3000

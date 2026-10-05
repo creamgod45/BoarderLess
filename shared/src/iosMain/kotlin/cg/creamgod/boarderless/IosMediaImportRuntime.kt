@@ -4,12 +4,17 @@ package cg.creamgod.boarderless
 
 import cg.creamgod.boarderless.data.IosFileAssetTransferSource
 import cg.creamgod.boarderless.data.MediaImportRuntime
+import cg.creamgod.boarderless.data.MediaActivityTracker
 import cg.creamgod.boarderless.data.IosAssetPreviewLoader
+import cg.creamgod.boarderless.data.IosGifAnimation
 import cg.creamgod.boarderless.data.loadIosGif
 import cg.creamgod.boarderless.data.loadIosVideo
 import cg.creamgod.boarderless.data.IosVideoSurface
 import cg.creamgod.boarderless.data.bitmapPreviewCache
 import cg.creamgod.boarderless.data.remote.BackendAssetTransferGateway
+import cg.creamgod.boarderless.data.remote.loadGiphyStill
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -29,8 +34,15 @@ internal class IosMediaPicker(private val presenter: () -> UIViewController) : N
     private var picker: UIDocumentPickerViewController? = null
 
     private val previewPermits = Semaphore(2)
+    val activityTracker = MediaActivityTracker()
     private val previewCache = bitmapPreviewCache()
-    val runtime = MediaImportRuntime(clearPreviewCache = previewCache::clear, selectSource = {
+    val runtime = MediaImportRuntime(clearPreviewCache = previewCache::clear, playbackActivity = activityTracker.activity,
+    loadGiphyAnimation = { url ->
+        cg.creamgod.boarderless.data.remote.loadGiphyAnimation(url) { IosGifAnimation.decode(it) }
+    },
+    loadGiphyStill = { url -> withContext(Dispatchers.Default) {
+        loadGiphyStill(url) { IosAssetPreviewLoader.decodePreview(it) }
+    } }, selectSource = {
         val url = selectDocument()
         url?.let { IosFileAssetTransferSource.fromUrl(it) }
     }, loadPreview = { session, assetId ->

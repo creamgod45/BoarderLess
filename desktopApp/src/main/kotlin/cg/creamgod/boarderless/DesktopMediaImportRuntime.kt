@@ -19,9 +19,20 @@ import kotlin.coroutines.resumeWithException
 
 fun desktopMediaImportRuntime(window: Window, playbackActivity: StateFlow<MediaPlaybackActivity>? = null): MediaImportRuntime {
     val previewCache = bitmapPreviewCache()
+    val imageLoader = DesktopViewportImageLoader()
     return MediaImportRuntime(
     playbackActivity = playbackActivity,
-    clearPreviewCache = previewCache::clear,
+    giphyApiKey = System.getenv("BOARDERLESS_GIPHY_API_KEY")?.takeIf { it.isNotBlank() },
+    loadGiphyStill = ::loadDesktopGiphyStill,
+    loadGiphyAnimation = ::loadDesktopGiphyAnimation,
+    clearPreviewCache = { previewCache.clear(); imageLoader.clear() },
+    loadImageTiles = { session, assetId, request, emit ->
+        desktopPreviewPermits.withPermit {
+            val gateway = BackendAssetTransferGateway()
+            try { imageLoader.load(gateway, session, assetId, request, emit) }
+            finally { gateway.close() }
+        }
+    },
     loadVideo = { session, assetId ->
         desktopPreviewPermits.withPermit {
             val gateway = BackendAssetTransferGateway()

@@ -18,6 +18,7 @@ import cg.creamgod.boarderless.domain.model.NodeShape
 internal fun NodeShape.composeShape(): Shape = when (this) {
     NodeShape.RoundedRectangle -> RoundedCornerShape(16.dp)
     NodeShape.Rectangle -> RoundedCornerShape(3.dp)
+    NodeShape.PlainText -> RoundedCornerShape(0.dp)
     NodeShape.Pill -> RoundedCornerShape(percent = 50)
     NodeShape.Ellipse -> GenericShape { size, _ ->
         addOval(Rect(Offset.Zero, size))
@@ -76,6 +77,13 @@ internal fun NodeShape.composeShape(): Shape = when (this) {
         cubicTo(size.width, size.height * 1.05f, 0f, size.height * 1.05f, 0f, size.height * 0.85f)
         close()
     }
+    else -> GenericShape { size, _ ->
+        polygonVertices()?.forEachIndexed { index, point ->
+            if (index == 0) moveTo(point.x * size.width, point.y * size.height)
+            else lineTo(point.x * size.width, point.y * size.height)
+        }
+        close()
+    }
 }
 
 internal fun NodeShape.horizontalContentPadding(width: Dp): Dp = when (this) {
@@ -85,6 +93,10 @@ internal fun NodeShape.horizontalContentPadding(width: Dp): Dp = when (this) {
     NodeShape.Document, NodeShape.Database -> width * 0.12f
     NodeShape.Pill -> width * 0.12f
     NodeShape.RoundedRectangle, NodeShape.Rectangle -> 18.dp
+    NodeShape.PlainText -> 8.dp
+    NodeShape.Plus -> width * .35f
+    NodeShape.Star -> width * .38f
+    else -> width * .28f
 }
 
 internal fun NodeShape.verticalContentPadding(height: Dp): Dp = when (this) {
@@ -92,6 +104,10 @@ internal fun NodeShape.verticalContentPadding(height: Dp): Dp = when (this) {
     NodeShape.Ellipse, NodeShape.Pill -> height * 0.12f
     NodeShape.Document, NodeShape.Database -> height * 0.16f
     NodeShape.RoundedRectangle, NodeShape.Rectangle, NodeShape.Parallelogram, NodeShape.Hexagon -> 18.dp
+    NodeShape.PlainText -> 8.dp
+    NodeShape.Plus -> height * .35f
+    NodeShape.Star -> height * .40f
+    else -> height * .30f
 }
 
 internal fun DrawScope.drawNodePreviewShape(
@@ -104,6 +120,13 @@ internal fun DrawScope.drawNodePreviewShape(
     borderWidth: Float,
 ) {
     when (shape) {
+        NodeShape.PlainText -> { // Text glyph hint, not a card fill or private text rendered into UI chrome.
+            repeat(3) { line ->
+                val y = topLeft.y + size.height * (.25f + line * .22f)
+                drawLine(color, Offset(topLeft.x + size.width * .08f, y),
+                    Offset(topLeft.x + size.width * (if (line == 2) .62f else .90f), y), strokeWidth = borderWidth)
+            }
+        }
         NodeShape.RoundedRectangle -> {
             val radius = CornerRadius(cornerRadius, cornerRadius)
             drawRoundRect(color, topLeft, size, radius)
@@ -166,5 +189,11 @@ private fun previewPath(shape: NodeShape, topLeft: Offset, size: Size): Path = P
             cubicTo(x(1f), y(1.05f), x(0f), y(1.05f), x(0f), y(0.85f)); close()
         }
         NodeShape.RoundedRectangle, NodeShape.Rectangle, NodeShape.Pill -> Unit
+        else -> {
+            shape.polygonVertices()?.forEachIndexed { index, point ->
+                if (index == 0) moveTo(x(point.x), y(point.y)) else lineTo(x(point.x), y(point.y))
+            }
+            close()
+        }
     }
 }

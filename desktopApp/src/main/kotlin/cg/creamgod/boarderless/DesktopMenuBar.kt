@@ -98,10 +98,16 @@ private fun MenuScope.Command(
     shortcut: KeyShortcut? = null,
     keyHint: String? = null,
 ) {
+    val enabled = bridge.isEnabled(id)
     Item(
         text = if (keyHint == null) text else "$text  $keyHint",
-        enabled = bridge.isEnabled(id),
-        shortcut = shortcut,
+        enabled = enabled,
+        // A disabled native menu key equivalent can still intercept text editing on macOS.
+        // Remove the binding, not just the action, while the canvas command is unavailable.
+        shortcut = workspaceMenuShortcut(enabled, shortcut),
         onClick = { if (EventQueue.getCurrentEvent() !is KeyEvent) bridge.run(id) },
     )
 }
+
+internal fun workspaceMenuShortcut(enabled: Boolean, shortcut: KeyShortcut?): KeyShortcut? =
+    shortcut.takeIf { enabled }
