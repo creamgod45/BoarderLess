@@ -1,5 +1,6 @@
 import type { Database } from '../repositories/index.ts'
-import { AssetService } from './asset.service.ts'
+import type { ObjectStorage } from '../storage/types.ts'
+import { AssetService, type AssetServiceOptions } from './asset.service.ts'
 import { MemberService } from './member.service.ts'
 import { OperationService } from './operation.service.ts'
 import { SnapshotService } from './snapshot.service.ts'
@@ -17,14 +18,21 @@ export interface Services {
   status: StatusService
 }
 
-export function createServices(db: Database, version: string): Services {
+export interface ServiceDependencies {
+  db: Database
+  storage: ObjectStorage
+  version: string
+  assets: AssetServiceOptions
+}
+
+export function createServices({ db, storage, version, assets }: ServiceDependencies): Services {
   return {
     users: new UserService(db),
     workspaces: new WorkspaceService(db),
     members: new MemberService(db),
     operations: new OperationService(db),
     snapshots: new SnapshotService(db),
-    assets: new AssetService(db),
-    status: new StatusService(db, version),
+    assets: new AssetService(db, storage, assets),
+    status: new StatusService(db, version, storage.driver),
   }
 }

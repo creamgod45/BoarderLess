@@ -1,0 +1,17 @@
+{
+  "description": "不存在或不可見",
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/assets/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+  },
+  "response": {
+    "status": 404,
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Asset not found"
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

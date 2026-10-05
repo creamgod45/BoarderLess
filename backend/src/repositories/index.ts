@@ -2,6 +2,7 @@ import type postgres from 'postgres'
 import type { Db } from '../db/client.ts'
 import { AssetRepository } from './asset.repository.ts'
 import { CanvasRepository } from './canvas.repository.ts'
+import { JobRepository } from './job.repository.ts'
 import { MemberRepository } from './member.repository.ts'
 import { OperationRepository } from './operation.repository.ts'
 import { OutboxRepository } from './outbox.repository.ts'
@@ -18,6 +19,7 @@ export interface Repositories {
   outbox: OutboxRepository
   snapshots: SnapshotRepository
   assets: AssetRepository
+  jobs: JobRepository
 }
 
 export function createRepositories(db: Db): Repositories {
@@ -30,6 +32,7 @@ export function createRepositories(db: Db): Repositories {
     outbox: new OutboxRepository(db),
     snapshots: new SnapshotRepository(db),
     assets: new AssetRepository(db),
+    jobs: new JobRepository(db),
   }
 }
 

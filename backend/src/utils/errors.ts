@@ -18,3 +18,8 @@ export const notFound = (resource: string) => new AppError(404, 'not_found', `${
 export const conflict = (code: string, message: string, details?: unknown) => new AppError(409, code, message, details)
 export const unprocessable = (code: string, message: string, details?: unknown) =>
   new AppError(422, code, message, details)
+export const payloadTooLarge = (code: string, message: string, details?: unknown) =>
+  new AppError(413, code, message, details)
+export const unsupportedMediaType = (code: string, message: string, details?: unknown) =>
+  new AppError(415, code, message, details)
+export const serviceUnavailable = (code: string, message: string) => new AppError(503, code, message)

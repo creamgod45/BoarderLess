@@ -1,4 +1,5 @@
-import Fastify, { type FastifyInstance } from 'fastify'
+import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify'
+import cors from '@fastify/cors'
 import swagger from '@fastify/swagger'
 import swaggerUi from '@fastify/swagger-ui'
 import type postgres from 'postgres'
@@ -9,28 +10,51 @@ import { registerErrorHandler } from './middlewares/error-handler.ts'
 import { Database } from './repositories/index.ts'
 import { apiRoutes } from './routes/api.routes.ts'
 import { pageRoutes } from './routes/page.routes.ts'
+import { localStorageRoutes } from './routes/storage.routes.ts'
 import { createServices } from './services/index.ts'
+import { LocalObjectStorage } from './storage/local.storage.ts'
+import type { ObjectStorage } from './storage/types.ts'
 import type { EndpointInfo } from './views/home.view.ts'
 
+export type BuildAppConfig = Pick<AppConfig, 'logLevel' | 'corsOrigins' | 'media'> & {
+  worker: Pick<AppConfig['worker'], 'maxAttempts'>
+}
+
 export interface BuildAppOptions {
-  config: Pick<AppConfig, 'logLevel'>
+  config: BuildAppConfig
   sql: postgres.Sql
+  storage: ObjectStorage
   logger?: boolean
 }
 
-export async function buildApp({ config, sql, logger = true }: BuildAppOptions): Promise<FastifyInstance> {
+/** log 中不保留 query string（可能含 signed URL 簽名或 token，§9） */
+function serializeRequest(request: FastifyRequest) {
+  return {
+    method: request.method,
+    url: request.url.split('?')[0],
+    hostname: request.hostname,
+    remoteAddress: request.ip,
+  }
+}
+
+export async function buildApp({ config, sql, storage, logger = true }: BuildAppOptions): Promise<FastifyInstance> {
   const app = Fastify({
     logger: logger && {
       level: config.logLevel,
-      // 不記錄 token / 身分 header（§9）
       redact: ['req.headers.authorization', `req.headers["${DEV_USER_HEADER}"]`],
+      serializers: { req: serializeRequest },
     },
     genReqId: () => crypto.randomUUID(),
     ajv: { customOptions: { removeAdditional: false, coerceTypes: 'array', useDefaults: true } },
   })
 
   const db = new Database(sql)
-  const services = createServices(db, pkg.version)
+  const services = createServices({
+    db,
+    storage,
+    version: pkg.version,
+    assets: { media: config.media, jobMaxAttempts: config.worker.maxAttempts },
+  })
 
   const endpoints: EndpointInfo[] = []
   app.addHook('onRoute', (route) => {
@@ -45,6 +69,14 @@ export async function buildApp({ config, sql, logger = true }: BuildAppOptions):
   registerErrorHandler(app)
   registerDevAuth(app, services.users)
 
+  await app.register(cors, {
+    origin: config.corsOrigins.includes('*') ? true : config.corsOrigins,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['content-type', DEV_USER_HEADER],
+    exposedHeaders: ['content-length', 'etag'],
+    maxAge: 600,
+  })
+
   await app.register(swagger, {
     openapi: {
       info: { title: 'BoarderLess Storage API', version: pkg.version },
@@ -58,6 +90,7 @@ export async function buildApp({ config, sql, logger = true }: BuildAppOptions):
 
   await app.register(pageRoutes(services, () => endpoints))
   await app.register(apiRoutes(services), { prefix: '/api/v1' })
+  if (storage instanceof LocalObjectStorage) await app.register(localStorageRoutes(storage))
 
   return app
 }

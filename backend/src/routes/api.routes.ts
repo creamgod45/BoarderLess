@@ -44,9 +44,11 @@ export function apiRoutes(services: Services) {
     app.get('/workspaces/:workspaceId/snapshots/latest', { schema: snapshot.latestSnapshotSchema }, snapshots.latest)
 
     const assets = new AssetController(services.assets)
-    app.post('/workspaces/:workspaceId/assets', { schema: asset.createAssetSchema }, assets.create)
+    app.post('/workspaces/:workspaceId/assets', { schema: asset.createAssetSchema }, assets.prepare)
     app.get('/workspaces/:workspaceId/assets', { schema: asset.listAssetsSchema }, assets.list)
     app.get('/workspaces/:workspaceId/assets/:assetId', { schema: asset.getAssetSchema }, assets.get)
-    app.delete('/workspaces/:workspaceId/assets/:assetId', { schema: asset.deleteAssetSchema }, assets.delete)
+    app.post('/workspaces/:workspaceId/assets/:assetId/complete', { schema: asset.completeAssetSchema }, assets.complete)
+    app.get('/workspaces/:workspaceId/assets/:assetId/content', { schema: asset.assetContentSchema }, assets.content)
+    app.delete('/workspaces/:workspaceId/assets/:assetId', { schema: asset.abandonAssetSchema }, assets.abandon)
   }
 }

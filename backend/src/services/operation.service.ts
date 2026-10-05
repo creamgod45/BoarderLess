@@ -4,6 +4,7 @@ import {
   type PayloadValidationError,
   type TypedOperation,
 } from '../domain/operations.ts'
+import { mediaKindOf } from '../models/asset.ts'
 import type { JsonObject } from '../models/canvas.ts'
 import type { CommittedOperation } from '../models/operation.ts'
 import type { Database, Repositories } from '../repositories/index.ts'
@@ -263,6 +264,7 @@ async function applyOperation(
       const [existing] = await canvas.findObjects(workspaceId, [p.objectId])
       if (existing) throw rejected('object_already_exists', `Object ${p.objectId} already exists`)
       if (p.parentId) await requireActiveObjects(repos, workspaceId, [p.parentId])
+      if (p.objectType === MEDIA_OBJECT_TYPE) await validateMediaReferences(repos, workspaceId, p.properties ?? {})
       await canvas.insertObject(workspaceId, actorId, {
         objectId: p.objectId,
         objectType: p.objectType,
@@ -283,6 +285,9 @@ async function applyOperation(
       if (p.parentId) {
         if (p.parentId === p.objectId) throw rejected('invalid_parent', 'An object cannot be its own parent')
         await requireActiveObjects(repos, workspaceId, [p.parentId])
+      }
+      if (obj!.objectType === MEDIA_OBJECT_TYPE && p.properties && MEDIA_KEYS.some((k) => k in p.properties!)) {
+        await validateMediaReferences(repos, workspaceId, { ...obj!.properties, ...p.properties })
       }
       await canvas.updateObject(workspaceId, p.objectId, actorId, p)
       return p
@@ -347,6 +352,34 @@ async function applyOperation(
       await canvas.softDeleteRelations(workspaceId, p.relationIds)
       return p
     }
+  }
+}
+
+const MEDIA_OBJECT_TYPE = 'media'
+const MEDIA_KEYS = ['assetId', 'mediaKind', 'thumbnailAssetId']
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * MediaNode 只能引用同一 Workspace 的 asset（BACKEND_MEDIA_API_SPEC §4.4、§7）。
+ * 不要求 ready：undo / 還原既有 Node 時，引用的素材可能已轉為 missing。
+ */
+async function validateMediaReferences(repos: Repositories, workspaceId: string, properties: JsonObject) {
+  const { assetId, mediaKind, thumbnailAssetId } = properties
+  if (typeof assetId !== 'string' || !UUID_RE.test(assetId)) {
+    throw rejected('invalid_media_reference', 'Media nodes require properties.assetId (UUID)')
+  }
+  if (thumbnailAssetId != null && (typeof thumbnailAssetId !== 'string' || !UUID_RE.test(thumbnailAssetId))) {
+    throw rejected('invalid_media_reference', 'properties.thumbnailAssetId must be a UUID')
+  }
+  const ids = thumbnailAssetId ? [assetId, thumbnailAssetId as string] : [assetId]
+  const assets = await repos.assets.findVisibleMany(workspaceId, ids)
+  const asset = assets.find((a) => a.id === assetId)
+  const missing = ids.filter((id) => !assets.some((a) => a.id === id))
+  if (!asset || missing.length > 0) {
+    throw rejected('asset_not_found', 'Referenced assets do not exist in this workspace', { assetIds: missing })
+  }
+  if (mediaKind !== mediaKindOf(asset.mediaType)) {
+    throw rejected('media_kind_mismatch', `mediaKind must be "${mediaKindOf(asset.mediaType)}" for ${asset.mediaType}`)
   }
 }
 

@@ -1,0 +1,20 @@
+{
+  "description": "ready 但內容遺失：409，不簽發假票券",
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/assets/99999999-9999-4999-8999-999999999999/content"
+  },
+  "response": {
+    "status": 409,
+    "body": {
+      "error": {
+        "code": "asset_missing",
+        "message": "Asset content is missing",
+        "details": {
+          "status": "missing"
+        }
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

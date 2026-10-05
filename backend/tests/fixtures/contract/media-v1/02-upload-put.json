@@ -1,0 +1,14 @@
+{
+  "description": "Signed PUT：只帶 upload.headers，原始 binary（非 multipart），不帶 x-user-id；2xx 不等同 ready",
+  "request": {
+    "method": "PUT",
+    "url": "https://storage.example.invalid/signed-upload",
+    "headers": {
+      "Content-Type": "image/png"
+    },
+    "body": "<binary: tests/fixtures/media/image.png>"
+  },
+  "response": {
+    "status": 200
+  }
+}

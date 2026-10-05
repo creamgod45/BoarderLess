@@ -9,7 +9,7 @@ const STYLE = `
 body { margin:0; background:var(--bg); color:var(--text); font:15px/1.55 system-ui,-apple-system,"PingFang TC","Noto Sans TC",sans-serif; }
 main { max-width:960px; margin:0 auto; padding:40px 16px 64px; }
 h1 { font-size:24px; margin:0 0 4px; } h2 { font-size:16px; margin:32px 0 12px; }
-p.sub { color:var(--muted); margin:0; }
+p.sub { color:var(--muted); margin:0; } h2 .sub { color:var(--muted); font-weight:400; }
 .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-top:24px; }
 .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
 .card .label { color:var(--muted); font-size:13px; } .card .value { font-size:22px; font-weight:600; font-variant-numeric:tabular-nums; }

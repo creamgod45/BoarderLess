@@ -26,6 +26,15 @@ export function homeView(status: ServiceStatus, endpoints: EndpointInfo[]): stri
         ${stat('Outbox backlog', status.stats?.outboxBacklog ?? '—')}
       </div>
 
+      <h2>素材與背景工作 <span class="sub">· storage: ${status.storageDriver}</span></h2>
+      <div class="grid">
+        ${stat('Assets ready', status.stats?.assets.ready ?? '—')}
+        ${stat('Assets pending', status.stats?.assets.pending ?? '—')}
+        ${stat('Assets rejected / missing', status.stats ? `${status.stats.assets.rejected} / ${status.stats.assets.missing}` : '—')}
+        ${stat('Jobs queued / running', status.stats ? `${status.stats.jobs.queued} / ${status.stats.jobs.running}` : '—')}
+        ${stat('Jobs dead-letter', status.stats?.jobs.dead ?? '—', status.stats?.jobs.dead ? 'bad' : '')}
+      </div>
+
       <h2>API</h2>
       <div class="table-wrap">
         <table>

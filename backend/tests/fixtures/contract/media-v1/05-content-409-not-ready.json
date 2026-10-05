@@ -1,0 +1,20 @@
+{
+  "description": "pending 時不簽發下載票券",
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/assets/33333333-3333-4333-8333-333333333333/content"
+  },
+  "response": {
+    "status": 409,
+    "body": {
+      "error": {
+        "code": "asset_not_ready",
+        "message": "Asset is still being processed",
+        "details": {
+          "status": "pending"
+        }
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

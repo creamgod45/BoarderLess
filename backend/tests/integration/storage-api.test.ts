@@ -197,13 +197,15 @@ describe.skipIf(!sql)('storage API (PostgreSQL)', () => {
     expect(snap.body.checksum).toStartWith('sha256:')
     expect((await api.get(`/workspaces/${ws}/snapshots/latest`)).body.throughServerSeq).toBe(1)
 
-    const bad = await api.post(`/workspaces/${ws}/assets`, { mediaType: 'application/x-sh', byteSize: 10, checksum: 'x' })
-    expect(bad.status).toBe(422)
+    const checksum = `sha256:${'a'.repeat(64)}`
+    const bad = await api.post(`/workspaces/${ws}/assets`, { mediaType: 'application/x-sh', byteSize: 10, checksum })
+    expect(bad.status).toBe(415)
 
-    const asset = await api.post(`/workspaces/${ws}/assets`, { mediaType: 'image/png', byteSize: 10, checksum: 'sha256:x' })
+    const asset = await api.post(`/workspaces/${ws}/assets`, { mediaType: 'image/png', byteSize: 10, checksum })
     expect(asset.status).toBe(201)
     expect(asset.body.asset.status).toBe('pending')
     expect(asset.body.asset.storageKey).toContain(asset.body.asset.id)
+    expect(asset.body.upload.method).toBe("PUT")
   })
 
   test('requests without a user are rejected', async () => {

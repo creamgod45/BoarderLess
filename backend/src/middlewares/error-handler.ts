@@ -1,4 +1,5 @@
 import type { FastifyError, FastifyInstance } from 'fastify'
+import { StorageUnavailableError } from '../storage/types.ts'
 import { AppError } from '../utils/errors.ts'
 
 interface PostgresError {
@@ -21,6 +22,10 @@ export function registerErrorHandler(app: FastifyInstance): void {
     }
     if ('validation' in error && error.validation) {
       return send(400, 'validation_error', error.message, error.validation)
+    }
+    if (error instanceof StorageUnavailableError) {
+      request.log.error({ err: error }, 'object storage unavailable')
+      return send(503, 'storage_unavailable', 'Object storage is temporarily unavailable')
     }
     if (isPostgresError(error)) {
       if (error.code === '23505') return send(409, 'unique_violation', 'Resource already exists')

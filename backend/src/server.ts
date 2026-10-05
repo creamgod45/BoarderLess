@@ -1,10 +1,13 @@
 import { buildApp } from './app.ts'
 import { loadConfig } from './config/env.ts'
 import { createSql } from './db/client.ts'
+import { createStorage } from './storage/index.ts'
 
 const config = loadConfig()
 const sql = createSql(config.databaseUrl, config.databasePoolMax)
-const app = await buildApp({ config, sql })
+const storage = createStorage(config.storage)
+await storage.init?.(config.corsOrigins)
+const app = await buildApp({ config, sql, storage })
 
 const shutdown = async (signal: string) => {
   app.log.info({ signal }, 'shutting down')
