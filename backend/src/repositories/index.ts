@@ -2,6 +2,7 @@ import type postgres from 'postgres'
 import type { Db } from '../db/client.ts'
 import { AssetRepository } from './asset.repository.ts'
 import { CanvasRepository } from './canvas.repository.ts'
+import { FenceRepository } from './fence.repository.ts'
 import { JobRepository } from './job.repository.ts'
 import { MemberRepository } from './member.repository.ts'
 import { OperationRepository } from './operation.repository.ts'
@@ -20,6 +21,7 @@ export interface Repositories {
   snapshots: SnapshotRepository
   assets: AssetRepository
   jobs: JobRepository
+  fences: FenceRepository
 }
 
 export function createRepositories(db: Db): Repositories {
@@ -33,6 +35,7 @@ export function createRepositories(db: Db): Repositories {
     snapshots: new SnapshotRepository(db),
     assets: new AssetRepository(db),
     jobs: new JobRepository(db),
+    fences: new FenceRepository(db),
   }
 }
 

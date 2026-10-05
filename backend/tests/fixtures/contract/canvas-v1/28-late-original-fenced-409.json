@@ -1,0 +1,54 @@
+{
+  "description": "被 fence 的原請求晚到：409 transaction_fenced，永不 commit",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "00000000-0000-4000-8000-000000000092",
+      "transactionId": "00000000-0000-4000-8000-000000000091",
+      "baseVersion": 9,
+      "operations": [
+        {
+          "operationId": "00000000-0000-4000-8000-000000000093",
+          "clientSeq": 1,
+          "kind": "create_object",
+          "payload": {
+            "objectId": "00000000-0000-4000-8000-000000000094",
+            "objectType": "text",
+            "transform": {
+              "x": 0,
+              "y": 0,
+              "width": 260,
+              "height": 132,
+              "rotationDegrees": 0
+            },
+            "properties": {
+              "text": "Idea",
+              "colorToken": "paper",
+              "shapeToken": "rounded"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 409,
+    "body": {
+      "error": {
+        "code": "transaction_fenced",
+        "message": "This transaction was fenced and can no longer be committed",
+        "details": {
+          "fenced": [
+            {
+              "kind": "transaction",
+              "id": "00000000-0000-4000-8000-000000000091"
+            }
+          ]
+        }
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

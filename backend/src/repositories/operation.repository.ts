@@ -31,6 +31,28 @@ export class OperationRepository {
     `
   }
 
+  /**
+   * 同一 actor 的原提交：所有包含指定 transaction ID 或 operation ID 的 transaction，回傳完整交易內容。
+   * 其他 actor 的同 ID 不會被認領。
+   */
+  async findForReceipts(
+    workspaceId: string,
+    actorId: string,
+    transactionIds: string[],
+    operationIds: string[],
+  ): Promise<CommittedOperation[]> {
+    return this.db<CommittedOperation[]>`
+      SELECT * FROM workspace_operations
+      WHERE workspace_id = ${workspaceId} AND actor_id = ${actorId}
+        AND transaction_id IN (
+          SELECT DISTINCT transaction_id FROM workspace_operations
+          WHERE workspace_id = ${workspaceId} AND actor_id = ${actorId}
+            AND (transaction_id = ANY(${transactionIds}::uuid[]) OR operation_id = ANY(${operationIds}::uuid[]))
+        )
+      ORDER BY server_seq
+    `
+  }
+
   async listAfterSeq(workspaceId: string, afterSeq: number, limit: number): Promise<CommittedOperation[]> {
     return this.db<CommittedOperation[]>`
       SELECT * FROM workspace_operations

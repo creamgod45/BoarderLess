@@ -1,7 +1,7 @@
 # Backend 開發進度
 
 對照：[`docs/BACKEND_ARCHITECTURE.md`](../docs/BACKEND_ARCHITECTURE.md) §11 交付階段、[`docs/BACKEND_MEDIA_API_SPEC.md`](../docs/BACKEND_MEDIA_API_SPEC.md)（Media v1）
-最後更新：2026-10-05（併入 2026-10-05 同步評估）
+最後更新：2026-10-05（併入同步評估；完成優先 1 資料正確性）
 
 圖例：✅ 完成 · 🟡 部分完成／暫定 · ⬜ 未開始
 
@@ -76,6 +76,21 @@
 - upload 預設 15 分鐘（`UPLOAD_URL_TTL_SECONDS`）、download 預設 5 分鐘（`DOWNLOAD_URL_TTL_SECONDS`）
 - 撤銷 membership 後立即停止簽發新票券；**已簽出的 S3 presigned URL 在到期前無法撤銷**，最大暴露時間即上述 TTL
 
+### 資料正確性（BAI-001 / 007 / 008 / 011 / 012）
+- ✅ 型別化物件 schema：只接受 `text` / `group` / `media`，未知型別回 `unsupported_object_type`（附 `supportedObjectTypes`、`objectSchemaVersion` 供舊 client 提示升級）
+- ✅ transform：`x` / `y` / `width` / `height` / `rotationDegrees` 必須是有限數字、尺寸不得為負、有上限；不允許額外欄位；缺少的欄位由伺服器補預設值並寫入正式 payload
+- ✅ properties：依型別驗證型別、長度與允許值（25 種 APP shapeToken、主題色 token 或 `#rrggbb`、media 的 assetId / mediaKind / altText / thumbnailAssetId）；explicit null 與未知欄位拒絕
+- ✅ `update_object` / `move_objects` 驗證 merge 後的完整狀態；transform 改為與既有值 merge
+- ✅ `zIndex` 限制在 INTEGER 範圍（原本超出會造成 500）
+- ✅ Group 階層：parent 必須是同 Workspace、active 的 group；以 transaction 內狀態檢查完整 ancestor 鏈（直接、間接、同 transaction 多筆變更的循環都拒絕）；`parent_id` 加上同 Workspace 複合 FK
+- ✅ 刪除含 children 的 group：children 未一起刪除或先 reparent 時回 `hierarchy_cascade_mismatch`（與 APP 一致）
+- ✅ `restore_objects` / `restore_relations`：以穩定 ID 還原 tombstone 最後狀態、版本 +1；`expectedObjectVersions` 比對 tombstone 版本；parent 必須還原後為 active group；relation 端點必須 active；整筆 transaction 原子
+- ✅ 對 tombstone 送 `create_object` / `create_relation`：回 `object_already_exists`，附 `deleted: true`、`restoreWith`
+- ✅ 型別替換（`update_object.objectType`）、relation 端點修改：回明確的 `unsupported_change`
+- ✅ `POST …/operations/receipts`：以目前使用者 + ACL 查自己的原 transaction / operation ID（最多 200 個），回傳完整交易邊界 receipt（不含 payload）或 unknown；其他 actor 的同 ID 不可認領
+- ✅ `POST …/operations/fences`：與 submit 取同一 Workspace lock，對尚未提交的 ID 建立 fence；之後原請求晚到一律 409 `transaction_fenced`；已提交則回 receipt
+- ✅ 31 份 canvas contract fixtures（`tests/fixtures/contract/canvas-v1/`，`bun run fixtures:canvas`），以 response schema 與 domain 型別驗證
+
 ### 寫入正確性（§4.3、§6.4、§8.1）
 - ✅ Workspace row lock 序列化同一 Workspace 的寫入，`serverSeq` 唯一且連續
 - ✅ 鎖內重新檢查 membership / 角色（撤銷後立即無法寫入）
@@ -86,10 +101,11 @@
 - ✅ locked 物件只能切換 `locked`，不可移動 / 修改 / 刪除
 - ✅ operation、projection、outbox 在同一 transaction 提交
 
-### 測試（`bun test`，89 個）
+### 測試（`bun test`，145 個）
 - ✅ 單元：operation payload 驗證、touched ids、角色權限矩陣、HTML 跳脫、MIME sniff、本機簽名 URL、contract fixtures schema
 - ✅ 整合（真實 PostgreSQL）：create/move/delete + 冪等重送、20 個並行寫入的 `serverSeq` 連續性、版本衝突、transaction rollback、relation cascade、角色與撤銷、outbox、snapshot
 - ✅ 素材整合（真實 ffmpeg）：六種 MIME 完整流程、驗證失敗分類、complete 冪等 / 衝突、abandon 競爭、GC、lease 過期重領、重複縮圖 job、多 worker、不可覆寫、missing、ACL、MediaNode 引用、storage 503
+- ✅ 資料正確性整合：BAI-008 重現 payload、邊界值、merge 後驗證、group 非法 parent / 直接 / 間接 / 同 transaction 循環 / 跨 Workspace、刪除含 children 的 group、restore（stale 版本、parent 依賴、relation 端點）、receipt（partial、跨 actor）、fence（晚到原請求、並行競爭、ACL、上限）
 - ✅ 端到端（真實 HTTP）：本機 driver 串流上傳約 4 MB 影片；S3 driver 對 RustFS 的 presigned PUT / GET、縮圖、`If-None-Match`（storage 無法連線時略過）
 
 ## 待辦事項
@@ -105,12 +121,16 @@
 
 整合問題細節見 [`BACKEND_APP_INTEGRATION_ISSUES.md`](../docs/BACKEND_APP_INTEGRATION_ISSUES.md)；素材實測紀錄見 [`MEDIA_LIVE_ACCEPTANCE.md`](../docs/MEDIA_LIVE_ACCEPTANCE.md)。
 
-### 資料正確性（優先 1）
-- [ ] BAI-008：依 objectType 型別化驗證 `create_object` / `update_object`（transform 尺寸／座標、properties schema、未知型別拒絕、更新後型別一致）
-- [ ] BAI-007：parent 必須是 Group、禁止間接循環、刪除父群組時 children 的處理規則
-- [ ] BAI-001：soft-delete 後以相同 ID 還原（`restore_objects` 或受檢查的 resurrection）
-- [ ] BAI-011：草稿合併的結構替換（物件型別替換、relation endpoint 修改）與刪除 Undo／Redo 語意
-- [ ] BAI-012：原 transaction 的權威 receipt／settlement／fence（一般 catch-up 查不到不代表未成功）
+### 資料正確性（優先 1）——後端已完成，待 APP 對接
+- [x] BAI-008：型別化 schema（`src/domain/canvas-objects.ts`）；細節見「已實作」
+- [x] BAI-007：Group 階層 invariant
+- [x] BAI-001：`restore_objects` / `restore_relations`
+- [x] BAI-011：型別替換與 relation 端點修改回明確 `unsupported_change`；刪除 Undo / Redo 改用 restore
+- [x] BAI-012：receipt 查詢與 fence
+- [ ] APP 對接：刪除的 inverse 與 Redo 改送 `restore_objects` / `restore_relations`；草稿合併改用 receipt / fence；更新 BAI 文件狀態
+- [ ] 正式型別替換 / relation 端點修改 operation（目前明確不支援；需產品確認語意）
+- [ ] 舊資料：migration 前寫入、不符合新 schema 的 dev 資料仍會出現在 state，之後的 update 會被拒絕（APP 已 fail-closed）；正式上線前需掃描 / 遷移
+- [ ] Receipt 依賴 operation log 保留；若日後裁剪歷史，需定義 receipt 保留期與「已裁剪」狀態
 
 ### 需先定稿的契約（§12，阻塞 B0 完成）
 - [ ] 與 KMP `shared` 模組共用 `WorkspaceOperation` 定義（種類、inverse 所需資料、transaction 邊界）；目前 `src/domain/operations.ts` 為 server 暫定版

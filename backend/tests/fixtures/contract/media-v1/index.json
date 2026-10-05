@@ -9,7 +9,7 @@
     },
     {
       "name": "02-upload-put",
-      "description": "Signed PUT",
+      "description": "Signed PUT：只帶 upload.headers，原始 binary（非 multipart），不帶 x-user-id；2xx 不等同 ready",
       "status": 200
     },
     {

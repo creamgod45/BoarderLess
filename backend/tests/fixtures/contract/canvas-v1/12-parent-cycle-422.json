@@ -1,0 +1,38 @@
+{
+  "description": "間接循環：A → B → A",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "00000000-0000-4000-8000-000000000048",
+      "transactionId": "00000000-0000-4000-8000-000000000049",
+      "baseVersion": 4,
+      "operations": [
+        {
+          "operationId": "00000000-0000-4000-8000-000000000050",
+          "clientSeq": 1,
+          "kind": "update_object",
+          "payload": {
+            "objectId": "00000000-0000-4000-8000-000000000045",
+            "parentId": "00000000-0000-4000-8000-000000000047"
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 422,
+    "body": {
+      "error": {
+        "code": "parent_cycle",
+        "message": "Parent change would create a cycle",
+        "details": {
+          "objectId": "00000000-0000-4000-8000-000000000045",
+          "parentId": "00000000-0000-4000-8000-000000000047"
+        }
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

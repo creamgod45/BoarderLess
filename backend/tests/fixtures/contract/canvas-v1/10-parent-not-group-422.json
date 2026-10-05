@@ -1,0 +1,51 @@
+{
+  "description": "parent 必須是 group",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "00000000-0000-4000-8000-000000000038",
+      "transactionId": "00000000-0000-4000-8000-000000000039",
+      "baseVersion": 3,
+      "operations": [
+        {
+          "operationId": "00000000-0000-4000-8000-000000000040",
+          "clientSeq": 1,
+          "kind": "create_object",
+          "payload": {
+            "objectId": "00000000-0000-4000-8000-000000000041",
+            "objectType": "text",
+            "transform": {
+              "x": 0,
+              "y": 0,
+              "width": 260,
+              "height": 132,
+              "rotationDegrees": 0
+            },
+            "properties": {
+              "text": "Idea",
+              "colorToken": "paper",
+              "shapeToken": "rounded"
+            },
+            "parentId": "66666666-6666-4666-8666-666666666666"
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 422,
+    "body": {
+      "error": {
+        "code": "invalid_parent",
+        "message": "Parent must be a group",
+        "details": {
+          "parentId": "66666666-6666-4666-8666-666666666666",
+          "parentType": "text"
+        }
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

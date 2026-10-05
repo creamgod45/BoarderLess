@@ -15,7 +15,8 @@
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "fixtures:media": "bun scripts/generate-media-fixtures.ts",
-    "fixtures:contract": "bun scripts/generate-contract-fixtures.ts"
+    "fixtures:contract": "bun scripts/generate-contract-fixtures.ts",
+    "fixtures:canvas": "bun scripts/generate-canvas-fixtures.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",

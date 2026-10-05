@@ -42,7 +42,7 @@ export const SubmitOperationsBody = Type.Object(
   { additionalProperties: false },
 )
 
-const CommittedResponse = Type.Object({
+export const CommittedResponse = Type.Object({
   status: Type.Union([Type.Literal('accepted'), Type.Literal('duplicate')]),
   fromServerSeq: Type.Integer(),
   toServerSeq: Type.Integer(),
@@ -50,7 +50,7 @@ const CommittedResponse = Type.Object({
   operations: Type.Array(CommittedOperationSchema),
 })
 
-const ConflictResponse = Type.Object({
+export const ConflictResponse = Type.Object({
   status: Type.Literal('conflict'),
   conflicts: Type.Array(
     Type.Object({
@@ -90,4 +90,64 @@ export const listOperationsSchema = {
     }),
     ...errorResponses,
   },
+}
+
+// ---- BAI-012 receipts / fences ----
+
+const ReceiptQueryBody = Type.Object(
+  {
+    transactionIds: Type.Optional(Type.Array(Uuid, { maxItems: 200 })),
+    operationIds: Type.Optional(Type.Array(Uuid, { maxItems: 200 })),
+  },
+  { additionalProperties: false },
+)
+
+export const ReceiptResponse = Type.Object({
+  workspaceId: Type.String(),
+  headServerSeq: Type.Integer(),
+  headWorkspaceVersion: Type.Integer(),
+  receipts: Type.Array(
+    Type.Object({
+      transactionId: Type.String(),
+      actorId: Type.String(),
+      clientId: Type.String(),
+      workspaceVersion: Type.Integer(),
+      fromServerSeq: Type.Integer(),
+      toServerSeq: Type.Integer(),
+      committedAt: DateTime,
+      operations: Type.Array(
+        Type.Object({
+          operationId: Type.String(),
+          clientSeq: Type.Integer(),
+          serverSeq: Type.Integer(),
+          kind: Type.String(),
+        }),
+      ),
+    }),
+  ),
+  lookups: Type.Array(
+    Type.Object({
+      type: Type.Enum(['transaction', 'operation'] as const),
+      id: Type.String(),
+      status: Type.Enum(['committed', 'fenced', 'unknown'] as const),
+      transactionId: Type.Optional(Type.String()),
+      workspaceVersion: Type.Optional(Type.Integer()),
+    }),
+  ),
+})
+
+export const lookupReceiptsSchema = {
+  tags: ['operations'],
+  summary: '查詢自己原提交的 receipt（最多 200 個 ID；unknown 不排除晚到的原請求）',
+  params: WorkspaceParams,
+  body: ReceiptQueryBody,
+  response: { 200: ReceiptResponse, ...errorResponses },
+}
+
+export const fenceTransactionsSchema = {
+  tags: ['operations'],
+  summary: 'Fence 尚未提交的原 transaction / operation，保證之後不會 commit',
+  params: WorkspaceParams,
+  body: ReceiptQueryBody,
+  response: { 200: ReceiptResponse, ...errorResponses },
 }

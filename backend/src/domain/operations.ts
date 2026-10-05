@@ -12,13 +12,15 @@ import { RELATION_DIRECTIONS } from '../models/canvas.ts'
 const Uuid = Type.String({ format: 'uuid' })
 const JsonObject = Type.Record(Type.String(), Type.Unknown())
 const Direction = Type.Enum(RELATION_DIRECTIONS)
+/** canvas_objects.z_index 是 INTEGER */
+const ZIndex = Type.Integer({ minimum: -2_147_483_648, maximum: 2_147_483_647 })
 
 export const CreateObjectPayload = Type.Object(
   {
     objectId: Uuid,
     objectType: Type.String({ minLength: 1, maxLength: 64 }),
     parentId: Type.Optional(Type.Union([Uuid, Type.Null()])),
-    zIndex: Type.Optional(Type.Integer()),
+    zIndex: Type.Optional(ZIndex),
     locked: Type.Optional(Type.Boolean()),
     transform: Type.Optional(JsonObject),
     properties: Type.Optional(JsonObject),
@@ -26,12 +28,16 @@ export const CreateObjectPayload = Type.Object(
   { additionalProperties: false },
 )
 
-/** 部分更新；properties 以淺層 merge 套用（JSONB `||`） */
+/**
+ * 部分更新：transform 與 properties 皆以淺層 merge 套用，merge 後的完整狀態必須通過型別驗證。
+ * objectType 只為了回報明確的 unsupported_change（型別替換需另定 operation，BAI-011）。
+ */
 export const UpdateObjectPayload = Type.Object(
   {
     objectId: Uuid,
+    objectType: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
     parentId: Type.Optional(Type.Union([Uuid, Type.Null()])),
-    zIndex: Type.Optional(Type.Integer()),
+    zIndex: Type.Optional(ZIndex),
     locked: Type.Optional(Type.Boolean()),
     transform: Type.Optional(JsonObject),
     properties: Type.Optional(JsonObject),
@@ -67,9 +73,12 @@ export const CreateRelationPayload = Type.Object(
   { additionalProperties: false },
 )
 
+/** sourceObjectId / targetObjectId 只為了回報明確的 unsupported_change（端點修改需另定 operation） */
 export const UpdateRelationPayload = Type.Object(
   {
     relationId: Uuid,
+    sourceObjectId: Type.Optional(Uuid),
+    targetObjectId: Type.Optional(Uuid),
     direction: Type.Optional(Direction),
     intent: Type.Optional(Type.Union([Type.String({ maxLength: 64 }), Type.Null()])),
     label: Type.Optional(Type.Union([Type.String({ maxLength: 500 }), Type.Null()])),
@@ -83,6 +92,21 @@ export const DeleteRelationsPayload = Type.Object(
   { additionalProperties: false },
 )
 
+/**
+ * 以穩定 ID 還原 soft-delete 的物件（BAI-001 / BAI-011）：恢復 tombstone 的最後狀態，版本 +1。
+ * expectedObjectVersions 對應 tombstone 版本；parent 必須在還原後為 active group。
+ */
+export const RestoreObjectsPayload = Type.Object(
+  { objectIds: Type.Array(Uuid, { minItems: 1, maxItems: 500 }) },
+  { additionalProperties: false },
+)
+
+/** 還原 soft-delete 的 relation；來源與目標必須為 active 物件（可在同一 transaction 先 restore_objects） */
+export const RestoreRelationsPayload = Type.Object(
+  { relationIds: Type.Array(Uuid, { minItems: 1, maxItems: 500 }) },
+  { additionalProperties: false },
+)
+
 export const OPERATION_PAYLOADS = {
   create_object: CreateObjectPayload,
   update_object: UpdateObjectPayload,
@@ -91,6 +115,8 @@ export const OPERATION_PAYLOADS = {
   create_relation: CreateRelationPayload,
   update_relation: UpdateRelationPayload,
   delete_relations: DeleteRelationsPayload,
+  restore_objects: RestoreObjectsPayload,
+  restore_relations: RestoreRelationsPayload,
 } satisfies Record<string, TSchema>
 
 export type OperationKind = keyof typeof OPERATION_PAYLOADS
@@ -127,6 +153,12 @@ export function validateOperationPayload(
   return { ok: true, operation: { kind, payload } as TypedOperation }
 }
 
+/** relation 類 operation：expectedObjectVersions 對應 relation 版本 */
+export const RELATION_OPERATION_KINDS = new Set<OperationKind>(['update_relation', 'delete_relations', 'restore_relations'])
+
+/** restore 類 operation：expectedObjectVersions 對應 tombstone 版本 */
+export const RESTORE_OPERATION_KINDS = new Set<OperationKind>(['restore_objects', 'restore_relations'])
+
 /** 取得 operation 會改動的物件 ID，用於 expectedObjectVersions 檢查。 */
 export function touchedObjectIds(op: TypedOperation): string[] {
   switch (op.kind) {
@@ -143,6 +175,10 @@ export function touchedObjectIds(op: TypedOperation): string[] {
     case 'update_relation':
       return [op.payload.relationId]
     case 'delete_relations':
+      return op.payload.relationIds
+    case 'restore_objects':
+      return op.payload.objectIds
+    case 'restore_relations':
       return op.payload.relationIds
   }
 }

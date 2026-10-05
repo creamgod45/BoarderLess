@@ -38,6 +38,7 @@ bun run worker:dev        # 另一個 terminal：素材驗證 / 縮圖 / 清理
 | `bun test` | 單元 + 整合 + 端到端測試（使用 `boarderless_test` DB，自動建立；DB / ffmpeg / S3 不可用時略過對應測試） |
 | `bun run fixtures:media` | 重新產生六種 MIME 的 binary fixture 與 manifest |
 | `bun run fixtures:contract` | 以真實流程重新錄製 Media v1 request / response fixtures |
+| `bun run fixtures:canvas` | 重新錄製 canvas（型別 / 階層 / restore / receipt）fixtures |
 | `bun run typecheck` | `tsc --noEmit` |
 
 ### 身分驗證（開發用）
@@ -94,9 +95,15 @@ tests/unit、tests/integration
 
 版本語意：每個 operation 一個 `serverSeq`；每個成功 transaction 使 Workspace `currentVersion` +1。
 
-### 暫定 operation kinds
+### Operation kinds
 
-`create_object`、`update_object`、`move_objects`、`delete_objects`（同 transaction 連帶刪除 relations，記錄於 payload 的 `cascadedRelationIds`）、`create_relation`、`update_relation`、`delete_relations`。
+`create_object`、`update_object`、`move_objects`、`delete_objects`（同 transaction 連帶刪除 relations，記錄於 payload 的 `cascadedRelationIds`）、`restore_objects`、`create_relation`、`update_relation`、`delete_relations`、`restore_relations`。
+
+- 物件型別：`text`、`group`、`media`，各有型別化 schema（[`src/domain/canvas-objects.ts`](src/domain/canvas-objects.ts)）；update 驗證 merge 後的完整狀態。
+- parent 必須是同 Workspace 的 active group 且不可形成循環；刪除 group 時 children 必須一起刪除或先 reparent。
+- 刪除的 Undo / Redo 使用 `restore_*`（以穩定 ID 還原 tombstone），不是 `create_*`。
+- 原提交 reconciliation：`POST …/operations/receipts` 查 receipt，`POST …/operations/fences` 保證晚到的原請求不會 commit。
+- 範例見 [`tests/fixtures/contract/canvas-v1/`](tests/fixtures/contract/canvas-v1/)。
 
 > 這是 server 端的暫定集合，須與 KMP client 共用的 `WorkspaceOperation` 定稿後以 contract fixtures 對齊（見 PROGRESS.md）。
 

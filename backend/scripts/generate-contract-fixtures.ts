@@ -3,10 +3,10 @@
  * UUID、時間、簽名 URL 正規化為固定值，供 APP（Kotlin）parser 與後端 schema 測試共用。
  * 需要測試 PostgreSQL 與 ffmpeg。用法：bun run fixtures:contract
  */
-import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type postgres from 'postgres'
 import { client, createTestEnv, createUser, readFixture, setupTestDatabase, sha256, transfer } from '../tests/helpers.ts'
+import { FixtureRecorder } from './fixture-recorder.ts'
 
 const OUT = join(import.meta.dirname, '../tests/fixtures/contract/media-v1')
 
@@ -14,57 +14,12 @@ const sql = (await setupTestDatabase()) as postgres.Sql
 if (!sql) throw new Error('test database unavailable (bun run db:up)')
 const env = await createTestEnv(sql)
 
-// ---- normalization ----
-const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g
-const ISO_RE = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z/g
-const ids = new Map<string, string>()
-const HEX = '123456789abcdef'
-const placeholder = (n: number) => {
-  if (n >= HEX.length) return `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
-  const c = HEX[n]!
-  const r = c.repeat(4)
-  return `${r}${r}-${r}-4${c.repeat(3)}-8${c.repeat(3)}-${r}${r}${r}`
-}
-const normId = (id: string) => {
-  if (!ids.has(id)) ids.set(id, placeholder(ids.size))
-  return ids.get(id)!
-}
-
-function normalize(value: unknown, key = ''): unknown {
-  if (typeof value === 'string') {
-    if (key === 'url') return value.includes('/storage/objects/uploads') || value.includes('ct=')
-      ? 'https://storage.example.invalid/signed-upload'
-      : 'https://storage.example.invalid/signed-download'
-    if (key === 'expiresAt') return '2026-10-02T00:15:00.000Z'
-    if (key === 'requestId') return '00000000-0000-4000-8000-000000000000'
-    return value.replace(UUID_RE, normId).replace(ISO_RE, '2026-10-02T00:00:00.000Z')
-  }
-  if (Array.isArray(value)) return value.map((v) => normalize(v))
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, normalize(v, k)]))
-  }
-  return value
-}
-
-const written: { name: string; description: string; status: number }[] = []
-async function record(
-  name: string,
-  description: string,
-  request: { method: string; path: string; body?: unknown },
-  response: { status: number; body: unknown },
-) {
-  const doc = {
-    description,
-    request: { method: request.method, path: normalize(request.path), ...(request.body ? { body: normalize(request.body) } : {}) },
-    response: { status: response.status, ...(response.body == null ? {} : { body: normalize(response.body) }) },
-  }
-  await writeFile(join(OUT, `${name}.json`), `${JSON.stringify(doc, null, 2)}\n`)
-  written.push({ name, description, status: response.status })
-}
+const recorder = new FixtureRecorder(OUT)
+const normId = (id: string) => recorder.normId(id)
+const record = recorder.record.bind(recorder)
 
 // ---- scenarios ----
-await rm(OUT, { recursive: true, force: true })
-await mkdir(OUT, { recursive: true })
+await recorder.reset()
 
 const ownerId = await createUser(env.app, 'Owner')
 const api = client(env.app, ownerId)
@@ -89,24 +44,20 @@ async function prepareUpload(file: string, mediaType: string, name?: string, ove
 // 1. PNG：prepare → PUT → complete(202) → GET pending → ready → content → 重送 complete(200)
 const png = await prepareUpload('image.png', 'image/png', '01-prepare-201')
 const pngId = png.res.body.asset.id
-await writeFile(
-  join(OUT, '02-upload-put.json'),
-  `${JSON.stringify(
-    {
-      description: 'Signed PUT：只帶 upload.headers，原始 binary（非 multipart），不帶 x-user-id；2xx 不等同 ready',
-      request: {
-        method: 'PUT',
-        url: 'https://storage.example.invalid/signed-upload',
-        headers: { 'Content-Type': 'image/png' },
-        body: '<binary: tests/fixtures/media/image.png>',
-      },
-      response: { status: 200 },
+await recorder.recordRaw(
+  '02-upload-put',
+  'Signed PUT：只帶 upload.headers，原始 binary（非 multipart），不帶 x-user-id；2xx 不等同 ready',
+  {
+    request: {
+      method: 'PUT',
+      url: 'https://storage.example.invalid/signed-upload',
+      headers: { 'Content-Type': 'image/png' },
+      body: '<binary: tests/fixtures/media/image.png>',
     },
-    null,
-    2,
-  )}\n`,
+    response: { status: 200 },
+  },
+  200,
 )
-written.push({ name: '02-upload-put', description: 'Signed PUT', status: 200 })
 const completePath = `${base}/${pngId}/complete`
 await record('03-complete-202-pending', 'Durable 接受完成：202 {asset} status=pending', { method: 'POST', path: completePath, body: png.completeBody }, await call('POST', completePath, png.completeBody))
 await record('04-get-pending', 'GET metadata（不包裝）：pending', { method: 'GET', path: `${base}/${pngId}` }, await call('GET', `${base}/${pngId}`))
@@ -175,7 +126,7 @@ await record('24-prepare-400', 'checksum 格式錯誤', { method: 'POST', path: 
 await record('25-get-404', '不存在或不可見', { method: 'GET', path: `${base}/${crypto.randomUUID()}` }, await call('GET', `${base}/${crypto.randomUUID()}`))
 await record('26-list', 'GET 列表：{assets: [...]}，含衍生縮圖', { method: 'GET', path: base }, await call('GET', base))
 
-await writeFile(join(OUT, 'index.json'), `${JSON.stringify({ contract: 'Media v1', generatedBy: 'scripts/generate-contract-fixtures.ts', fixtures: written }, null, 2)}\n`)
-console.log(`wrote ${written.length} fixtures to ${OUT}`)
+const count = await recorder.writeIndex('Media v1', 'scripts/generate-contract-fixtures.ts')
+console.log(`wrote ${count} fixtures to ${OUT}`)
 await env.close()
 await sql.end()

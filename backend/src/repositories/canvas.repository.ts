@@ -107,6 +107,45 @@ export class CanvasRepository {
     return rows.map((r) => r.objectId)
   }
 
+  /** 還原 tombstone；版本 +1，保留刪除前的狀態 */
+  async restoreObjects(workspaceId: string, objectIds: string[], actorId: string): Promise<CanvasObject[]> {
+    return this.db<CanvasObject[]>`
+      UPDATE canvas_objects
+      SET deleted_at = NULL, updated_at = now(), updated_by = ${actorId}, object_version = object_version + 1
+      WHERE workspace_id = ${workspaceId} AND object_id = ANY(${objectIds}::uuid[]) AND deleted_at IS NOT NULL
+      RETURNING *
+    `
+  }
+
+  /** parentIds 底下仍為 active 的直接 children */
+  async findActiveChildren(workspaceId: string, parentIds: string[]): Promise<CanvasObject[]> {
+    if (parentIds.length === 0) return []
+    return this.db<CanvasObject[]>`
+      SELECT * FROM canvas_objects
+      WHERE workspace_id = ${workspaceId} AND parent_id = ANY(${parentIds}::uuid[]) AND deleted_at IS NULL
+    `
+  }
+
+  /**
+   * startId 的 ancestor 鏈（含 startId 本身）是否經過 objectId——用於 parent 變更的循環檢查。
+   * 以 transaction 內目前狀態計算，同一 transaction 先前的 parent 變更也會被看見。
+   */
+  async ancestorChainContains(workspaceId: string, startId: string, objectId: string): Promise<boolean> {
+    const [row] = await this.db<{ found: boolean }[]>`
+      WITH RECURSIVE chain (object_id, parent_id, depth) AS (
+        SELECT object_id, parent_id, 1 FROM canvas_objects
+        WHERE workspace_id = ${workspaceId} AND object_id = ${startId}
+        UNION ALL
+        SELECT c.object_id, c.parent_id, chain.depth + 1
+        FROM canvas_objects c
+        JOIN chain ON c.workspace_id = ${workspaceId} AND c.object_id = chain.parent_id
+        WHERE chain.depth < 10000 AND chain.object_id <> ${objectId}
+      )
+      SELECT EXISTS (SELECT 1 FROM chain WHERE object_id = ${objectId}) AS found
+    `
+    return row!.found
+  }
+
   // ---- relations ----
 
   async findRelations(workspaceId: string, relationIds: string[]): Promise<Relation[]> {
@@ -161,6 +200,15 @@ export class CanvasRepository {
       RETURNING relation_id
     `
     return rows.map((r) => r.relationId)
+  }
+
+  async restoreRelations(workspaceId: string, relationIds: string[]): Promise<Relation[]> {
+    return this.db<Relation[]>`
+      UPDATE relations
+      SET deleted_at = NULL, updated_at = now(), relation_version = relation_version + 1
+      WHERE workspace_id = ${workspaceId} AND relation_id = ANY(${relationIds}::uuid[]) AND deleted_at IS NOT NULL
+      RETURNING *
+    `
   }
 
   /** 刪除 Node 時一併刪除連到它的 relation，避免半連線（§5.1 relations） */

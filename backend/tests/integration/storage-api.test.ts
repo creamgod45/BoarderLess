@@ -73,7 +73,7 @@ describe.skipIf(!sql)('storage API (PostgreSQL)', () => {
       Array.from({ length: 20 }, () =>
         api.post(
           `/workspaces/${ws}/operations`,
-          envelope(0, [{ kind: 'create_object', payload: { objectId: uuid(), objectType: 'shape' } }]),
+          envelope(0, [{ kind: 'create_object', payload: { objectId: uuid(), objectType: 'text' } }]),
         ),
       ),
     )
@@ -189,7 +189,7 @@ describe.skipIf(!sql)('storage API (PostgreSQL)', () => {
     const ws = await newWorkspace()
     await api.post(
       `/workspaces/${ws}/operations`,
-      envelope(0, [{ kind: 'create_object', payload: { objectId: uuid(), objectType: 'image' } }]),
+      envelope(0, [{ kind: 'create_object', payload: { objectId: uuid(), objectType: 'group' } }]),
     )
     const snap = await api.post(`/workspaces/${ws}/snapshots`)
     expect(snap.status).toBe(201)

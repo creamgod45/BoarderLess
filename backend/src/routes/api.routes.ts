@@ -34,9 +34,11 @@ export function apiRoutes(services: Services) {
     app.put('/workspaces/:workspaceId/members/:userId', { schema: workspace.setMemberSchema }, members.set)
     app.delete('/workspaces/:workspaceId/members/:userId', { schema: workspace.revokeMemberSchema }, members.revoke)
 
-    const operations = new OperationController(services.operations)
+    const operations = new OperationController(services.operations, services.receipts)
     app.post('/workspaces/:workspaceId/operations', { schema: operation.submitOperationsSchema }, operations.submit)
     app.get('/workspaces/:workspaceId/operations', { schema: operation.listOperationsSchema }, operations.list)
+    app.post('/workspaces/:workspaceId/operations/receipts', { schema: operation.lookupReceiptsSchema }, operations.lookupReceipts)
+    app.post('/workspaces/:workspaceId/operations/fences', { schema: operation.fenceTransactionsSchema }, operations.fence)
 
     const snapshots = new SnapshotController(services.snapshots)
     app.get('/workspaces/:workspaceId/state', { schema: snapshot.getStateSchema }, snapshots.state)

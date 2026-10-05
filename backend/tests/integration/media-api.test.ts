@@ -525,8 +525,9 @@ describe.skipIf(!sql || !hasMediaTools)('media asset lifecycle (Media v1)', () =
       expect(foreign.status).toBe(422)
       expect(foreign.body.error.code).toBe('asset_not_found')
 
+      // 缺 assetId 由型別 schema 拒絕（BAI-008）
       const missingRef = await api.post(`/workspaces/${ws}/operations`, media({ mediaKind: 'video' }))
-      expect(missingRef.body.error.code).toBe('invalid_media_reference')
+      expect(missingRef.body.error.code).toBe('invalid_object')
     })
   })
 })

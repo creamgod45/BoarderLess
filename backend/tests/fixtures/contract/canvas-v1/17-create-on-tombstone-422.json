@@ -1,0 +1,50 @@
+{
+  "description": "同 ID create 不兼任 restore：提示 restoreWith",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "00000000-0000-4000-8000-000000000069",
+      "transactionId": "00000000-0000-4000-8000-000000000070",
+      "baseVersion": 7,
+      "operations": [
+        {
+          "operationId": "00000000-0000-4000-8000-000000000071",
+          "clientSeq": 1,
+          "kind": "create_object",
+          "payload": {
+            "objectId": "00000000-0000-4000-8000-000000000061",
+            "objectType": "text",
+            "transform": {
+              "x": 0,
+              "y": 0,
+              "width": 260,
+              "height": 132,
+              "rotationDegrees": 0
+            },
+            "properties": {
+              "text": "Idea",
+              "colorToken": "paper",
+              "shapeToken": "rounded"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 422,
+    "body": {
+      "error": {
+        "code": "object_already_exists",
+        "message": "Object 00000000-0000-4000-8000-000000000061 already exists",
+        "details": {
+          "deleted": true,
+          "restoreWith": "restore_objects"
+        }
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "description": "fence 尚未提交的原 transaction：fenced",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations/fences",
+    "body": {
+      "transactionIds": [
+        "00000000-0000-4000-8000-000000000091"
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "workspaceId": "22222222-2222-4222-8222-222222222222",
+      "headServerSeq": 15,
+      "headWorkspaceVersion": 9,
+      "receipts": [],
+      "lookups": [
+        {
+          "type": "transaction",
+          "id": "00000000-0000-4000-8000-000000000091",
+          "status": "fenced"
+        }
+      ]
+    }
+  }
+}

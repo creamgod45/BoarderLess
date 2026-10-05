@@ -1,0 +1,164 @@
+{
+  "description": "兩個物件與 relation",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "00000000-0000-4000-8000-000000000058",
+      "transactionId": "00000000-0000-4000-8000-000000000059",
+      "baseVersion": 5,
+      "operations": [
+        {
+          "operationId": "00000000-0000-4000-8000-000000000060",
+          "clientSeq": 1,
+          "kind": "create_object",
+          "payload": {
+            "objectId": "00000000-0000-4000-8000-000000000061",
+            "objectType": "text",
+            "transform": {
+              "x": 0,
+              "y": 0,
+              "width": 260,
+              "height": 132,
+              "rotationDegrees": 0
+            },
+            "properties": {
+              "text": "Idea",
+              "colorToken": "paper",
+              "shapeToken": "rounded"
+            }
+          }
+        },
+        {
+          "operationId": "00000000-0000-4000-8000-000000000062",
+          "clientSeq": 2,
+          "kind": "create_object",
+          "payload": {
+            "objectId": "00000000-0000-4000-8000-000000000063",
+            "objectType": "text",
+            "transform": {
+              "x": 0,
+              "y": 0,
+              "width": 260,
+              "height": 132,
+              "rotationDegrees": 0
+            },
+            "properties": {
+              "text": "Idea",
+              "colorToken": "paper",
+              "shapeToken": "rounded"
+            }
+          }
+        },
+        {
+          "operationId": "00000000-0000-4000-8000-000000000064",
+          "clientSeq": 3,
+          "kind": "create_relation",
+          "payload": {
+            "relationId": "00000000-0000-4000-8000-000000000065",
+            "sourceObjectId": "00000000-0000-4000-8000-000000000061",
+            "targetObjectId": "00000000-0000-4000-8000-000000000063",
+            "direction": "forward",
+            "label": null,
+            "style": {
+              "colorToken": "relation"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "status": "accepted",
+      "fromServerSeq": 8,
+      "toServerSeq": 10,
+      "workspaceVersion": 6,
+      "operations": [
+        {
+          "serverSeq": 8,
+          "operationId": "00000000-0000-4000-8000-000000000060",
+          "transactionId": "00000000-0000-4000-8000-000000000059",
+          "actorId": "11111111-1111-4111-8111-111111111111",
+          "clientId": "00000000-0000-4000-8000-000000000058",
+          "clientSeq": 1,
+          "baseVersion": 5,
+          "workspaceVersion": 6,
+          "operationType": "create_object",
+          "payload": {
+            "objectId": "00000000-0000-4000-8000-000000000061",
+            "transform": {
+              "x": 0,
+              "y": 0,
+              "width": 260,
+              "height": 132,
+              "rotationDegrees": 0
+            },
+            "objectType": "text",
+            "properties": {
+              "text": "Idea",
+              "colorToken": "paper",
+              "shapeToken": "rounded"
+            }
+          },
+          "schemaVersion": 1,
+          "committedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "serverSeq": 9,
+          "operationId": "00000000-0000-4000-8000-000000000062",
+          "transactionId": "00000000-0000-4000-8000-000000000059",
+          "actorId": "11111111-1111-4111-8111-111111111111",
+          "clientId": "00000000-0000-4000-8000-000000000058",
+          "clientSeq": 2,
+          "baseVersion": 5,
+          "workspaceVersion": 6,
+          "operationType": "create_object",
+          "payload": {
+            "objectId": "00000000-0000-4000-8000-000000000063",
+            "transform": {
+              "x": 0,
+              "y": 0,
+              "width": 260,
+              "height": 132,
+              "rotationDegrees": 0
+            },
+            "objectType": "text",
+            "properties": {
+              "text": "Idea",
+              "colorToken": "paper",
+              "shapeToken": "rounded"
+            }
+          },
+          "schemaVersion": 1,
+          "committedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "serverSeq": 10,
+          "operationId": "00000000-0000-4000-8000-000000000064",
+          "transactionId": "00000000-0000-4000-8000-000000000059",
+          "actorId": "11111111-1111-4111-8111-111111111111",
+          "clientId": "00000000-0000-4000-8000-000000000058",
+          "clientSeq": 3,
+          "baseVersion": 5,
+          "workspaceVersion": 6,
+          "operationType": "create_relation",
+          "payload": {
+            "label": null,
+            "style": {
+              "colorToken": "relation"
+            },
+            "direction": "forward",
+            "relationId": "00000000-0000-4000-8000-000000000065",
+            "sourceObjectId": "00000000-0000-4000-8000-000000000061",
+            "targetObjectId": "00000000-0000-4000-8000-000000000063"
+          },
+          "schemaVersion": 1,
+          "committedAt": "2026-10-02T00:00:00.000Z"
+        }
+      ]
+    }
+  }
+}
