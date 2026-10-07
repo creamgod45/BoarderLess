@@ -8,6 +8,7 @@ import kotlin.test.*
 class PenAnchorCoordinatesTest {
     private val anchor = PenAnchor(Vec2(80f, 70f), Vec2(50f, 60f), Vec2(110f, 90f))
     private val draft = PenPathDraft(CanvasSize(400f, 300f), listOf(anchor, PenAnchor(Vec2(200f, 150f))))
+
     @Test fun curveConversionAtBoundsRejectsWithoutMutation() {
         val converted = curvePenAnchor(draft, 0)
         assertEquals(anchor.point - Vec2(30f, 0f), converted.anchors[0].incoming)
@@ -20,6 +21,7 @@ class PenAnchorCoordinatesTest {
         }
         assertEquals(anchor, draft.anchors[0])
     }
+
     @Test fun movingAnchorTranslatesBothControlsInOneUndoableEdit() {
         val next = editPenCoordinate(draft, 0, PenCoordinateTarget.Anchor, Vec2(100f, 40f))
         assertEquals(anchor.translated(Vec2(20f, -30f)), next.anchors.first())
@@ -31,6 +33,7 @@ class PenAnchorCoordinatesTest {
         assertEquals(next, history.undo().redo().draft)
         assertTrue(PenPathHistory(draft).edit(editPenCoordinate(draft, 0, PenCoordinateTarget.Anchor, anchor.point)).undoStack.isEmpty())
     }
+
     @Test fun handlesCanBeIndependentlyCreatedChangedRemovedAndSerialized() {
         val incoming = editPenCoordinate(draft, 1, PenCoordinateTarget.Incoming, Vec2(-500f, 800f))
         assertEquals(Vec2(-500f, 800f), incoming.anchors[1].incoming)
@@ -44,6 +47,7 @@ class PenAnchorCoordinatesTest {
         assertEquals(removed, removePenControl(removed, 1, PenCoordinateTarget.Incoming))
         assertFailsWith<IllegalArgumentException> { removePenControl(draft, 0, PenCoordinateTarget.Anchor) }
     }
+
     @Test fun invalidCoordinatesIndexesAndTranslatedHandleOverflowAreAtomic() {
         assertFailsWith<IllegalArgumentException> { editPenCoordinate(draft, -1, PenCoordinateTarget.Anchor, Vec2(0f, 0f)) }
         assertFailsWith<IllegalArgumentException> { editPenCoordinate(draft, 2, PenCoordinateTarget.Incoming, Vec2(0f, 0f)) }
@@ -53,8 +57,13 @@ class PenAnchorCoordinatesTest {
         assertEquals(Vec2(999_999f, 0f), nearLimit.anchors.single().outgoing)
         assertEquals(anchor, draft.anchors.first())
     }
+
     @Test fun coordinateParserAcceptsSignedFractionsButRejectsUnsafeText() {
-        listOf("", "NaN", "Infinity", "-Infinity", "1e99", "1000001", "-1000001", "0".repeat(17), "<script>").forEach { assertNull(parsePenCoordinate(it)) }
-        listOf(" -12.5 " to -12.5f, "0" to 0f, "1000000" to 1_000_000f, "-1000000" to -1_000_000f).forEach { (text, value) -> assertEquals(value, parsePenCoordinate(text)) }
+        listOf("", "NaN", "Infinity", "-Infinity", "1e99", "1000001", "-1000001", "0".repeat(17), "<script>").forEach {
+            assertNull(parsePenCoordinate(it))
+        }
+        listOf(" -12.5 " to -12.5f, "0" to 0f, "1000000" to 1_000_000f, "-1000000" to -1_000_000f).forEach { (text, value) ->
+            assertEquals(value, parsePenCoordinate(text))
+        }
     }
 }

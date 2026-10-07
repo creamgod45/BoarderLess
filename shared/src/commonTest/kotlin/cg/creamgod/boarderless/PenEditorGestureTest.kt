@@ -15,8 +15,18 @@ class PenEditorGestureTest {
         repeat(100) { drag = drag.move(Vec2(150f + it, 50f)) }
         val result = drag.commit()
         assertEquals(2, result.undoStack.size)
-        assertEquals(Vec2(249f, 50f), result.draft.anchors.last().outgoing)
-        assertEquals(Vec2(51f, 50f), result.draft.anchors.last().incoming)
+        assertEquals(
+            Vec2(249f, 50f),
+            result.draft.anchors
+                .last()
+                .outgoing,
+        )
+        assertEquals(
+            Vec2(51f, 50f),
+            result.draft.anchors
+                .last()
+                .incoming,
+        )
         assertEquals(click.draft, result.undo().draft)
         assertEquals(result.draft, result.undo().redo().draft)
     }
@@ -48,7 +58,14 @@ class PenEditorGestureTest {
         assertNull(beginPenEditorGesture(empty, Vec2(-1f, 0f), 10f, true, null))
         assertNull(beginPenEditorGesture(empty, Vec2(450f, 50f), 10f, true, null))
         assertNull(beginPenEditorGesture(empty, Vec2(50f, 50f), 10f, false, null))
-        val closed = empty.copy(draft = empty.draft.append(PenAnchor(Vec2(10f, 10f))).append(PenAnchor(Vec2(20f, 20f))).copy(closed = true))
+        val closed =
+            empty.copy(
+                draft =
+                    empty.draft
+                        .append(PenAnchor(Vec2(10f, 10f)))
+                        .append(PenAnchor(Vec2(20f, 20f)))
+                        .copy(closed = true),
+            )
         assertNull(beginPenEditorGesture(closed, Vec2(100f, 100f), 10f, true, null))
         assertFails { beginPenEditorGesture(empty, Vec2.Zero, Float.NaN, true, null) }
     }

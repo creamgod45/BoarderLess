@@ -31,7 +31,10 @@ class ClipboardPayloadValidationTest {
         parentOriginalId = parentId,
     )
 
-    private fun group(id: String, parentId: String? = null) = ClipboardGroup(
+    private fun group(
+        id: String,
+        parentId: String? = null,
+    ) = ClipboardGroup(
         originalId = id,
         x = 0f,
         y = 0f,
@@ -69,18 +72,25 @@ class ClipboardPayloadValidationTest {
 
     @Test
     fun acceptsRelationsBetweenMediaAndTextAndBetweenMedia() {
-        val payload = ClipboardPayload(
-            nodes = listOf(node("text")),
-            media = listOf(media("photo"), media("video", mediaKind = "video")),
-            relations = listOf(
-                ClipboardRelation(sourceId = "photo", targetId = "text", direction = "Forward"),
-                ClipboardRelation(sourceId = "video", targetId = "photo", direction = "Both"),
+        val payload =
+            ClipboardPayload(
+                nodes = listOf(node("text")),
+                media = listOf(media("photo"), media("video", mediaKind = "video")),
+                relations =
+                    listOf(
+                        ClipboardRelation(sourceId = "photo", targetId = "text", direction = "Forward"),
+                        ClipboardRelation(sourceId = "video", targetId = "photo", direction = "Both"),
+                    ),
+            )
+        assertNull(validateClipboardPayload(payload))
+        assertEquals(
+            ClipboardPayloadIssue.InvalidRelation,
+            validateClipboardPayload(
+                payload.copy(
+                    relations = listOf(ClipboardRelation(sourceId = "photo", targetId = "missing", direction = "Forward")),
+                ),
             ),
         )
-        assertNull(validateClipboardPayload(payload))
-        assertEquals(ClipboardPayloadIssue.InvalidRelation, validateClipboardPayload(payload.copy(
-            relations = listOf(ClipboardRelation(sourceId = "photo", targetId = "missing", direction = "Forward")),
-        )))
     }
 
     @Test
@@ -91,7 +101,7 @@ class ClipboardPayloadValidationTest {
         )
         assertEquals(
             ClipboardPayloadIssue.UnsupportedVersion,
-            validateClipboardPayload(ClipboardPayload(version = 5, nodes = listOf(node("a")))),
+            validateClipboardPayload(ClipboardPayload(version = 8, nodes = listOf(node("a")))),
         )
         assertEquals(ClipboardPayloadIssue.Empty, validateClipboardPayload(ClipboardPayload(nodes = emptyList())))
     }

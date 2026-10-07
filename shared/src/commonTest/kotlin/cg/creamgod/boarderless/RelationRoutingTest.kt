@@ -49,14 +49,15 @@ class RelationRoutingTest {
         val targetTransform = CanvasTransform(Vec2(400f, 0f), CanvasSize(100f, 80f))
         val obstacle = CanvasTransform(Vec2(200f, -20f), CanvasSize(100f, 120f))
 
-        val route = orthogonalRelationRoute(
-            source = source,
-            sourceTransform = sourceTransform,
-            target = target,
-            targetTransform = targetTransform,
-            obstacles = listOf(obstacle),
-            clearance = 20f,
-        )
+        val route =
+            orthogonalRelationRoute(
+                source = source,
+                sourceTransform = sourceTransform,
+                target = target,
+                targetTransform = targetTransform,
+                obstacles = listOf(obstacle),
+                clearance = 20f,
+            )
 
         assertTrue(route.size >= 4)
         assertTrue(route.zipWithNext().all { (start, end) -> start.x == end.x || start.y == end.y })
@@ -69,25 +70,30 @@ class RelationRoutingTest {
         val target = node("target", NodeShape.Hexagon)
         val sourceTransform = CanvasTransform(Vec2.Zero, CanvasSize(100f, 80f))
         val targetTransform = CanvasTransform(Vec2(400f, 0f), CanvasSize(100f, 80f))
-        val rotatedObstacle = CanvasTransform(
-            position = Vec2(210f, -20f),
-            size = CanvasSize(80f, 120f),
-            rotationDegrees = 45f,
-        )
+        val rotatedObstacle =
+            CanvasTransform(
+                position = Vec2(210f, -20f),
+                size = CanvasSize(80f, 120f),
+                rotationDegrees = 45f,
+            )
 
-        val route = orthogonalRelationRoute(
-            source = source,
-            sourceTransform = sourceTransform,
-            target = target,
-            targetTransform = targetTransform,
-            obstacles = listOf(rotatedObstacle),
-            clearance = 16f,
-        )
+        val route =
+            orthogonalRelationRoute(
+                source = source,
+                sourceTransform = sourceTransform,
+                target = target,
+                targetTransform = targetTransform,
+                obstacles = listOf(rotatedObstacle),
+                clearance = 16f,
+            )
 
         assertTrue(!routeIntersectsTransform(route, rotatedObstacle, clearance = 16f))
     }
 
-    private fun node(id: String, shape: NodeShape) = TextNode(
+    private fun node(
+        id: String,
+        shape: NodeShape,
+    ) = TextNode(
         id = CanvasObjectId(id),
         transform = CanvasTransform(Vec2.Zero, CanvasSize(100f, 80f)),
         text = id,

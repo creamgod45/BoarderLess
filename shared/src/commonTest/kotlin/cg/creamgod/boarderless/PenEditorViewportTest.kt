@@ -6,6 +6,7 @@ import kotlin.test.*
 
 class PenEditorViewportTest {
     private val viewBox = CanvasSize(400f, 300f)
+
     @Test fun resetLetterboxesAndInverseSurvivesZoomAndPan() {
         val viewport = PenEditorViewport.reset(viewBox).zoomBy(2f).copy(center = Vec2(180f, 90f))
         val transform = penEditorTransform(viewBox, viewport, 848f, 648f, 24f)!!
@@ -17,6 +18,7 @@ class PenEditorViewportTest {
         assertEquals(1f, reset.scale)
         assertEquals(Vec2(224f, 24f), reset.origin)
     }
+
     @Test fun panUsesOriginalCameraAndScreenDeltaWithoutEditingHistory() {
         val viewport = PenEditorViewport.reset(viewBox).zoomBy(2f)
         val transform = penEditorTransform(viewBox, viewport, 448f, 348f, 24f)!!
@@ -27,6 +29,7 @@ class PenEditorViewportTest {
         assertTrue(history.undoStack.isEmpty())
         assertEquals(1_000_000f, transform.panFrom(viewport, Vec2(-10_000_000f, 0f)).center.x)
     }
+
     @Test fun fitIncludesUnselectedOutsideHandlesAndExtremeLegalCoordinates() {
         val draft = PenPathDraft(viewBox, listOf(PenAnchor(Vec2(10f, 20f), Vec2(-1_000_000f, -1_000_000f), Vec2(1_000_000f, 1_000_000f))))
         val viewport = PenEditorViewport.fit(draft)
@@ -38,6 +41,7 @@ class PenEditorViewportTest {
         }
         assertEquals(PenEditorViewport.reset(viewBox), PenEditorViewport.fit(PenPathDraft(viewBox)))
     }
+
     @Test fun zoomAndInvalidSizesAreBounded() {
         val viewport = PenEditorViewport.reset(viewBox)
         assertEquals(PenEditorViewport.MAX_ZOOM, viewport.zoomBy(Float.MAX_VALUE).zoom)
@@ -47,6 +51,7 @@ class PenEditorViewportTest {
         assertNull(penEditorTransform(viewBox, viewport, 300f, Float.NaN, 24f))
         assertNull(penEditorTransform(viewBox, viewport, 300f, 300f, -1f))
     }
+
     @Test fun editingAfterPanAndZoomKeepsScreenOffsetAndOneHistoryStep() {
         val anchor = PenAnchor(Vec2(80f, 70f), Vec2(50f, 70f), Vec2(110f, 70f))
         val history = PenPathHistory(PenPathDraft(viewBox, listOf(anchor)))

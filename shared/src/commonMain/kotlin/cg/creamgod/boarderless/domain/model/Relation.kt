@@ -3,7 +3,9 @@ package cg.creamgod.boarderless.domain.model
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class RelationId(val value: String) {
+data class RelationId(
+    val value: String,
+) {
     init {
         require(value.isNotBlank()) { "Relation id must not be blank" }
     }
@@ -27,8 +29,10 @@ data class Relation(
     val intent: String? = null,
     val label: String? = null,
     val colorToken: String = "relation",
+    val geometry: RelationGeometry? = null,
 ) {
     init {
+        require(geometry?.allowsEndpoints(sourceObjectId, targetObjectId) != false) { "Invalid relation route for endpoints" }
         require(version >= 1) { "relation version must be positive" }
     }
 }
