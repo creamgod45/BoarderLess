@@ -20,34 +20,52 @@ class UiPreferences(
         set(value) = settings.putString(LanguageKey, value.token)
 
     var colorPickerModel: ColorModel
-        get() = settings.getStringOrNull(ColorPickerModelKey)
-            ?.let { name -> ColorModel.entries.firstOrNull { it.name == name } }
-            ?: ColorModel.Hsb
+        get() =
+            settings
+                .getStringOrNull(ColorPickerModelKey)
+                ?.let { name -> ColorModel.entries.firstOrNull { it.name == name } }
+                ?: ColorModel.Hsb
         set(value) = settings.putString(ColorPickerModelKey, value.name)
 
     var collapsedInspectorSections: Set<String>
-        get() = settings.getStringOrNull(CollapsedInspectorSectionsKey)
-            .orEmpty()
-            .split(',')
-            .map(String::trim)
-            .filter(String::isNotEmpty)
-            .toSet()
-        set(value) = settings.putString(
-            CollapsedInspectorSectionsKey,
-            value.asSequence().map(String::trim).filter(String::isNotEmpty).sorted().joinToString(","),
-        )
+        get() =
+            settings
+                .getStringOrNull(CollapsedInspectorSectionsKey)
+                .orEmpty()
+                .split(',')
+                .map(String::trim)
+                .filter(String::isNotEmpty)
+                .toSet()
+        set(value) =
+            settings.putString(
+                CollapsedInspectorSectionsKey,
+                value
+                    .asSequence()
+                    .map(String::trim)
+                    .filter(String::isNotEmpty)
+                    .sorted()
+                    .joinToString(","),
+            )
 
     var collapsedPanelSections: Set<String>
-        get() = settings.getStringOrNull(CollapsedPanelSectionsKey)
-            .orEmpty()
-            .split(',')
-            .map(String::trim)
-            .filter(String::isNotEmpty)
-            .toSet()
-        set(value) = settings.putString(
-            CollapsedPanelSectionsKey,
-            value.asSequence().map(String::trim).filter(String::isNotEmpty).sorted().joinToString(","),
-        )
+        get() =
+            settings
+                .getStringOrNull(CollapsedPanelSectionsKey)
+                .orEmpty()
+                .split(',')
+                .map(String::trim)
+                .filter(String::isNotEmpty)
+                .toSet()
+        set(value) =
+            settings.putString(
+                CollapsedPanelSectionsKey,
+                value
+                    .asSequence()
+                    .map(String::trim)
+                    .filter(String::isNotEmpty)
+                    .sorted()
+                    .joinToString(","),
+            )
 
     private companion object {
         const val ReduceTransparencyKey = "ui.accessibility.reduceTransparency"

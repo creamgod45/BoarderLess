@@ -50,29 +50,52 @@ class AndroidMediaRecoverySettingsTest {
         var result = true
         var commits = 0
         var applies = 0
-        val api: SharedPreferences = proxy { name, args -> when (name) {
-            "getAll" -> values.toMap()
-            "contains" -> values.containsKey(args!![0])
-            "getString" -> values[args!![0]] ?: args[1]
-            "edit" -> editor()
-            else -> error("Unexpected preference call: $name")
-        } }
+        val api: SharedPreferences =
+            proxy { name, args ->
+                when (name) {
+                    "getAll" -> values.toMap()
+                    "contains" -> values.containsKey(args!![0])
+                    "getString" -> values[args!![0]] ?: args[1]
+                    "edit" -> editor()
+                    else -> error("Unexpected preference call: $name")
+                }
+            }
+
         private fun editor(): SharedPreferences.Editor {
             val pending = mutableMapOf<String, String?>()
             lateinit var editor: SharedPreferences.Editor
-            editor = proxy { name, args -> when (name) {
-                "putString" -> { pending[args!![0] as String] = args[1] as String?; editor }
-                "remove" -> { pending[args!![0] as String] = null; editor }
-                "commit" -> {
-                    commits++
-                    pending.forEach { (key, value) -> if (value == null) values.remove(key) else values[key] = value }
-                    result
+            editor =
+                proxy { name, args ->
+                    when (name) {
+                        "putString" -> {
+                            pending[args!![0] as String] = args[1] as String?
+                            editor
+                        }
+
+                        "remove" -> {
+                            pending[args!![0] as String] = null
+                            editor
+                        }
+
+                        "commit" -> {
+                            commits++
+                            pending.forEach { (key, value) -> if (value == null) values.remove(key) else values[key] = value }
+                            result
+                        }
+
+                        "apply" -> {
+                            applies++
+                            error("Recovery writes must not use apply")
+                        }
+
+                        else -> {
+                            error("Unexpected editor call: $name")
+                        }
+                    }
                 }
-                "apply" -> { applies++; error("Recovery writes must not use apply") }
-                else -> error("Unexpected editor call: $name")
-            } }
             return editor
         }
+
         private inline fun <reified T> proxy(crossinline handle: (String, Array<out Any?>?) -> Any?): T =
             Proxy.newProxyInstance(T::class.java.classLoader, arrayOf(T::class.java)) { _, method, args ->
                 handle(method.name, args)

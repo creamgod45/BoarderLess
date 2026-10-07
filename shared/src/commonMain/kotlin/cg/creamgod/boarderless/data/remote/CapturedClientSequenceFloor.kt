@@ -17,31 +17,49 @@ internal object CapturedClientSequenceFloor {
         legacyCounter: Long?,
         legacyPending: List<PendingWorkspaceSubmission>,
         bundles: List<WorkspaceDraftScopeBundle>,
+        legacyStopped: List<PendingWorkspaceSubmission>,
     ): Long {
         WorkspaceDraftScopeBundleCodec.scopeHash(scope) // Validate namespace components.
         var floor = requireNotNull(legacyCounter) { "Missing legacy counter requires explicit recovery" }
         require(floor in 0..Maximum)
-        require(legacyPending.size <= 256 && bundles.size <= 256)
+        require(legacyPending.size <= 256 && bundles.size <= 256 && legacyStopped.size <= 256)
         require(legacyPending.map { it.scope }.distinct().size == legacyPending.size)
         require(bundles.map { it.scope }.distinct().size == bundles.size)
+        require(legacyStopped.map { it.scope to it.request.transactionId }.distinct().size == legacyStopped.size)
+        val identities = mutableMapOf<Pair<PendingSubmissionScope, String>, PendingWorkspaceSubmission>()
 
         fun include(entry: PendingWorkspaceSubmission) {
             validatePendingWorkspaceSubmission(entry)
+            val key = entry.scope to entry.request.transactionId
+            identities[key]?.let { require(it == entry) { "Conflicting captured original wire identities" } }
+            identities[key] = entry
             if (entry.scope.apiBase == scope.apiBase && entry.scope.userId == scope.userId &&
-                entry.scope.clientId == scope.clientId) {
-                floor = maxOf(floor, entry.request.operations.last().clientSeq)
+                entry.scope.clientId == scope.clientId
+            ) {
+                floor =
+                    maxOf(
+                        floor,
+                        entry.request.operations
+                            .last()
+                            .clientSeq,
+                    )
             }
         }
-        var wireBytes = 0L
-        legacyPending.forEach { entry ->
-            val content = json.encodeToString(entry)
-            requireBoundedDraftJsonDepth(content)
-            val size = content.encodeToByteArray().size
-            require(size in 1..1024 * 1024)
-            wireBytes += size
-            require(wireBytes <= 4L * 1024 * 1024)
-            include(json.decodeFromString<PendingWorkspaceSubmission>(content))
+
+        fun includeCaptured(entries: List<PendingWorkspaceSubmission>) {
+            var bytes = 0L
+            entries.forEach { entry ->
+                val content = json.encodeToString(entry)
+                requireBoundedDraftJsonDepth(content)
+                val size = content.encodeToByteArray().size
+                require(size in 1..1024 * 1024)
+                bytes += size
+                require(bytes <= 4L * 1024 * 1024)
+                include(json.decodeFromString<PendingWorkspaceSubmission>(content))
+            }
         }
+        includeCaptured(legacyPending)
+        includeCaptured(legacyStopped)
         var bytes = 0L
         bundles.forEach { bundle ->
             // Validate even foreign namespaces: corrupt evidence is never silently skipped.
@@ -52,6 +70,7 @@ internal object CapturedClientSequenceFloor {
             frozen.pending?.let(::include)
             frozen.acknowledged?.submitted?.let(::include)
             frozen.stoppedPending?.let(::include)
+            frozen.retainedStopped.forEach { include(it.submitted) }
         }
         return floor // serverSeq/baseVersion are NOT client sequence numbers.
     }

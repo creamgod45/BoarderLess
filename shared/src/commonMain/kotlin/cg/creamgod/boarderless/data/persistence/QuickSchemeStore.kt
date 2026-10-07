@@ -2,26 +2,48 @@ package cg.creamgod.boarderless.data.persistence
 
 import cg.creamgod.boarderless.i18n.Strings
 import com.russhwolf.settings.Settings
+import kotlinx.serialization.Serializable
 
-class QuickSchemeStore(
-    private val settings: Settings = Settings(),
-) {
+interface QuickSchemeRepository {
     fun save(
         payload: String,
         name: String? = null,
-        schemaVersion: Int = LegacySchemaVersion,
+        schemaVersion: Int = 1,
         sourceWorkspaceId: String? = null,
+    ): QuickScheme
+
+    fun list(): List<QuickScheme>
+
+    fun latest(): QuickScheme? = list().lastOrNull()
+
+    fun rename(
+        id: Int,
+        name: String,
+    ): QuickScheme?
+
+    fun delete(id: Int): Boolean
+}
+
+class QuickSchemeStore(
+    private val settings: Settings = Settings(),
+) : QuickSchemeRepository {
+    override fun save(
+        payload: String,
+        name: String?,
+        schemaVersion: Int,
+        sourceWorkspaceId: String?,
     ): QuickScheme {
         require(schemaVersion > 0) { "Schema version must be positive" }
         require(sourceWorkspaceId == null || sourceWorkspaceId.isNotBlank()) { "Source workspace must not be blank" }
         val nextIndex = settings.getInt(CountKey, 0) + 1
-        val scheme = QuickScheme(
-            id = nextIndex,
-            name = name?.trim()?.takeIf { it.isNotEmpty() } ?: Strings.content.scheme(nextIndex),
-            payload = payload,
-            schemaVersion = schemaVersion,
-            sourceWorkspaceId = sourceWorkspaceId,
-        )
+        val scheme =
+            QuickScheme(
+                id = nextIndex,
+                name = name?.trim()?.takeIf { it.isNotEmpty() } ?: Strings.content.scheme(nextIndex),
+                payload = payload,
+                schemaVersion = schemaVersion,
+                sourceWorkspaceId = sourceWorkspaceId,
+            )
         settings.putInt(CountKey, nextIndex)
         settings.putString("$ItemPrefix$nextIndex.name", scheme.name)
         settings.putString("$ItemPrefix$nextIndex.payload", scheme.payload)
@@ -30,18 +52,21 @@ class QuickSchemeStore(
         return scheme
     }
 
-    fun list(): List<QuickScheme> = (1..settings.getInt(CountKey, 0)).mapNotNull(::read)
+    override fun list(): List<QuickScheme> = (1..settings.getInt(CountKey, 0)).mapNotNull(::read)
 
-    fun latest(): QuickScheme? = list().lastOrNull()
+    override fun latest(): QuickScheme? = list().lastOrNull()
 
-    fun rename(id: Int, name: String): QuickScheme? {
+    override fun rename(
+        id: Int,
+        name: String,
+    ): QuickScheme? {
         val scheme = read(id) ?: return null
         val renamed = scheme.copy(name = name.trim().takeIf { it.isNotEmpty() } ?: scheme.name)
         settings.putString("$ItemPrefix$id.name", renamed.name)
         return renamed
     }
 
-    fun delete(id: Int): Boolean {
+    override fun delete(id: Int): Boolean {
         if (read(id) == null) return false
         settings.remove("$ItemPrefix$id.name")
         settings.remove("$ItemPrefix$id.payload")
@@ -68,6 +93,7 @@ class QuickSchemeStore(
     }
 }
 
+@Serializable
 data class QuickScheme(
     val id: Int,
     val name: String,

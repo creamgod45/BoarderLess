@@ -4,7 +4,9 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 
 @Serializable
-internal data class CreateUserRequest(val displayName: String)
+internal data class CreateUserRequest(
+    val displayName: String,
+)
 
 @Serializable
 internal data class UserDto(
@@ -13,10 +15,14 @@ internal data class UserDto(
 )
 
 @Serializable
-internal data class CreateWorkspaceRequest(val title: String)
+internal data class CreateWorkspaceRequest(
+    val title: String,
+)
 
 @Serializable
-internal data class RenameWorkspaceRequest(val title: String)
+internal data class RenameWorkspaceRequest(
+    val title: String,
+)
 
 @Serializable
 internal data class WorkspaceDto(
@@ -30,7 +36,9 @@ internal data class WorkspaceDto(
 )
 
 @Serializable
-internal data class WorkspaceListDto(val workspaces: List<WorkspaceDto>)
+internal data class WorkspaceListDto(
+    val workspaces: List<WorkspaceDto>,
+)
 
 @Serializable
 internal data class WorkspaceMemberDto(
@@ -41,10 +49,14 @@ internal data class WorkspaceMemberDto(
 )
 
 @Serializable
-internal data class WorkspaceMemberListDto(val members: List<WorkspaceMemberDto>)
+internal data class WorkspaceMemberListDto(
+    val members: List<WorkspaceMemberDto>,
+)
 
 @Serializable
-internal data class SetWorkspaceMemberRoleRequest(val role: String)
+internal data class SetWorkspaceMemberRoleRequest(
+    val role: String,
+)
 
 @Serializable
 internal data class AssetDto(
@@ -65,7 +77,9 @@ internal data class AssetDto(
 )
 
 @Serializable
-internal data class AssetListDto(val assets: List<AssetDto>)
+internal data class AssetListDto(
+    val assets: List<AssetDto>,
+)
 
 @Serializable
 internal data class CanvasObjectDto(
