@@ -50,7 +50,8 @@ internal class OpenAiChatEventDecoder {
             val delta = choice.getValue("delta").jsonObject
             require(delta.string("role") in listOf(null, "assistant"))
             if (delta.string("refusal") != null || delta["function_call"].present() ||
-                delta["tool_calls"].let { it.present() && it != JsonArray(emptyList()) }) {
+                delta["tool_calls"].let { it.present() && it != JsonArray(emptyList()) }
+            ) {
                 return fail("AI response requires an unsupported review mode", false)
             }
             val reason = choice.string("finish_reason")
@@ -68,12 +69,20 @@ internal class OpenAiChatEventDecoder {
     }
 
     fun finish(): List<AiCoworkEvent> = if (terminal) emptyList() else fail("AI stream ended before completion", true)
-    fun transportFailed(retryable: Boolean = true): List<AiCoworkEvent> = if (terminal) emptyList() else fail("AI stream connection failed", retryable)
-    private fun fail(message: String, retryable: Boolean): List<AiCoworkEvent> {
+
+    fun transportFailed(retryable: Boolean = true): List<AiCoworkEvent> =
+        if (terminal) emptyList() else fail("AI stream connection failed", retryable)
+
+    private fun fail(
+        message: String,
+        retryable: Boolean,
+    ): List<AiCoworkEvent> {
         terminal = true
         return listOf(AiCoworkEvent.Failed(message, retryable))
     }
+
     private fun JsonElement?.present() = this != null && this != JsonNull
+
     private fun JsonObject.string(key: String): String? {
         val value = this[key] ?: return null
         if (value == JsonNull) return null
@@ -90,16 +99,23 @@ internal class OpenAiChatEventAdapter(
     override val providerId: String,
     private val dataEvents: (AiCoworkRequest) -> Flow<String>,
 ) : AiCoworkProvider {
-    init { require(providerId.isNotBlank()) }
-    override fun stream(request: AiCoworkRequest): Flow<AiCoworkEvent> = flow {
-        val decoder = OpenAiChatEventDecoder()
-        emitAll(flow { emitAll(dataEvents(request)) }.transformWhile { data ->
-            decoder.accept(data).forEach { emit(it) }
-            !decoder.isTerminal
-        }.catch { failure ->
-            if (failure is CancellationException) throw failure
-            decoder.transportFailed(aiTransportFailureIsRetryable(failure)).forEach { emit(it) }
-        })
-        decoder.finish().forEach { emit(it) }
+    init {
+        require(providerId.isNotBlank())
     }
+
+    override fun stream(request: AiCoworkRequest): Flow<AiCoworkEvent> =
+        flow {
+            val decoder = OpenAiChatEventDecoder()
+            emitAll(
+                flow { emitAll(dataEvents(request)) }
+                    .transformWhile { data ->
+                        decoder.accept(data).forEach { emit(it) }
+                        !decoder.isTerminal
+                    }.catch { failure ->
+                        if (failure is CancellationException) throw failure
+                        decoder.transportFailed(aiTransportFailureIsRetryable(failure)).forEach { emit(it) }
+                    },
+            )
+            decoder.finish().forEach { emit(it) }
+        }
 }

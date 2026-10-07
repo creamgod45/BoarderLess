@@ -50,42 +50,50 @@ data class AiContextSnapshot(
                 workspaceId = workspace.id.value,
                 workspaceVersion = workspace.version,
                 scope = if (objects.isEmpty()) AiContextScope.PromptOnly else AiContextScope.Selection,
-                objects = objects.map { canvasObject ->
-                    when (canvasObject) {
-                        is TextNode -> AiContextObject(
-                            objectId = canvasObject.id.value,
-                            objectType = "text",
-                            version = canvasObject.version,
-                            content = canvasObject.text,
-                        )
+                objects =
+                    objects.map { canvasObject ->
+                        when (canvasObject) {
+                            is TextNode -> {
+                                AiContextObject(
+                                    objectId = canvasObject.id.value,
+                                    objectType = "text",
+                                    version = canvasObject.version,
+                                    content = canvasObject.text,
+                                )
+                            }
 
-                        is GroupFrame -> AiContextObject(
-                            objectId = canvasObject.id.value,
-                            objectType = "group",
-                            version = canvasObject.version,
-                            content = canvasObject.title,
-                        )
+                            is GroupFrame -> {
+                                AiContextObject(
+                                    objectId = canvasObject.id.value,
+                                    objectType = "group",
+                                    version = canvasObject.version,
+                                    content = canvasObject.title,
+                                )
+                            }
 
-                        is MediaNode -> AiContextObject(
-                            objectId = canvasObject.id.value,
-                            objectType = "media",
-                            version = canvasObject.version,
-                            content = canvasObject.altText.ifBlank { canvasObject.mediaKind.token },
-                        )
-                    }
-                },
-                relations = workspace.relations.values
-                    .filter { it.sourceObjectId in includedIds && it.targetObjectId in includedIds }
-                    .map { relation ->
-                        AiContextRelation(
-                            relationId = relation.id.value,
-                            sourceObjectId = relation.sourceObjectId.value,
-                            targetObjectId = relation.targetObjectId.value,
-                            direction = relation.direction.name,
-                            intent = relation.intent,
-                            label = relation.label,
-                        )
+                            is MediaNode -> {
+                                AiContextObject(
+                                    objectId = canvasObject.id.value,
+                                    objectType = "media",
+                                    version = canvasObject.version,
+                                    content = canvasObject.altText.ifBlank { canvasObject.mediaKind.token },
+                                )
+                            }
+                        }
                     },
+                relations =
+                    workspace.relations.values
+                        .filter { it.sourceObjectId in includedIds && it.targetObjectId in includedIds }
+                        .map { relation ->
+                            AiContextRelation(
+                                relationId = relation.id.value,
+                                sourceObjectId = relation.sourceObjectId.value,
+                                targetObjectId = relation.targetObjectId.value,
+                                direction = relation.direction.name,
+                                intent = relation.intent,
+                                label = relation.label,
+                            )
+                        },
             )
         }
     }
@@ -98,13 +106,20 @@ data class AiCoworkRequest(
 )
 
 sealed interface AiCoworkEvent {
-    data class TextDelta(val text: String) : AiCoworkEvent
+    data class TextDelta(
+        val text: String,
+    ) : AiCoworkEvent
 
-    data class ProposedOperation(val item: AiProposalItem) : AiCoworkEvent
+    data class ProposedOperation(
+        val item: AiProposalItem,
+    ) : AiCoworkEvent
 
     data object Completed : AiCoworkEvent
 
-    data class Failed(val message: String, val retryable: Boolean) : AiCoworkEvent
+    data class Failed(
+        val message: String,
+        val retryable: Boolean,
+    ) : AiCoworkEvent
 }
 
 interface AiCoworkProvider {
@@ -142,9 +157,13 @@ data class AiProposal(
         }
     }
 
-    fun withItemIncluded(itemId: String, included: Boolean): AiProposal = copy(
-        items = items.map { item -> if (item.itemId == itemId) item.copy(included = included) else item },
-    )
+    fun withItemIncluded(
+        itemId: String,
+        included: Boolean,
+    ): AiProposal =
+        copy(
+            items = items.map { item -> if (item.itemId == itemId) item.copy(included = included) else item },
+        )
 
     fun selectedOperation(): TransactionOperation? {
         val selected = items.filter(AiProposalItem::included).map(AiProposalItem::operation)
@@ -158,33 +177,39 @@ data class AiProposal(
     fun preview(workspace: Workspace): AiProposalPreview {
         if (workspace.version != contextWorkspaceVersion) {
             return AiProposalPreview.Conflict(
-                error = AiProposalConflict.WorkspaceVersion(
-                    expected = contextWorkspaceVersion,
-                    actual = workspace.version,
-                ),
+                error =
+                    AiProposalConflict.WorkspaceVersion(
+                        expected = contextWorkspaceVersion,
+                        actual = workspace.version,
+                    ),
             )
         }
         val operation = selectedOperation() ?: return AiProposalPreview.Empty
         return when (val result = operation.applyTo(workspace)) {
-            is OperationResult.Applied -> AiProposalPreview.Ready(
-                workspace = result.workspace,
-                operation = operation,
-            )
+            is OperationResult.Applied -> {
+                AiProposalPreview.Ready(
+                    workspace = result.workspace,
+                    operation = operation,
+                )
+            }
 
-            is OperationResult.Rejected -> AiProposalPreview.Conflict(
-                error = AiProposalConflict.Operation(result.error),
-            )
+            is OperationResult.Rejected -> {
+                AiProposalPreview.Conflict(
+                    error = AiProposalConflict.Operation(result.error),
+                )
+            }
         }
     }
 
     fun markCommitted(): AiProposal {
         val includedCount = items.count(AiProposalItem::included)
         return copy(
-            status = if (includedCount == items.size) {
-                AiProposalStatus.Accepted
-            } else {
-                AiProposalStatus.PartiallyAccepted
-            },
+            status =
+                if (includedCount == items.size) {
+                    AiProposalStatus.Accepted
+                } else {
+                    AiProposalStatus.PartiallyAccepted
+                },
         )
     }
 
@@ -192,9 +217,14 @@ data class AiProposal(
 }
 
 sealed interface AiProposalConflict {
-    data class WorkspaceVersion(val expected: Long, val actual: Long) : AiProposalConflict
+    data class WorkspaceVersion(
+        val expected: Long,
+        val actual: Long,
+    ) : AiProposalConflict
 
-    data class Operation(val error: OperationError) : AiProposalConflict
+    data class Operation(
+        val error: OperationError,
+    ) : AiProposalConflict
 }
 
 sealed interface AiProposalPreview {
@@ -203,7 +233,9 @@ sealed interface AiProposalPreview {
         val operation: TransactionOperation,
     ) : AiProposalPreview
 
-    data class Conflict(val error: AiProposalConflict) : AiProposalPreview
+    data class Conflict(
+        val error: AiProposalConflict,
+    ) : AiProposalPreview
 
     data object Empty : AiProposalPreview
 }

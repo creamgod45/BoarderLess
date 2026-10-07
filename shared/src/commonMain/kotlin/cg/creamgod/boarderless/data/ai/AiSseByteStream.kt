@@ -12,23 +12,24 @@ internal class AiSseFormatException : IllegalStateException("AI event stream for
 /** Single-use channel owned by the collector. No reconnect, retry or Last-Event-ID persistence.
  * HTTP status/content type/auth/timeout remain the request transport's responsibility.
  */
-internal fun ByteReadChannel.aiSseEvents(): Flow<AiSseDataEvent> = flow {
-    val parser = AiSseByteParser()
-    val buffer = ByteArray(16384)
-    try {
-        while (true) {
-            currentCoroutineContext().ensureActive()
-            val size = readAvailable(buffer, 0, buffer.size)
-            if (size < 0) break
-            for (index in 0 until size) {
-                parser.accept(buffer[index])?.let { emit(it) }
+internal fun ByteReadChannel.aiSseEvents(): Flow<AiSseDataEvent> =
+    flow {
+        val parser = AiSseByteParser()
+        val buffer = ByteArray(16384)
+        try {
+            while (true) {
+                currentCoroutineContext().ensureActive()
+                val size = readAvailable(buffer, 0, buffer.size)
+                if (size < 0) break
+                for (index in 0 until size) {
+                    parser.accept(buffer[index])?.let { emit(it) }
+                }
             }
+            parser.finish() // EOF never dispatches an incomplete event.
+        } finally {
+            cancel(null) // Includes downstream terminal/take, cancellation, malformed input and consumer error.
         }
-        parser.finish() // EOF never dispatches an incomplete event.
-    } finally {
-        cancel(null) // Includes downstream terminal/take, cancellation, malformed input and consumer error.
     }
-}
 
 /** UTF-8 is decoded only after a complete line, preserving split multibyte scalars.
  * Strict invalid UTF-8 rejection is an APP safety policy, not browser replacement decoding.
@@ -71,8 +72,14 @@ private class AiSseByteParser {
     }
 
     private fun decodeLine(): String {
-        var text = try { line.decodeToString(0, length, throwOnInvalidSequence = true) }
-        catch (_: Exception) { throw AiSseFormatException() }
+        var text =
+            try {
+                line.decodeToString(0, length, throwOnInvalidSequence = true)
+            } catch (
+                _: Exception,
+            ) {
+                throw AiSseFormatException()
+            }
         if (firstLine) {
             firstLine = false
             if (text.startsWith('\uFEFF')) text = text.substring(1)
@@ -84,11 +91,17 @@ private class AiSseByteParser {
         val text = decodeLine()
         length = 0
         if (text.isEmpty()) {
-            val event = if (!hasData) null else {
-                if (++eventCount > 8192) throw AiSseFormatException()
-                AiSseDataEvent(eventName.ifEmpty { "message" }, data.toString().dropLast(1))
-            }
-            data.clear(); dataBytes = 0; hasData = false; eventName = ""
+            val event =
+                if (!hasData) {
+                    null
+                } else {
+                    if (++eventCount > 8192) throw AiSseFormatException()
+                    AiSseDataEvent(eventName.ifEmpty { "message" }, data.toString().dropLast(1))
+                }
+            data.clear()
+            dataBytes = 0
+            hasData = false
+            eventName = ""
             return event
         }
         if (text.startsWith(':')) return null
@@ -101,6 +114,7 @@ private class AiSseByteParser {
                 if (value.length > 128) throw AiSseFormatException()
                 eventName = value
             }
+
             "data" -> {
                 dataBytes += value.encodeToByteArray().size + 1
                 if (dataBytes > 262144) throw AiSseFormatException()

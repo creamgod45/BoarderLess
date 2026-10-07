@@ -27,22 +27,25 @@ import kotlin.test.assertTrue
 class AiCoworkTest {
     private val firstId = CanvasObjectId("first")
     private val secondId = CanvasObjectId("second")
-    private val first = TextNode(
-        id = firstId,
-        transform = CanvasTransform(Vec2.Zero, CanvasSize(240f, 120f)),
-        text = "Raw idea",
-    )
-    private val second = TextNode(
-        id = secondId,
-        transform = CanvasTransform(Vec2(300f, 0f), CanvasSize(240f, 120f)),
-        text = "Private unselected idea",
-    )
-    private val workspace = Workspace(
-        id = WorkspaceId("workspace"),
-        title = "Test",
-        version = 1,
-        objects = mapOf(firstId to first, secondId to second),
-    )
+    private val first =
+        TextNode(
+            id = firstId,
+            transform = CanvasTransform(Vec2.Zero, CanvasSize(240f, 120f)),
+            text = "Raw idea",
+        )
+    private val second =
+        TextNode(
+            id = secondId,
+            transform = CanvasTransform(Vec2(300f, 0f), CanvasSize(240f, 120f)),
+            text = "Private unselected idea",
+        )
+    private val workspace =
+        Workspace(
+            id = WorkspaceId("workspace"),
+            title = "Test",
+            version = 1,
+            objects = mapOf(firstId to first, secondId to second),
+        )
 
     @Test
     fun contextIncludesOnlyExplicitSelection() {
@@ -88,25 +91,28 @@ class AiCoworkTest {
 
     @Test
     fun partialAcceptanceBuildsOneTransactionAndRejectDoesNotApplyAnything() {
-        val create = TextNode(
-            id = CanvasObjectId("new"),
-            transform = CanvasTransform(Vec2(0f, 200f), CanvasSize(240f, 120f)),
-            text = "Suggested next step",
-        )
-        val proposal = AiProposal(
-            proposalId = "proposal",
-            contextWorkspaceVersion = workspace.version,
-            items = listOf(
-                proposalFor(first, "Organized idea").items.single(),
-                AiProposalItem(
-                    itemId = "create",
-                    summary = "Add a next step",
-                    rationale = "Makes the idea actionable",
-                    operation = CreateObjectsOperation("ai-create", listOf(create)),
-                    included = false,
-                ),
-            ),
-        )
+        val create =
+            TextNode(
+                id = CanvasObjectId("new"),
+                transform = CanvasTransform(Vec2(0f, 200f), CanvasSize(240f, 120f)),
+                text = "Suggested next step",
+            )
+        val proposal =
+            AiProposal(
+                proposalId = "proposal",
+                contextWorkspaceVersion = workspace.version,
+                items =
+                    listOf(
+                        proposalFor(first, "Organized idea").items.single(),
+                        AiProposalItem(
+                            itemId = "create",
+                            summary = "Add a next step",
+                            rationale = "Makes the idea actionable",
+                            operation = CreateObjectsOperation("ai-create", listOf(create)),
+                            included = false,
+                        ),
+                    ),
+            )
 
         val operation = proposal.selectedOperation()
         assertEquals(1, operation?.operations?.size)
@@ -116,26 +122,33 @@ class AiCoworkTest {
         assertTrue(workspace.objectById(create.id) == null)
     }
 
-    private fun proposalFor(node: TextNode, nextText: String): AiProposal = AiProposal(
-        proposalId = "rewrite",
-        contextWorkspaceVersion = workspace.version,
-        items = listOf(
-            AiProposalItem(
-                itemId = "rewrite-first",
-                summary = "Clarify the selected thought",
-                rationale = "Improves readability",
-                operation = EditTextOperation(
-                    operationId = "ai-edit",
-                    changes = listOf(
-                        TextChange(
-                            objectId = node.id,
-                            expectedVersion = node.version,
-                            before = node.text,
-                            after = nextText,
-                        ),
+    private fun proposalFor(
+        node: TextNode,
+        nextText: String,
+    ): AiProposal =
+        AiProposal(
+            proposalId = "rewrite",
+            contextWorkspaceVersion = workspace.version,
+            items =
+                listOf(
+                    AiProposalItem(
+                        itemId = "rewrite-first",
+                        summary = "Clarify the selected thought",
+                        rationale = "Improves readability",
+                        operation =
+                            EditTextOperation(
+                                operationId = "ai-edit",
+                                changes =
+                                    listOf(
+                                        TextChange(
+                                            objectId = node.id,
+                                            expectedVersion = node.version,
+                                            before = node.text,
+                                            after = nextText,
+                                        ),
+                                    ),
+                            ),
                     ),
                 ),
-            ),
-        ),
-    )
+        )
 }
