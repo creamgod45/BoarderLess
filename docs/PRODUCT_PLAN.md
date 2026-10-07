@@ -1,6 +1,8 @@
 # BoarderLess 產品與介面計畫書
 
-版本：0.1  
+目前 loop 執行清單：[CURRENT_LOOP_GOAL.md](CURRENT_LOOP_GOAL.md)。區分已實作 APP、待真實驗收及未完成產品能力；已完成實作不重做，原六項順序與範圍不變。
+
+版本：0.2
 狀態：產品假設草案，供設計與 MVP 開發使用
 
 ## 1. 產品摘要
@@ -140,6 +142,18 @@ MVP 優先完成 Text node、Group 和 Relation；其他物件在核心互動穩
 - Bottom/Corner：Zoom、定位與同步狀態。
 - Overlay：Command Palette、搜尋、AI Proposal Review。
 
+### 7.4 Canvas Object 基礎模型
+
+首版雖以 Text node 為主要可見內容，但領域模型不應只針對文字設計。所有正式畫布物件共用以下能力：
+
+- 穩定且跨儲存週期不變的唯一識別碼與資料版本。
+- 世界座標、尺寸、旋轉、可計算的 bounds 與 z-order。
+- 可選的 parent/group、locked 狀態與樣式資料。
+- 可被選取、移動、複製、刪除及納入統一 history。
+- 不保存 Compose state 或平台專屬 UI 物件。
+
+`TextNode`、`ImageNode`、`VideoNode`、`GroupFrame` 和其他未來內容型別應建立在共同 Canvas Object 契約上。Relation 是具有來源、目標、方向和意圖的領域資料，不只是畫面上的線段。
+
 ## 8. MVP 範圍
 
 ### 8.1 必須具備
@@ -229,49 +243,152 @@ User Intent
 - 接受狀態。
 - 可逆操作所需資料。
 
+AI transport 使用 provider-neutral adapter，首批正式支援三類端點：
+
+- OpenAI-compatible API server：可設定 base URL、model、能力與受保護的 API key reference。
+- Anthropic-compatible API server：可設定 base URL、model、能力與受保護的 API key reference。
+- Local AI server：以使用者明確設定的本機或區域網路 endpoint 提供輔助，可選擇不帶金鑰或使用裝置端受保護憑證。
+
+遠端供應商的正式金鑰預設由 BoarderLess 後端 gateway 或安全 secret store 管理，App 不把明文金鑰寫入 Workspace、operation、日誌或同步偏好。Local AI endpoint 屬於裝置層設定，不隨 Workspace 分享；所有 provider response 先轉成統一的文字 delta、proposal item、完成、取消與錯誤事件，AI 仍不得繞過 proposal review 直接修改正式內容。
+
+### 9.5 Workspace Operation 與互動狀態
+
+建立、編輯、移動、調整尺寸、群組、鎖定、改變層級與 AI 接受結果，都必須轉換成可序列化的 `WorkspaceOperation`。多物件行為以 transaction 表示，作為 undo/redo、自動儲存、AI proposal 和未來多人同步的共同邊界。
+
+Canvas 輸入採明確互動狀態，不讓各元件各自解讀指標事件：
+
+- Select：單選、多選、框選與拖曳物件。
+- Pan：平移 viewport。
+- Create：建立指定內容型別。
+- Connect：建立或調整 relation。
+- Transform：縮放與旋轉選取物件。
+- Text edit：文字輸入，避免與 Canvas 快捷鍵衝突。
+
+自由移動是預設行為；網格顯示與吸附規則彼此獨立，可分別開關。吸附至少區分網格、物件邊緣與中心輔助線。
+
+### 9.6 素材與方案資料
+
+- Workspace 對圖片、GIF 和影片保存可攜的 asset reference，不把平台檔案控制項或暫存 URL 放入 domain。
+- 「物品庫」提供系統內建物件與素材入口；圖形依基本幾何、流程圖、箭頭、標註、容器／泳道、組織／架構、網路／拓樸、文字、媒體與自訂圖形分類，可搜尋、收藏及顯示最近使用。
+- 文字輸入框是獨立、可直接輸入的畫布物件，不強迫套用卡片外框；仍共用 selection、transform、history、clipboard 與 collaboration operation。
+- 鋼筆工具建立 BoarderLess 自有的版本化向量路徑。路徑以有限且通過驗證的 move／line／quadratic／cubic／close commands 保存，不接受可執行 script 或未驗證的任意 SVG；建立、節點編輯、關閉路徑、填色與描邊均可 Undo。
+- 「快速方案簿」保存使用者建立的物件或群組模板；使用者層級 API 讓同一帳號跨裝置同步，並以 revision／ETag 防止靜默覆蓋。
+- 插入快速方案時預設建立具新 ID 的副本；模板本身具有 schema version，避免日後模型升級破壞既有方案。
+- 跨裝置交付合約見 [BACKEND_QUICK_SCHEME_API_SPEC.md](BACKEND_QUICK_SCHEME_API_SPEC.md)（Proposal）。resource envelope v2 與 selection v4 分層；素材方案需要 source binding、授權保留與 destination materialization，不能將使用者方案所有權當成跨畫布素材權限。保留本機原件、revision 衝突確認與 migration journal 為上線門檻，不以文件或本機 tests 代表後端已完成。
+- 第一階段先支援本機圖片；GIF、影片播放與線上 GIF Browser 在資產保存及生命週期穩定後加入。
+
+### 9.7 後端與協作邊界
+
+Node.js 後端、正式儲存、多核心處理、WebSocket 協定與多人協作的詳細規劃見 `docs/BACKEND_ARCHITECTURE.md`。用戶端與伺服器共用版本化 `WorkspaceOperation` 語意；PostgreSQL 是正式內容與 operation log 的 source of truth，Redis 只承擔可重建的暫態協調與背景工作分發，媒體檔案保存於 object storage。
+
 ## 10. 里程碑
 
-### M0：Foundation Spike
+目前執行順序以圖片／GIF／影片素材為第一優先、多人即時協作為第二優先，其後依序補 Quick Scheme 跨裝置同步、共用 Canvas 樣式、AI transport 與物件庫／鋼筆工具。視覺辨識與遮擋依 [`產品 QA 品質檢驗 SOP.md`](產品%20QA%20品質檢驗%20SOP.md) 交由產品負責人最終簽核；效能量測在核心功能、後端整合與主要回歸穩定後才進入最後階段。
 
+共用 Canvas 樣式的雙端交付規範見 [BACKEND_CANVAS_STYLE_API_SPEC.md](BACKEND_CANVAS_STYLE_API_SPEC.md)（Proposal）：正式 style CAS／snapshot／replay／Undo，個人 viewport 與顯示偏好隔離、remote-state guard 及舊資料 migration 都是完成門檻；不能只把本機色票改成 REST 設定就視為共享功能完成。
+
+### M0：Foundation 與領域契約
+
+- 建立可重複的 JDK、Gradle 與各平台編譯基線。
 - 移除範例畫面對 Material 3 的依賴。
 - 建立 tokens、ShellTheme、ContentTheme。
-- 建立 GlassSurface 和 fallback renderer。
+- 建立最小 GlassSurface 和 fallback renderer。
+- 建立 Workspace、Canvas Object、Relation、Transform 與 Workspace Operation 契約。
+- 為 operation、transaction 與 undo/redo 建立 common test。
 - 驗證 Desktop、Android、iOS、Web 均能編譯。
 
-完成標準：同一個示範畫面能呈現 Canvas、原始內容節點和玻璃工具列，並可切換 Reduce Transparency。
+完成標準：同一個示範畫面能呈現 Canvas、原始內容節點和玻璃工具列；領域模型不依賴 Compose，基本 operation 可測試及反轉。
 
-### M1：Canvas Core
+### M1A：Canvas Navigation
 
 - Viewport transform。
-- 建立、選取、移動及編輯文字節點。
-- 多選、群組、連線。
+- 平移、游標焦點縮放與 Fit Content。
+- 世界座標和畫面座標互轉。
+- 基本 hit testing 與穩定重繪。
+
+完成標準：使用者能流暢瀏覽含多個測試物件的無邊際 Canvas，且縮放時焦點不明顯漂移。
+
+### M1B：Node Editing
+
+- 建立、選取、自由移動、編輯及刪除文字節點。
+- 框選、多選與鍵盤刪除。
 - Undo / redo。
 
-完成標準：使用者能在單一工作階段完成一張可編輯思想圖。
+完成標準：使用者能在單一工作階段建立和重新排列一組文字思想，且所有正式變更可撤銷與重做。
 
 ### M2：Persistence
 
-- Workspace schema。
+- Workspace 檔案 schema 與 migration version；領域 schema 已於 M0 建立。
 - 自動儲存、開啟與資料遷移基礎。
 - 異常關閉後復原。
 
 完成標準：重新啟動後能恢復內容及 viewport，且不遺失最後一次已確認操作。
 
-### M3：AI Cowork
+### M3：Structure 與 Control
 
-- Provider abstraction。
+- 有方向、意圖與可選標籤的 relation。
+- 群組與解除群組。
+- 鎖定物件與基本 z-order/layer 操作。
+- 剪下、複製、貼上與 duplicate。
+- 多物件操作以單一 transaction 進入 history。
+
+完成標準：使用者能把自由節點整理成具有關係、群組與前後層級的思想圖，並安全撤銷整批操作。
+
+### M4：Customization 與進階互動
+
+- 網格顯示、網格吸附、物件對齊輔助線。
+- Canvas 背景與 Node 顏色自訂。
+- Inspector 與進階屬性。
+- Node 縮放、旋轉及 transform handles。
+- 操作回饋動畫與 Reduce Motion 降級。
+
+完成標準：使用者能在不犧牲自由移動的前提下精確排列並調整物件外觀。
+
+### M5：Library 與 Rich Media
+
+- 可拖曳、可搜尋並分類的擴充物品庫與大量內建圖形。
+- 無外框文字輸入框與自訂向量形狀鋼筆工具。
+- 快速方案簿：保存、預覽、插入及跨裝置同步使用者方案。
+- 本機圖片匯入、縮圖、遺失資產處理。
+- GIF 與影片物件；資產生命週期穩定後再加入線上 GIF Browser。
+
+完成標準：使用者能重用自己設計的物件組合，並可靠地保存與重新開啟含圖片的 Workspace。
+
+### M6：AI Cowork
+
+- OpenAI-compatible、Anthropic-compatible 與 Local AI server 的 provider adapters。
+- Provider profile、能力探測、金鑰 reference 與裝置本機 endpoint 設定。
 - 選取內容作為 context。
 - 串流回應與取消。
 - Proposal preview、接受、拒絕與撤銷。
 
 完成標準：AI 能對選取節點提出結構化修改，且未經接受不會變更正式內容。
 
-### M4：Product Validation
+### M7：Product Validation
 
 - Onboarding 和空狀態。
 - 搜尋與 Command Palette。
-- 效能、鍵盤及可及性整理。
+- 鍵盤、VoiceOver 與可及性整理。
+- 視覺與遮擋由產品負責人依 QA SOP 簽核。
 - 封閉測試與回饋收集。
+
+### M8：Realtime Collaboration（MVP 後）
+
+- 身分、Workspace 權限與分享流程。
+- Presence、游標和選取狀態。
+- Operation 同步、衝突合併、離線重連與資產同步。
+- 活動紀錄、版本回復與安全性檢查。
+
+完成標準：兩位以上使用者能在同一 Workspace 同時編輯，暫時離線後可安全合併且不遺失已確認內容。
+
+### M9：Performance Validation（最後階段）
+
+- 在功能與後端合約穩定後建立大型 Workspace 固定測試資料。
+- 量測啟動、載入、平移／縮放、記憶體、CPU、網路與同步延遲。
+- 素材處理與多使用者 operation fan-out 納入同一版基線。
+- 依實測建立門檻並完成退化比較，不在功能尚未穩定時臆定數字。
+
+完成標準：主要平台在固定資料與裝置上有可重現基線，沒有阻擋核心工作流程的效能退化。
 
 ## 11. 成功指標
 
@@ -302,4 +419,3 @@ MVP 不以註冊數為主要指標，而觀察核心價值是否成立：
 - 使用者內容的「原始樣式」是否允許自訂主題與嵌入 HTML/Markdown。
 - 第一版是否只支援自由節點，或同時提供文件視圖。
 - 行動版定位為完整編輯器或快速捕捉與檢視工具。
-

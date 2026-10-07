@@ -1,0 +1,21 @@
+{
+  "description": "不同 checksum 的 complete：409",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/assets/33333333-3333-4333-8333-333333333333/complete",
+    "body": {
+      "byteSize": 442,
+      "checksum": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    }
+  },
+  "response": {
+    "status": 409,
+    "body": {
+      "error": {
+        "code": "completion_mismatch",
+        "message": "byteSize / checksum do not match the prepared asset"
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "description": "abandon 後 complete：409",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/assets/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/complete",
+    "body": {
+      "byteSize": 442,
+      "checksum": "sha256:15b8da68f777d7caaab816ede7dc7364cc979cc9bffaab4e93d39e24b624d49d"
+    }
+  },
+  "response": {
+    "status": 409,
+    "body": {
+      "error": {
+        "code": "asset_abandoned",
+        "message": "The upload was abandoned and can no longer be completed"
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

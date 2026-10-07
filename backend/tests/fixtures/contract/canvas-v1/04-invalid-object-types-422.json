@@ -1,0 +1,58 @@
+{
+  "description": "錯誤型別：非數字座標、負尺寸、text 為數字",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "00000000-0000-4000-8000-000000000016",
+      "transactionId": "00000000-0000-4000-8000-000000000017",
+      "baseVersion": 2,
+      "operations": [
+        {
+          "operationId": "00000000-0000-4000-8000-000000000018",
+          "clientSeq": 1,
+          "kind": "create_object",
+          "payload": {
+            "objectId": "00000000-0000-4000-8000-000000000019",
+            "objectType": "text",
+            "transform": {
+              "x": "not-a-number",
+              "y": 0,
+              "width": -1,
+              "height": 132,
+              "rotationDegrees": 0
+            },
+            "properties": {
+              "text": 42
+            }
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 422,
+    "body": {
+      "error": {
+        "code": "invalid_object",
+        "message": "Object state does not match its type schema",
+        "details": [
+          {
+            "path": "/transform/x",
+            "message": "must be number"
+          },
+          {
+            "path": "/transform/width",
+            "message": "must be >= 0"
+          },
+          {
+            "path": "/properties/text",
+            "message": "must be string"
+          }
+        ]
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

@@ -1,0 +1,32 @@
+# 本機開發用基礎設施。Redis 會在 B2 階段加入。
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: boarderless
+      POSTGRES_PASSWORD: boarderless
+      POSTGRES_DB: boarderless
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U boarderless"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # S3-compatible object storage（MinIO 社群版映像已停止公開發佈，改用 RustFS）
+  object-storage:
+    image: rustfs/rustfs:latest
+    environment:
+      RUSTFS_ACCESS_KEY: boarderless
+      RUSTFS_SECRET_KEY: boarderless-dev-secret
+    ports:
+      - "9000:9000"
+    volumes:
+      - objectdata:/data
+
+volumes:
+  pgdata:
+  objectdata:

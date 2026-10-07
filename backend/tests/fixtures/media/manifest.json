@@ -1,0 +1,62 @@
+[
+  {
+    "file": "image.png",
+    "mediaType": "image/png",
+    "byteSize": 442,
+    "checksum": "sha256:15b8da68f777d7caaab816ede7dc7364cc979cc9bffaab4e93d39e24b624d49d",
+    "width": 64,
+    "height": 48,
+    "durationMs": null,
+    "hasAudio": false
+  },
+  {
+    "file": "image.jpg",
+    "mediaType": "image/jpeg",
+    "byteSize": 1808,
+    "checksum": "sha256:3515800af882b49e4aa6e7cfb593d5ca257ee7e00dae9ba2734afc108b521dfe",
+    "width": 64,
+    "height": 48,
+    "durationMs": null,
+    "hasAudio": false
+  },
+  {
+    "file": "image.webp",
+    "mediaType": "image/webp",
+    "byteSize": 770,
+    "checksum": "sha256:ae7e8bc228f04bf461aa59159d6583a38c090331dbc0cebec3241879feec9ae0",
+    "width": 64,
+    "height": 48,
+    "durationMs": null,
+    "hasAudio": false
+  },
+  {
+    "file": "animation.gif",
+    "mediaType": "image/gif",
+    "byteSize": 4199,
+    "checksum": "sha256:1cd939684164951ba43842b1014896dedc1277b70aa51688155afa8679e8f0c5",
+    "width": 48,
+    "height": 32,
+    "durationMs": 1000,
+    "hasAudio": false
+  },
+  {
+    "file": "video.mp4",
+    "mediaType": "video/mp4",
+    "byteSize": 12941,
+    "checksum": "sha256:a307ccbd69c7dd8dc8bcab07ac7abede2b069181ea0aee45e0c0a44f77b3cb88",
+    "width": 64,
+    "height": 48,
+    "durationMs": 1000,
+    "hasAudio": true
+  },
+  {
+    "file": "video.webm",
+    "mediaType": "video/webm",
+    "byteSize": 14528,
+    "checksum": "sha256:26dc2e5218dc1829457ed54903dff27ba2c9a5af90c491d09c9f84d5dea0c57d",
+    "width": 64,
+    "height": 48,
+    "durationMs": 1008,
+    "hasAudio": true
+  }
+]

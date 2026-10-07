@@ -2,12 +2,20 @@ package cg.creamgod.boarderless
 
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.window.ComposeViewport
+import cg.creamgod.boarderless.data.rememberBrowserMediaImportRuntime
+import cg.creamgod.boarderless.data.browserDraftBackupRuntime
+import cg.creamgod.boarderless.data.browserDraftImportRuntime
+import androidx.compose.runtime.remember
 
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
     ComposeViewport {
         WithFontResourcesLoaded {
-            App()
+            val mediaImportRuntime = rememberBrowserMediaImportRuntime()
+            val draftBackupRuntime = remember { browserDraftBackupRuntime() }
+            val draftImportRuntime = remember { browserDraftImportRuntime() }
+            App(mediaImportRuntime = mediaImportRuntime, draftBackupRuntime = draftBackupRuntime,
+                draftImportRuntime = draftImportRuntime)
         }
     }
 }

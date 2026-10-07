@@ -1,0 +1,76 @@
+{
+  "description": "邊界值：尺寸 0、座標 ±1e7、自訂 #rrggbb 色、全部 APP shape 之一",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "00000000-0000-4000-8000-000000000028",
+      "transactionId": "00000000-0000-4000-8000-000000000029",
+      "baseVersion": 2,
+      "operations": [
+        {
+          "operationId": "00000000-0000-4000-8000-000000000030",
+          "clientSeq": 1,
+          "kind": "create_object",
+          "payload": {
+            "objectId": "00000000-0000-4000-8000-000000000031",
+            "objectType": "text",
+            "transform": {
+              "x": -10000000,
+              "y": 10000000,
+              "width": 0,
+              "height": 0,
+              "rotationDegrees": -90.5
+            },
+            "properties": {
+              "text": "",
+              "colorToken": "#a1b2c3",
+              "shapeToken": "manual-input"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "status": "accepted",
+      "fromServerSeq": 4,
+      "toServerSeq": 4,
+      "workspaceVersion": 3,
+      "operations": [
+        {
+          "serverSeq": 4,
+          "operationId": "00000000-0000-4000-8000-000000000030",
+          "transactionId": "00000000-0000-4000-8000-000000000029",
+          "actorId": "11111111-1111-4111-8111-111111111111",
+          "clientId": "00000000-0000-4000-8000-000000000028",
+          "clientSeq": 1,
+          "baseVersion": 2,
+          "workspaceVersion": 3,
+          "operationType": "create_object",
+          "payload": {
+            "objectId": "00000000-0000-4000-8000-000000000031",
+            "transform": {
+              "x": -10000000,
+              "y": 10000000,
+              "width": 0,
+              "height": 0,
+              "rotationDegrees": -90.5
+            },
+            "objectType": "text",
+            "properties": {
+              "text": "",
+              "colorToken": "#a1b2c3",
+              "shapeToken": "manual-input"
+            }
+          },
+          "schemaVersion": 1,
+          "committedAt": "2026-10-02T00:00:00.000Z"
+        }
+      ]
+    }
+  }
+}

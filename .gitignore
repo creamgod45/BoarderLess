@@ -17,4 +17,10 @@ captures
 !*.xcworkspace/contents.xcworkspacedata
 **/xcshareddata/WorkspaceSettings.xcsettings
 node_modules/
+
+# Release outputs and signing material
+/artifacts/
+*.p12
+*.mobileprovision
+*.keystore
 /backend/.env

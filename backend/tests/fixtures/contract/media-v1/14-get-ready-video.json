@@ -1,0 +1,27 @@
+{
+  "description": "影片 ready：durationMs 與 poster 縮圖",
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/assets/66666666-6666-4666-8666-666666666666"
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "66666666-6666-4666-8666-666666666666",
+      "workspaceId": "22222222-2222-4222-8222-222222222222",
+      "ownerId": "11111111-1111-4111-8111-111111111111",
+      "storageKey": "workspaces/22222222-2222-4222-8222-222222222222/assets/66666666-6666-4666-8666-666666666666.mp4",
+      "mediaType": "video/mp4",
+      "byteSize": 12941,
+      "checksum": "sha256:a307ccbd69c7dd8dc8bcab07ac7abede2b069181ea0aee45e0c0a44f77b3cb88",
+      "status": "ready",
+      "createdAt": "2026-10-02T00:00:00.000Z",
+      "updatedAt": "2026-10-02T00:00:00.000Z",
+      "width": 64,
+      "height": 48,
+      "durationMs": 1000,
+      "thumbnailAssetId": "77777777-7777-4777-8777-777777777777",
+      "rejectionReason": null
+    }
+  }
+}

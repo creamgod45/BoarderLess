@@ -1,0 +1,136 @@
+{
+  "contract": "Media v1",
+  "generatedBy": "scripts/generate-contract-fixtures.ts",
+  "fixtures": [
+    {
+      "name": "01-prepare-201",
+      "description": "準備上傳 image.png：201 {asset, upload}",
+      "status": 201
+    },
+    {
+      "name": "02-upload-put",
+      "description": "Signed PUT：只帶 upload.headers，原始 binary（非 multipart），不帶 x-user-id；2xx 不等同 ready",
+      "status": 200
+    },
+    {
+      "name": "03-complete-202-pending",
+      "description": "Durable 接受完成：202 {asset} status=pending",
+      "status": 202
+    },
+    {
+      "name": "04-get-pending",
+      "description": "GET metadata（不包裝）：pending",
+      "status": 200
+    },
+    {
+      "name": "05-content-409-not-ready",
+      "description": "pending 時不簽發下載票券",
+      "status": 409
+    },
+    {
+      "name": "06-get-ready",
+      "description": "GET metadata：ready（伺服器驗證後的尺寸）",
+      "status": 200
+    },
+    {
+      "name": "07-content-200",
+      "description": "Signed GET：200 {asset, download}",
+      "status": 200
+    },
+    {
+      "name": "08-complete-200-ready-retry",
+      "description": "已 ready 後重送相同 complete：200 {asset}",
+      "status": 200
+    },
+    {
+      "name": "09-complete-409-mismatch",
+      "description": "不同 checksum 的 complete：409",
+      "status": 409
+    },
+    {
+      "name": "10-abandon-409-completed",
+      "description": "已 complete 的資產不可 abandon：409",
+      "status": 409
+    },
+    {
+      "name": "11-get-ready-gif-with-thumbnail",
+      "description": "GIF ready：thumbnailAssetId 指向另一筆 ready asset",
+      "status": 200
+    },
+    {
+      "name": "12-get-thumbnail",
+      "description": "縮圖是獨立 asset（同 Workspace ACL）",
+      "status": 200
+    },
+    {
+      "name": "13-thumbnail-content-200",
+      "description": "縮圖下載走通用 content endpoint",
+      "status": 200
+    },
+    {
+      "name": "14-get-ready-video",
+      "description": "影片 ready：durationMs 與 poster 縮圖",
+      "status": 200
+    },
+    {
+      "name": "15-get-rejected",
+      "description": "Worker 驗證失敗：rejected + rejectionReason",
+      "status": 200
+    },
+    {
+      "name": "16-content-409-rejected",
+      "description": "rejected 不簽發下載票券",
+      "status": 409
+    },
+    {
+      "name": "17-content-409-missing",
+      "description": "ready 但內容遺失：409，不簽發假票券",
+      "status": 409
+    },
+    {
+      "name": "18-get-missing",
+      "description": "之後 GET 顯示 missing",
+      "status": 200
+    },
+    {
+      "name": "19-abandon-204",
+      "description": "尚未 complete 的上傳可 abandon：204",
+      "status": 204
+    },
+    {
+      "name": "20-complete-409-abandoned",
+      "description": "abandon 後 complete：409",
+      "status": 409
+    },
+    {
+      "name": "21-prepare-403-viewer",
+      "description": "viewer 不可準備上傳",
+      "status": 403
+    },
+    {
+      "name": "22-prepare-413",
+      "description": "原檔超過 200 MiB",
+      "status": 413
+    },
+    {
+      "name": "23-prepare-415",
+      "description": "不在 allowlist 的 MIME",
+      "status": 415
+    },
+    {
+      "name": "24-prepare-400",
+      "description": "checksum 格式錯誤",
+      "status": 400
+    },
+    {
+      "name": "25-get-404",
+      "description": "不存在或不可見",
+      "status": 404
+    },
+    {
+      "name": "26-list",
+      "description": "GET 列表：{assets: [...]}，含衍生縮圖",
+      "status": 200
+    }
+  ]
+}

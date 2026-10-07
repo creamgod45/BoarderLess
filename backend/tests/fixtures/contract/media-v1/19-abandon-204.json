@@ -1,0 +1,10 @@
+{
+  "description": "尚未 complete 的上傳可 abandon：204",
+  "request": {
+    "method": "DELETE",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/assets/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+  },
+  "response": {
+    "status": 204
+  }
+}

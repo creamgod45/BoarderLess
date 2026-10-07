@@ -20,10 +20,40 @@ Use the run configurations provided by the run widget in your IDE's toolbar. You
 - Desktop app:
   - Hot reload: `./gradlew :desktopApp:hotRun --auto`
   - Standard run: `./gradlew :desktopApp:run`
+  - Development QA Workbench: `BOARDERLESS_QA_MODE=true ./gradlew :desktopApp:run`
 - Web app:
   - Wasm target (faster, modern browsers): `./gradlew :webApp:wasmJsBrowserDevelopmentRun`
   - JS target (slower, supports older browsers): `./gradlew :webApp:jsBrowserDevelopmentRun`
-- iOS app: open the [/iosApp](./iosApp) directory in Xcode and run it from there.
+- iOS app: open the [/iosApp](./iosApp) directory in Xcode and run it from there. The simulator uses
+  `127.0.0.1:3000` on the simulator; physical iPhone builds use the current development LAN host
+  `192.168.68.67:3000` via the `sdk=iphoneos*` setting in `iosApp/Configuration/Config.xcconfig`.
+  For another network, change that device setting or explicitly override `BOARDERLESS_BACKEND_HOST`
+  when building. Rebuild/reinstall after changing it; allow Local Network access on the iPhone.
+  The API and the storage host issued in signed tickets must both be reachable from the device.
+  These HTTP/LAN settings are for development, not production deployment.
+  The Xcode build phase automatically finds a system JDK, Android Studio, IntelliJ IDEA, or the JetBrains
+  Toolbox runtime; if none is available it reports an actionable error.
+
+### Development QA Workbench
+
+The QA Workbench is excluded from the normal product UI unless the environment flag is explicitly enabled. On Desktop, start it with:
+
+```bash
+BOARDERLESS_QA_MODE=true ./gradlew :desktopApp:run
+```
+
+Windows PowerShell:
+
+```powershell
+$env:BOARDERLESS_QA_MODE = "true"
+.\gradlew.bat :desktopApp:run
+```
+
+The `QA` control opens an acceptance questionnaire based on [`docs/產品 QA 品質檢驗 SOP.md`](docs/%E7%94%A2%E5%93%81%20QA%20%E5%93%81%E8%B3%AA%E6%AA%A2%E9%A9%97%20SOP.md). It can capture the BoarderLess window, attach existing PNG/JPEG evidence from mobile devices, and generate self-contained HTML and PDF reports in `Documents/BoarderLess QA`. Screenshot bytes and form answers remain in the QA session and exported files; they are not written into Workspace content or sent to the backend.
+
+### Release packaging
+
+See [Release 打包設定](docs/RELEASE_PACKAGING.md) for GitHub Actions releases, Android signing, and iOS simulator/archive/IPA packaging. Local iOS: `APP_VERSION=1.2.3 ./scripts/package-ios.sh`.
 
 ### Running tests
 

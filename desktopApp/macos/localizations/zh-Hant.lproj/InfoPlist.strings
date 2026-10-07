@@ -1,0 +1,3 @@
+/* Finder 與 Dock 顯示的名稱。 */
+"CFBundleName" = "無邊界";
+"CFBundleDisplayName" = "無邊界";

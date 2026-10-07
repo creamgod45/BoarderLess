@@ -1,0 +1,42 @@
+{
+  "description": "update 驗證 merge 後完整狀態：text 物件不可加 group 欄位",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "00000000-0000-4000-8000-000000000032",
+      "transactionId": "00000000-0000-4000-8000-000000000033",
+      "baseVersion": 3,
+      "operations": [
+        {
+          "operationId": "00000000-0000-4000-8000-000000000034",
+          "clientSeq": 1,
+          "kind": "update_object",
+          "payload": {
+            "objectId": "66666666-6666-4666-8666-666666666666",
+            "properties": {
+              "title": "not for text"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 422,
+    "body": {
+      "error": {
+        "code": "invalid_object",
+        "message": "Object state does not match its type schema",
+        "details": [
+          {
+            "path": "/properties",
+            "message": "must not have additional properties"
+          }
+        ]
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

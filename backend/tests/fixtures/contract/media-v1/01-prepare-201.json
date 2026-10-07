@@ -1,0 +1,42 @@
+{
+  "description": "準備上傳 image.png：201 {asset, upload}",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/assets",
+    "body": {
+      "mediaType": "image/png",
+      "byteSize": 442,
+      "checksum": "sha256:15b8da68f777d7caaab816ede7dc7364cc979cc9bffaab4e93d39e24b624d49d"
+    }
+  },
+  "response": {
+    "status": 201,
+    "body": {
+      "asset": {
+        "id": "33333333-3333-4333-8333-333333333333",
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "ownerId": "11111111-1111-4111-8111-111111111111",
+        "storageKey": "workspaces/22222222-2222-4222-8222-222222222222/assets/33333333-3333-4333-8333-333333333333.png",
+        "mediaType": "image/png",
+        "byteSize": 442,
+        "checksum": "sha256:15b8da68f777d7caaab816ede7dc7364cc979cc9bffaab4e93d39e24b624d49d",
+        "status": "pending",
+        "createdAt": "2026-10-02T00:00:00.000Z",
+        "updatedAt": "2026-10-02T00:00:00.000Z",
+        "width": null,
+        "height": null,
+        "durationMs": null,
+        "thumbnailAssetId": null,
+        "rejectionReason": null
+      },
+      "upload": {
+        "method": "PUT",
+        "url": "https://storage.example.invalid/signed-upload",
+        "headers": {
+          "Content-Type": "image/png"
+        },
+        "expiresAt": "2026-10-02T00:15:00.000Z"
+      }
+    }
+  }
+}

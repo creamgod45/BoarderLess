@@ -1,0 +1,22 @@
+{
+  "description": "viewer 不可準備上傳",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/assets",
+    "body": {
+      "mediaType": "image/png",
+      "byteSize": 10,
+      "checksum": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  "response": {
+    "status": 403,
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Role \"viewer\" cannot perform assets.upload"
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

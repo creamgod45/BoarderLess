@@ -1,0 +1,44 @@
+{
+  "description": "restore 以 tombstone 版本做樂觀鎖",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "00000000-0000-4000-8000-000000000075",
+      "transactionId": "00000000-0000-4000-8000-000000000076",
+      "baseVersion": 7,
+      "operations": [
+        {
+          "operationId": "00000000-0000-4000-8000-000000000077",
+          "clientSeq": 1,
+          "kind": "restore_objects",
+          "payload": {
+            "objectIds": [
+              "00000000-0000-4000-8000-000000000061"
+            ]
+          },
+          "expectedObjectVersions": {
+            "3956e011-d909-445d-924b-f1fd34c22b96": 1
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 409,
+    "body": {
+      "status": "conflict",
+      "conflicts": [
+        {
+          "id": "00000000-0000-4000-8000-000000000061",
+          "expectedVersion": 1,
+          "actualVersion": 2
+        }
+      ],
+      "workspaceVersion": 7,
+      "lastServerSeq": 11,
+      "missingOperations": []
+    }
+  }
+}

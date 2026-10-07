@@ -1,0 +1,33 @@
+{
+  "description": "checksum 格式錯誤",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/assets",
+    "body": {
+      "mediaType": "image/png",
+      "byteSize": 10,
+      "checksum": "md5:abc"
+    }
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": {
+        "code": "validation_error",
+        "message": "body/checksum must match pattern \"^sha256:[0-9a-f]{64}$\"",
+        "details": [
+          {
+            "instancePath": "/checksum",
+            "schemaPath": "#/properties/checksum/pattern",
+            "keyword": "pattern",
+            "params": {
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "message": "must match pattern \"^sha256:[0-9a-f]{64}$\""
+          }
+        ]
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

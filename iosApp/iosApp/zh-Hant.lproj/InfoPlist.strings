@@ -1,0 +1,5 @@
+/* 主畫面上顯示的名稱。 */
+"CFBundleDisplayName" = "無邊界";
+
+/* iOS 首次連線到區域網路上的開發伺服器時顯示。 */
+"NSLocalNetworkUsageDescription" = "無邊界需要連線到區域網路上的開發伺服器，才能儲存並同步工作區。";

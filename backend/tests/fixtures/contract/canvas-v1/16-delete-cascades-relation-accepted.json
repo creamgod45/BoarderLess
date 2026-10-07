@@ -1,0 +1,60 @@
+{
+  "description": "刪除物件：cascadedRelationIds 寫入正式 payload",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "00000000-0000-4000-8000-000000000066",
+      "transactionId": "00000000-0000-4000-8000-000000000067",
+      "baseVersion": 6,
+      "operations": [
+        {
+          "operationId": "00000000-0000-4000-8000-000000000068",
+          "clientSeq": 1,
+          "kind": "delete_objects",
+          "payload": {
+            "objectIds": [
+              "00000000-0000-4000-8000-000000000061"
+            ]
+          },
+          "expectedObjectVersions": {
+            "3956e011-d909-445d-924b-f1fd34c22b96": 1
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "status": "accepted",
+      "fromServerSeq": 11,
+      "toServerSeq": 11,
+      "workspaceVersion": 7,
+      "operations": [
+        {
+          "serverSeq": 11,
+          "operationId": "00000000-0000-4000-8000-000000000068",
+          "transactionId": "00000000-0000-4000-8000-000000000067",
+          "actorId": "11111111-1111-4111-8111-111111111111",
+          "clientId": "00000000-0000-4000-8000-000000000066",
+          "clientSeq": 1,
+          "baseVersion": 6,
+          "workspaceVersion": 7,
+          "operationType": "delete_objects",
+          "payload": {
+            "objectIds": [
+              "00000000-0000-4000-8000-000000000061"
+            ],
+            "cascadedRelationIds": [
+              "00000000-0000-4000-8000-000000000065"
+            ]
+          },
+          "schemaVersion": 1,
+          "committedAt": "2026-10-02T00:00:00.000Z"
+        }
+      ]
+    }
+  }
+}

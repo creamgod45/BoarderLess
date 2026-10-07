@@ -1,0 +1,42 @@
+{
+  "description": "未知 objectType：回報支援型別與 objectSchemaVersion 供舊 client 提示升級",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      "transactionId": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+      "baseVersion": 2,
+      "operations": [
+        {
+          "operationId": "ffffffff-ffff-4fff-8fff-ffffffffffff",
+          "clientSeq": 1,
+          "kind": "create_object",
+          "payload": {
+            "objectId": "00000000-0000-4000-8000-000000000015",
+            "objectType": "future_widget"
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 422,
+    "body": {
+      "error": {
+        "code": "unsupported_object_type",
+        "message": "Object type \"future_widget\" is not supported",
+        "details": {
+          "supportedObjectTypes": [
+            "text",
+            "group",
+            "media"
+          ],
+          "objectSchemaVersion": 1
+        }
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

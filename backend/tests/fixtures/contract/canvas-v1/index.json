@@ -1,0 +1,161 @@
+{
+  "contract": "Canvas v1（BAI-001 / 007 / 008 / 011 / 012）",
+  "generatedBy": "scripts/generate-canvas-fixtures.ts",
+  "fixtures": [
+    {
+      "name": "01-create-text-group-accepted",
+      "description": "完整 text / group 物件：accepted",
+      "status": 200
+    },
+    {
+      "name": "02-create-defaults-accepted",
+      "description": "欄位不存在時套用預設：transform 由伺服器補齊並寫入正式 payload",
+      "status": 200
+    },
+    {
+      "name": "03-unsupported-object-type-422",
+      "description": "未知 objectType：回報支援型別與 objectSchemaVersion 供舊 client 提示升級",
+      "status": 422
+    },
+    {
+      "name": "04-invalid-object-types-422",
+      "description": "錯誤型別：非數字座標、負尺寸、text 為數字",
+      "status": 422
+    },
+    {
+      "name": "05-invalid-object-explicit-null-422",
+      "description": "explicit null 不視為缺省",
+      "status": 422
+    },
+    {
+      "name": "06-invalid-object-unknown-token-422",
+      "description": "未知 shapeToken / colorToken",
+      "status": 422
+    },
+    {
+      "name": "07-boundary-values-accepted",
+      "description": "邊界值：尺寸 0、座標 ±1e7、自訂 #rrggbb 色、全部 APP shape 之一",
+      "status": 200
+    },
+    {
+      "name": "08-update-merged-invalid-422",
+      "description": "update 驗證 merge 後完整狀態：text 物件不可加 group 欄位",
+      "status": 422
+    },
+    {
+      "name": "09-update-object-type-unsupported-422",
+      "description": "型別替換為明確不支援的變更（BAI-011）",
+      "status": 422
+    },
+    {
+      "name": "10-parent-not-group-422",
+      "description": "parent 必須是 group",
+      "status": 422
+    },
+    {
+      "name": "11-nested-groups-accepted",
+      "description": "同一 transaction 建立巢狀 group",
+      "status": 200
+    },
+    {
+      "name": "12-parent-cycle-422",
+      "description": "間接循環：A → B → A",
+      "status": 422
+    },
+    {
+      "name": "13-create-child-accepted",
+      "description": "在 group 內建立 child",
+      "status": 200
+    },
+    {
+      "name": "14-delete-group-with-children-422",
+      "description": "刪除 group 時 children 必須一起刪除或先 reparent",
+      "status": 422
+    },
+    {
+      "name": "15-create-relation-accepted",
+      "description": "兩個物件與 relation",
+      "status": 200
+    },
+    {
+      "name": "16-delete-cascades-relation-accepted",
+      "description": "刪除物件：cascadedRelationIds 寫入正式 payload",
+      "status": 200
+    },
+    {
+      "name": "17-create-on-tombstone-422",
+      "description": "同 ID create 不兼任 restore：提示 restoreWith",
+      "status": 422
+    },
+    {
+      "name": "18-restore-relation-endpoint-missing-422",
+      "description": "端點仍刪除時不可還原 relation",
+      "status": 422
+    },
+    {
+      "name": "19-restore-stale-version-409",
+      "description": "restore 以 tombstone 版本做樂觀鎖",
+      "status": 409
+    },
+    {
+      "name": "20-restore-objects-relations-accepted",
+      "description": "同一 transaction 還原物件與 cascaded relations",
+      "status": 200
+    },
+    {
+      "name": "21-update-relation-endpoint-unsupported-422",
+      "description": "relation 端點修改為明確不支援的變更",
+      "status": 422
+    },
+    {
+      "name": "22-state-after-restore",
+      "description": "還原後的 projection：版本 +1、狀態保留",
+      "status": 200
+    },
+    {
+      "name": "23-original-transaction-accepted",
+      "description": "原提交（兩個 operation）",
+      "status": 200
+    },
+    {
+      "name": "24-receipt-partial-query",
+      "description": "只查其中一個 operation ID：回傳完整交易邊界 receipt（不含 payload）",
+      "status": 200
+    },
+    {
+      "name": "25-receipt-other-actor-unknown",
+      "description": "其他 actor 不能認領同一 transaction / operation ID",
+      "status": 200
+    },
+    {
+      "name": "26-receipt-unknown",
+      "description": "尚未提交：unknown（不排除晚到的原請求）",
+      "status": 200
+    },
+    {
+      "name": "27-fence-unknown-fenced",
+      "description": "fence 尚未提交的原 transaction：fenced",
+      "status": 200
+    },
+    {
+      "name": "28-late-original-fenced-409",
+      "description": "被 fence 的原請求晚到：409 transaction_fenced，永不 commit",
+      "status": 409
+    },
+    {
+      "name": "29-fence-committed-returns-receipt",
+      "description": "fence 已提交的 transaction：回傳 committed receipt",
+      "status": 200
+    },
+    {
+      "name": "30-receipt-limit-400",
+      "description": "超過 200 個 ID",
+      "status": 400
+    },
+    {
+      "name": "31-receipt-revoked-404",
+      "description": "撤銷 membership 後查詢：404",
+      "status": 404
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "description": "刪除 group 時 children 必須一起刪除或先 reparent",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "00000000-0000-4000-8000-000000000055",
+      "transactionId": "00000000-0000-4000-8000-000000000056",
+      "baseVersion": 5,
+      "operations": [
+        {
+          "operationId": "00000000-0000-4000-8000-000000000057",
+          "clientSeq": 1,
+          "kind": "delete_objects",
+          "payload": {
+            "objectIds": [
+              "88888888-8888-4888-8888-888888888888"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 422,
+    "body": {
+      "error": {
+        "code": "hierarchy_cascade_mismatch",
+        "message": "Deleting a group requires deleting or reparenting its children",
+        "details": {
+          "objectIds": [
+            "00000000-0000-4000-8000-000000000054"
+          ]
+        }
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

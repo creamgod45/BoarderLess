@@ -1,0 +1,32 @@
+{
+  "description": "不在 allowlist 的 MIME",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/assets",
+    "body": {
+      "mediaType": "image/svg+xml",
+      "byteSize": 10,
+      "checksum": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  "response": {
+    "status": 415,
+    "body": {
+      "error": {
+        "code": "unsupported_media_type",
+        "message": "Media type image/svg+xml is not allowed",
+        "details": {
+          "allowed": [
+            "image/png",
+            "image/jpeg",
+            "image/webp",
+            "image/gif",
+            "video/mp4",
+            "video/webm"
+          ]
+        }
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

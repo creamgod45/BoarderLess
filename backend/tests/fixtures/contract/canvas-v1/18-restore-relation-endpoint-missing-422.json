@@ -1,0 +1,40 @@
+{
+  "description": "端點仍刪除時不可還原 relation",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "00000000-0000-4000-8000-000000000072",
+      "transactionId": "00000000-0000-4000-8000-000000000073",
+      "baseVersion": 7,
+      "operations": [
+        {
+          "operationId": "00000000-0000-4000-8000-000000000074",
+          "clientSeq": 1,
+          "kind": "restore_relations",
+          "payload": {
+            "relationIds": [
+              "00000000-0000-4000-8000-000000000065"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 422,
+    "body": {
+      "error": {
+        "code": "relation_endpoint_missing",
+        "message": "Relation endpoints must be active (restore objects first)",
+        "details": {
+          "relationIds": [
+            "00000000-0000-4000-8000-000000000065"
+          ]
+        }
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

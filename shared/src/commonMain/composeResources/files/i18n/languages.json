@@ -1,0 +1,16 @@
+{
+  "default": "en",
+  "languages": [
+    {
+      "tag": "en",
+      "name": "English"
+    },
+    {
+      "tag": "zh-TW",
+      "name": "繁體中文",
+      "matches": [
+        "zh"
+      ]
+    }
+  ]
+}
