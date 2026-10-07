@@ -51,6 +51,10 @@ $env:BOARDERLESS_QA_MODE = "true"
 
 The `QA` control opens an acceptance questionnaire based on [`docs/產品 QA 品質檢驗 SOP.md`](docs/%E7%94%A2%E5%93%81%20QA%20%E5%93%81%E8%B3%AA%E6%AA%A2%E9%A9%97%20SOP.md). It can capture the BoarderLess window, attach existing PNG/JPEG evidence from mobile devices, and generate self-contained HTML and PDF reports in `Documents/BoarderLess QA`. Screenshot bytes and form answers remain in the QA session and exported files; they are not written into Workspace content or sent to the backend.
 
+### Release packaging
+
+See [Release 打包設定](docs/RELEASE_PACKAGING.md) for GitHub Actions releases, Android signing, and iOS simulator/archive/IPA packaging. Local iOS: `APP_VERSION=1.2.3 ./scripts/package-ios.sh`.
+
 ### Running tests
 
 Use the run button in your IDE's editor gutter, or run tests using Gradle tasks:

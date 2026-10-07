@@ -1,0 +1,342 @@
+name: Release Packages
+
+# 桌面三平台安裝包、免安裝版、Android APK/AAB、iOS archive / simulator / IPA。
+#
+# jpackage 無法交叉編譯，所以每種格式只能在對應的 OS runner 上產生：
+#   ubuntu  -> .deb / .rpm
+#   windows -> .msi
+#   macos   -> .dmg（arm64）
+#
+# Android 不受這個限制，跟著 ubuntu runner 一起打 .apk / .aab。
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本號 x.y.z（例如 1.0.0，不要加 v）'
+        required: true
+        type: string
+      draft:
+        description: '建立為草稿 Release'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  resolve-version:
+    name: 解析版本號
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      tag: ${{ steps.resolve.outputs.tag }}
+      build_number: ${{ steps.resolve.outputs.build_number }}
+    steps:
+      - id: resolve
+        shell: bash
+        env:
+          # 走 env 而不是直接內插，避免 workflow_dispatch 的輸入被當成 shell 指令執行
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            VERSION="$INPUT_VERSION"
+          else
+            VERSION="$REF_NAME"
+          fi
+          VERSION="${VERSION#v}"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::版本號必須是 x.y.z（jpackage 對 .msi / .dmg 的硬性限制），實際收到 '$VERSION'"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          # 固定版本編碼，重跑同一版本不會改變；MSI 限制 major/minor <=255。
+          IFS=. read -r MAJOR MINOR PATCH <<< "$VERSION"
+          for PART in "$MAJOR" "$MINOR" "$PATCH"; do
+            if [ "${#PART}" -gt 3 ] || [[ "$PART" =~ ^0[0-9] ]]; then
+              echo "::error::每段版本須為 0..999 且不可有前導零"
+              exit 1
+            fi
+          done
+          if [ "$((10#$MAJOR))" -lt 1 ] || [ "$((10#$MAJOR))" -gt 255 ] || [ "$((10#$MINOR))" -gt 255 ]; then
+            echo "::error::桌面打包要求 major 為 1..255、minor 為 0..255、patch 為 0..999"
+            exit 1
+          fi
+          CODE=$((10#$MAJOR * 1000000 + 10#$MINOR * 1000 + 10#$PATCH))
+          if [ "$CODE" -lt 1 ]; then echo "::error::版本須大於 0.0.0"; exit 1; fi
+          echo "build_number=$CODE" >> "$GITHUB_OUTPUT"
+          echo "### 準備發佈 \`v$VERSION\`" >> "$GITHUB_STEP_SUMMARY"
+
+  package:
+    name: 打包 ${{ matrix.name }}
+    needs: resolve-version
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux-x64
+            tasks: ':desktopApp:packageDeb :desktopApp:packageRpm :desktopApp:createDistributable'
+          - os: windows-latest
+            name: windows-x64
+            tasks: ':desktopApp:packageMsi :desktopApp:createDistributable'
+          - os: macos-latest
+            name: macos-arm64
+            tasks: ':desktopApp:packageDmg :desktopApp:createDistributable'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安裝 JDK 21 (Zulu)
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: 設定 Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: 安裝 Linux 打包工具
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          # fakeroot + dpkg 供 .deb，rpm 提供 rpmbuild 供 .rpm，binutils 供 jpackage 的 objcopy
+          sudo apt-get install -y --no-install-recommends fakeroot rpm binutils
+
+      - name: 確認 WiX Toolset v3（jpackage 產生 .msi 需要）
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $candle = Get-ChildItem 'C:\Program Files (x86)\WiX Toolset v3*\bin\candle.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $candle) {
+            choco install wixtoolset -y --no-progress
+            $candle = Get-ChildItem 'C:\Program Files (x86)\WiX Toolset v3*\bin\candle.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
+          if (-not $candle) { throw 'WiX Toolset v3 not found; jpackage 無法產生 .msi' }
+          Add-Content -Path $env:GITHUB_PATH -Value $candle.Directory.FullName
+
+      - name: 打包
+        shell: bash
+        run: ./gradlew ${{ matrix.tasks }} -PappVersion=${{ needs.resolve-version.outputs.version }} --stacktrace
+
+      - name: 收集產物
+        shell: bash
+        env:
+          VERSION: ${{ needs.resolve-version.outputs.version }}
+          TARGET: ${{ matrix.name }}
+        run: |
+          set -euo pipefail
+          BIN=desktopApp/build/compose/binaries/main
+          OUT=artifacts
+          mkdir -p "$OUT"
+
+          # 安裝包：deb/rpm/msi/dmg 各自落在 $BIN/<format>/ 底下。
+          # 重新命名帶上平台，避免 macos-arm64 與 macos-x64 的 .dmg 在 Release 撞名。
+          while IFS= read -r f; do
+            ext="${f##*.}"
+            cp "$f" "$OUT/BoarderLess-${VERSION}-${TARGET}.${ext}"
+          done < <(find "$BIN" -mindepth 2 -maxdepth 2 -type f \
+                     \( -name '*.deb' -o -name '*.rpm' -o -name '*.msi' -o -name '*.dmg' \))
+
+          # 免安裝版：createDistributable 產生自帶精簡 JRE 的目錄，解壓即可執行。
+          # 從 app/ 內部打包，壓縮檔裡才不會帶上 desktopApp/build/... 這串路徑。
+          APP_DIR="$BIN/app"
+          if [ -d "$APP_DIR" ]; then
+            ABS_OUT="$(cd "$OUT" && pwd)"
+            if [ "$RUNNER_OS" = "Windows" ]; then
+              (cd "$APP_DIR" && 7z a -tzip "$ABS_OUT/BoarderLess-${VERSION}-${TARGET}-portable.zip" ./* > /dev/null)
+            else
+              tar -czf "$ABS_OUT/BoarderLess-${VERSION}-${TARGET}-portable.tar.gz" -C "$APP_DIR" .
+            fi
+          fi
+
+          ls -lh "$OUT"
+          if [ -z "$(ls -A "$OUT")" ]; then
+            echo "::error::$TARGET 沒有產生任何檔案"
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: artifacts/*
+          if-no-files-found: error
+          retention-days: 7
+
+  package-android:
+    name: 打包 android
+    needs: resolve-version
+    runs-on: ubuntu-latest
+    env:
+      # secrets context 在 step 的 if: 不可用（只有 github/needs/strategy/matrix/job/
+      # runner/env/vars/steps/inputs），所以先在 job 層轉成 env 再判斷。
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安裝 JDK 21 (Zulu)
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: 設定 Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: 還原簽章金鑰
+        # 沒有設定 ANDROID_KEYSTORE_BASE64 secret 時就跳過，產物會是未簽署的 APK。
+        if: env.ANDROID_KEYSTORE_BASE64 != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+
+      - name: 打包
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          ./gradlew :androidApp:assembleRelease :androidApp:bundleRelease \
+            -PappVersion=${{ needs.resolve-version.outputs.version }} \
+            -PappVersionCode=${{ needs.resolve-version.outputs.build_number }} --stacktrace
+
+      - name: 收集產物
+        shell: bash
+        env:
+          VERSION: ${{ needs.resolve-version.outputs.version }}
+        run: |
+          set -euo pipefail
+          OUT=artifacts
+          mkdir -p "$OUT"
+
+          # 未簽署時 AGP 的檔名會是 *-release-unsigned.apk，名稱上保留這個資訊，
+          # 免得有人拿到裝不起來的檔案還找不到原因。
+          while IFS= read -r f; do
+            case "$f" in
+              *-unsigned.apk) cp "$f" "$OUT/BoarderLess-${VERSION}-android-unsigned.apk" ;;
+              *) cp "$f" "$OUT/BoarderLess-${VERSION}-android.apk" ;;
+            esac
+          done < <(find androidApp/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk')
+
+          # .aab 給 Google Play 上架用（Play 會自己重新簽章）
+          while IFS= read -r f; do
+            cp "$f" "$OUT/BoarderLess-${VERSION}-android.aab"
+          done < <(find androidApp/build/outputs/bundle/release -maxdepth 1 -type f -name '*.aab')
+
+          ls -lh "$OUT"
+          if [ -z "$(ls -A "$OUT")" ]; then
+            echo "::error::android 沒有產生任何檔案"
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: artifacts/*
+          if-no-files-found: error
+          retention-days: 7
+
+  package-ios:
+    name: 打包 iOS
+    needs: resolve-version
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: 封存 iOS、模擬器包與選用 IPA
+        shell: bash
+        env:
+          APP_VERSION: ${{ needs.resolve-version.outputs.version }}
+          APP_BUILD_NUMBER: ${{ needs.resolve-version.outputs.build_number }}
+          IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+          IOS_TEAM_ID: ${{ vars.IOS_TEAM_ID }}
+          IOS_BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID }}
+          IOS_EXPORT_METHOD: ${{ vars.IOS_EXPORT_METHOD }}
+          IOS_BACKEND_SCHEME: ${{ vars.IOS_BACKEND_SCHEME }}
+          IOS_BACKEND_HOST: ${{ vars.IOS_BACKEND_HOST }}
+          IOS_BACKEND_PORT: ${{ vars.IOS_BACKEND_PORT }}
+        run: ./scripts/package-ios.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios
+          path: artifacts/*
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: 建立 Release
+    needs: [resolve-version, package, package-android, package-ios]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: 產生 Release 說明
+        shell: bash
+        env:
+          VERSION: ${{ needs.resolve-version.outputs.version }}
+        run: |
+          set -euo pipefail
+          ls -lh dist
+          sed "s/{{VERSION}}/$VERSION/g" .github/release-notes-template.md > notes.md
+          cat notes.md
+
+      - name: 上傳到 GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.resolve-version.outputs.tag }}
+          VERSION: ${{ needs.resolve-version.outputs.version }}
+          REPO: ${{ github.repository }}
+          DRAFT: ${{ inputs.draft }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" -R "$REPO" >/dev/null 2>&1; then
+            echo "Release $TAG 已存在，直接覆蓋產物"
+            gh release upload "$TAG" dist/* --clobber -R "$REPO"
+          else
+            EXTRA=()
+            # workflow_dispatch 預設開草稿，讓人先檢查過再公開；tag push 則直接發佈
+            if [ "${DRAFT:-false}" = "true" ]; then EXTRA+=(--draft); fi
+            gh release create "$TAG" dist/* \
+              -R "$REPO" \
+              --title "BoarderLess $VERSION" \
+              --notes-file notes.md \
+              --target "$GITHUB_SHA" \
+              "${EXTRA[@]}"
+          fi
+          echo "### Release $TAG 已就緒" >> "$GITHUB_STEP_SUMMARY"

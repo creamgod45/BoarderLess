@@ -44,9 +44,9 @@ compose.desktop {
         mainClass = "cg.creamgod.boarderless.MainKt"
 
         nativeDistributions {
-            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
+            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Rpm)
             packageName = "BoarderLess"
-            packageVersion = "1.0.0"
+            packageVersion = providers.gradleProperty("appVersion").orElse("1.0.0").get()
             macOS {
                 bundleID = "cg.creamgod.boarderless"
                 iconFile.set(project.file("icons/app.icns"))

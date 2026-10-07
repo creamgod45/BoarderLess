@@ -6,6 +6,10 @@ PRODUCT_BUNDLE_IDENTIFIER=cg.creamgod.boarderless.BoarderLess$(TEAM_ID)
 CURRENT_PROJECT_VERSION=1
 MARKETING_VERSION=1.0
 
+// Kotlin's Xcode build phase writes Shared.framework here for the selected SDK.
+FRAMEWORK_SEARCH_PATHS=$(inherited) $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)
+OTHER_LDFLAGS=$(inherited) -framework Shared
+
 // Local development only. Simulator loopback reaches the Mac; device loopback reaches the iPhone.
 // Keep the physical-device host aligned with the current Android / Kotlin LAN development host.
 // Override these build settings for another development network or a production HTTPS service.
