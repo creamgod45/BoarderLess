@@ -104,7 +104,12 @@ jobs:
           distribution: zulu
           java-version: '21'
 
-      - uses: android-actions/setup-android@v3
+      # Gradle 會設定共用 Android 模組；不要使用 action 預設的舊版 tools 套件。
+      - name: 設定 Android SDK（共用 Gradle 設定需要）
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+          log-accepted-android-sdk-licenses: 'false'
 
       - name: 設定 Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -193,7 +198,12 @@ jobs:
           distribution: zulu
           java-version: '21'
 
-      - uses: android-actions/setup-android@v3
+      # Gradle 會設定共用 Android 模組；不要使用 action 預設的舊版 tools 套件。
+      - name: 設定 Android SDK（共用 Gradle 設定需要）
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+          log-accepted-android-sdk-licenses: 'false'
 
       - name: 設定 Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -264,7 +274,12 @@ jobs:
         with:
           distribution: zulu
           java-version: '21'
-      - uses: android-actions/setup-android@v3
+      # Gradle 會設定共用 Android 模組；不要使用 action 預設的舊版 tools 套件。
+      - name: 設定 Android SDK（共用 Gradle 設定需要）
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+          log-accepted-android-sdk-licenses: 'false'
       - uses: gradle/actions/setup-gradle@v4
       - name: 封存 iOS、模擬器包與選用 IPA
         shell: bash
