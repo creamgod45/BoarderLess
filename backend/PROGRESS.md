@@ -129,7 +129,6 @@
 - [x] BAI-012：receipt 查詢與 fence
 - [ ] APP 對接：刪除的 inverse 與 Redo 改送 `restore_objects` / `restore_relations`；草稿合併改用 receipt / fence；更新 BAI 文件狀態
 - [ ] 正式型別替換 / relation 端點修改 operation（目前明確不支援；需產品確認語意）
-- [ ] 舊資料：migration 前寫入、不符合新 schema 的 dev 資料仍會出現在 state，之後的 update 會被拒絕（APP 已 fail-closed）；正式上線前需掃描 / 遷移
 - [ ] Receipt 依賴 operation log 保留；若日後裁剪歷史，需定義 receipt 保留期與「已裁剪」狀態
 
 ### 需先定稿的契約（§12，阻塞 B0 完成）
@@ -178,6 +177,9 @@
 - [ ] 大型 snapshot 改存 object storage（`storage_key`）
 - [ ] CI：typecheck + test（含 PostgreSQL service）
 - [ ] Workspace 狀態 inspector page view（需先有正式 auth）
+
+## 資料政策
+- 目前所有資料（開發與測試 DB、object storage）皆為測試資料：schema 變更不需要資料搬移或相容處理，必要時可直接重建。
 
 ## 與架構文件的差異
 - 目錄使用 `backend/`（文件 §7 建議 `server/`），目前為單一 package 的 MVC 結構；待 WebSocket gateway / worker 加入時再評估拆成 `apps/` + `packages/`。
