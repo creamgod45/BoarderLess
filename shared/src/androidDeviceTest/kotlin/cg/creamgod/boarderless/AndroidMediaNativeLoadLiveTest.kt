@@ -27,7 +27,7 @@ class AndroidMediaNativeLoadLiveTest {
             val base = requireNotNull(args.getString("boarderlessMediaBase"))
             val user = requireNotNull(args.getString("boarderlessMediaUser"))
             val workspace = requireNotNull(args.getString("boarderlessMediaWorkspace"))
-            require(base == "http://192.168.68.67:3000")
+            require(base == "http://192.168.68.65:3000")
             require(user == "60e37ef6-1e7a-4066-898b-c1878ae84d33")
             require(workspace == "c47bf81e-2a79-4fb0-aea6-2d36d47ffac3")
             val instrumentation = InstrumentationRegistry.getInstrumentation()

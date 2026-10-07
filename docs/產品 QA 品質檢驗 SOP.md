@@ -73,7 +73,7 @@
 
 ## iPhone API 配置修正重驗流程（2026-10-05）
 
-已修原device loopback預設：iphoneos SDK解析192.168.68.67:3000、simulator保留127.0.0.1；直接Xcode配置2case通過不代表實機網路／上傳完成。驗收必須：
+已修原device loopback預設：iphoneos SDK解析192.168.68.65:3000、simulator保留127.0.0.1；直接Xcode配置2case通過不代表實機網路／上傳完成。驗收必須：
 
 1. 記錄實機／模擬器、OS、APP build、Wi-Fi、檔案來源／格式／大小；先重新build/install使Info URL更新，保留原APP資料，不以清除資料作預設修復。
 2. 實機與開發Mac同網路，允許「設定→隱私權與安全性→區域網路」中的APP權限（實際選單依OS）；API3000與server簽發storage9000均須可達。不能把Mac health成功當手機storage可達。

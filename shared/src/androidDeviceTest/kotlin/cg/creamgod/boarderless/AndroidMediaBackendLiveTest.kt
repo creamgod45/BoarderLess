@@ -101,7 +101,7 @@ class AndroidMediaBackendLiveTest {
             val base = requireNotNull(arguments.getString("boarderlessMediaBase"))
             val user = requireNotNull(arguments.getString("boarderlessMediaUser"))
             val workspace = requireNotNull(arguments.getString("boarderlessMediaWorkspace"))
-            require(base == "http://192.168.68.67:3000") // Explicit local acceptance target, not a production default.
+            require(base == "http://192.168.68.65:3000") // Explicit local acceptance target, not a production default.
             UUID.fromString(user)
             UUID.fromString(workspace)
             val context = InstrumentationRegistry.getInstrumentation().context

@@ -283,7 +283,7 @@ iOS Photos入口已補，不重做Files-only問題：匯入來源menu與PHPicker
 
 Web選檔誤判取消競態已重現並修：移除focus後250ms空files即取消，等待change／native cancel／explicit cancel；120s選擇deadline為錯誤、不假稱取消，listeners／input清理。原程式delayed-change regression確實fail，修後Node Web20cases通過；JS／Wasm與entries結果另列。需用新Web build驗實際原檔與storage，不重做已驗Android／iPhone配置，原六主線active，人工QA／效能最後保持。詳MEDIA_LIVE_ACCEPTANCE。
 
-iPhone配置缺口已修：83922 Xcode解析原Info API確實127.0.0.1:3000且優先於Kotlin fallback；Config.xcconfig增加iphoneos SDK條件192.168.68.67，simulator保留loopback，不改ATS／backend。78986直接Xcode／plutil配置驗證2cases通過2.02s，explicit部署override仍優先；README與QA重驗步驟已補。不重做此配置修正，但使用者截圖平台／build未確認，不当該問題唯一根因或iPhone實機上傳已通過。需重新build/install後重驗，或接續iOS正式sink／來源網路證據；原六主線active、人工簽核與效能最後保持。
+iPhone配置缺口已修：83922 Xcode解析原Info API確實127.0.0.1:3000且優先於Kotlin fallback；Config.xcconfig增加iphoneos SDK條件192.168.68.65，simulator保留loopback，不改ATS／backend。78986直接Xcode／plutil配置驗證2cases通過2.02s，explicit部署override仍優先；README與QA重驗步驟已補。不重做此配置修正，但使用者截圖平台／build未確認，不当該問題唯一根因或iPhone實機上傳已通過。需重新build/install後重驗，或接續iOS正式sink／來源網路證據；原六主線active、人工簽核與效能最後保持。
 
 7001 Android原生載入唯讀 live 通過1.379s／1case無skip：既有JPEG／WebP及三張poster原生解碼、GIF全部影格、MP4／WebM MediaPlayer prepare／seek command／release与fixture cache清理，前後workspace不變。37369 Device APK成功10s，只更新獨立QA APK，無新增server資料；普通run明確skip。不重做此已驗範圍；影片surface／音訊／實際連續播放／seek落點、picker UI／OS重啟仍Pending。最新iPhone generic失敗截圖待使用者補實機／模擬器、格式與build，Android成功不解除iOS；下一步原生播放或iOS正式來源與sink證據。詳細scope／重跑見MEDIA_LIVE_ACCEPTANCE。正式WS／auth仍未交付，原六主線active、效能最後。
 
@@ -297,7 +297,7 @@ iPhone配置缺口已修：83922 Xcode解析原Info API確實127.0.0.1:3000且�
 
 2026-10-05 Android素材錯誤接續：唯讀再查現有QA asset簽發仍localhost:9000，等待維護者配置後重驗，不改後端／signed URL。APP補上第一byte前Uploading(0)狀態、typed file issue／選檔／prepare／transfer／confirm／processing分階段安全提示；原RecoveryRequired asset提示優先、cancel／scope保護與pending-only清理不改。新增前byte失敗case＋failure分類3cases，結果另記。這是診斷可用性修正，不當原Android上傳已通過或storage設定已修。
 
-2026-10-05 使用者Android模擬器素材失敗轉為目前優先診斷：原PNG200214bytes／1262×1308；同Android工作區GET200但assets空，現有QA readyasset正式content GET200的signed storage origin為localhost:9000；後端S3 presign PUT/GET均使用publicEndpoint，Android API預設192.168.68.67:3000。Mac上LAN9000可達403；不改signed URL、不修改／啟動backend。需後端維護者配置可達S3_PUBLIC_ENDPOINT後使用者重驗，尚不當此上傳實機case已完成。
+2026-10-05 使用者Android模擬器素材失敗轉為目前優先診斷：原PNG200214bytes／1262×1308；同Android工作區GET200但assets空，現有QA readyasset正式content GET200的signed storage origin為localhost:9000；後端S3 presign PUT/GET均使用publicEndpoint，Android API預設192.168.68.65:3000。Mac上LAN9000可達403；不改signed URL、不修改／啟動backend。需後端維護者配置可達S3_PUBLIC_ENDPOINT後使用者重驗，尚不當此上傳實機case已完成。
 
 AI composition最終96784成功1m11s（JVM／Desktop／JS／Wasm／AndroidHost／APK／Web）；72724 iOS成功55s，本次boot恢復shutdown，各composition7cases零fail/error/skip。97780取消fixture premature readiness已修，不忽略channel斷言；正式APP設定／context同意UI／secure store／proposal／實際provider仍Pending。使用者新增Android素材錯誤已切回素材診斷，原六主線active。
 

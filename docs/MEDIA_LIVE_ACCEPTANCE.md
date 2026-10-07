@@ -43,9 +43,9 @@ Photos不查PHAsset／整本照片圖庫、不請求廣泛Photos權限。選取�
 
 83922 唯讀 `xcodebuild -showBuildSettings` 證實原 iOS 配置為 `http://127.0.0.1:3000`；Info.plist 的 BoarderLessBackendURL 經 Xcode 展開後優先於 Kotlin fallback，因此實機會連手機自身，而不是目前LAN服務。這是可證實的實機預設配置缺口，但使用者截圖的安裝版本／實機或模擬器／檔案來源尚未確認，不能宣稱已找到該截圖唯一根因。
 
-Config.xcconfig 新增 `BOARDERLESS_BACKEND_HOST[sdk=iphoneos*]=192.168.68.67`，保留 simulator loopback、現有 Info.plist／Local Network 說明與 ATS 設定，不開 NSAllowsArbitraryLoads、不改 backend 或 signed tickets。此位址是目前已驗證的開發LAN服務（health status=ok／database=up），不是 production預設；換網路需改device設定或build override，release部署需明確HTTPS服務。README補上重新建置／安裝與storage可達要求。
+Config.xcconfig 新增 `BOARDERLESS_BACKEND_HOST[sdk=iphoneos*]=192.168.68.65`，保留 simulator loopback、現有 Info.plist／Local Network 說明與 ATS 設定，不開 NSAllowsArbitraryLoads、不改 backend 或 signed tickets。此位址是目前已驗證的開發LAN服務（health status=ok／database=up），不是 production預設；換網路需改device設定或build override，release部署需明確HTTPS服務。README補上重新建置／安裝與storage可達要求。
 
-新增 `iosApp/tests/backend-config.test.mjs`，直接讀 Xcode 對兩種SDK的Debug解析及plutil讀source，非手寫xcconfig parser：simulator127.0.0.1／device192.168.68.67、scheme/port、Info URL參數、既有localnetwork permission與未開arbitrary loads、explicit HTTPS override優先。69022首輪2cases通過；加generic destination避免無關裝置inventory後78986最後2cases／0fail／0skip通過2.02s，git diff --check通過。只測建置配置，不當完整APP build／實機安裝、權限或素材上傳通過；未啟動模擬器、未覆蓋任何已安裝APP。
+新增 `iosApp/tests/backend-config.test.mjs`，直接讀 Xcode 對兩種SDK的Debug解析及plutil讀source，非手寫xcconfig parser：simulator127.0.0.1／device192.168.68.65、scheme/port、Info URL參數、既有localnetwork permission與未開arbitrary loads、explicit HTTPS override優先。69022首輪2cases通過；加generic destination避免無關裝置inventory後78986最後2cases／0fail／0skip通過2.02s，git diff --check通過。只測建置配置，不當完整APP build／實機安裝、權限或素材上傳通過；未啟動模擬器、未覆蓋任何已安裝APP。
 
 重跑配置驗證：
 
@@ -69,7 +69,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer node --test iosApp/test
 /Users/wangfuxian/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell am instrument -w -r \
   -e class cg.creamgod.boarderless.AndroidMediaNativeLoadLiveTest \
   -e boarderlessMediaReadLive true \
-  -e boarderlessMediaBase http://192.168.68.67:3000 \
+  -e boarderlessMediaBase http://192.168.68.65:3000 \
   -e boarderlessMediaUser 60e37ef6-1e7a-4066-898b-c1878ae84d33 \
   -e boarderlessMediaWorkspace c47bf81e-2a79-4fb0-aea6-2d36d47ffac3 \
   cg.creamgod.boarderless.shared.test/androidx.test.runner.AndroidJUnitRunner
@@ -79,7 +79,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer node --test iosApp/test
 
 ## Android 裝置實際 LAN 上傳驗證（2026-10-05）
 
-本輪唯讀正式 content directive 已從 localhost:9000 更新成 `http://192.168.68.67:9000`，因此回到素材優先主線，不修改AI介面。後端配置由維護者更新；APP沒有修改／重啟backend，也沒有改寫signed URL。
+本輪唯讀正式 content directive 已從 localhost:9000 更新成 `http://192.168.68.65:9000`，因此回到素材優先主線，不修改AI介面。後端配置由維護者更新；APP沒有修改／重啟backend，也沒有改寫signed URL。
 
 新增 `AndroidMediaBackendLiveTest.contentUriUploadNodeReloadAndVerifiedNativeSink`：emulator-5554、API37 真正 instrumentation／Android HTTP engine，與測試APK私有 read-only ContentProvider。重用已保留的 QA workspace `1883808a-7a58-4062-9556-9de88bd55e89`／owner `8d9cac0b-a741-447c-9f37-97de230de00d`，明確arguments opt-in才允許server寫入；不讀／改使用者APP prefs、不使用原截圖、不新增identity。這段是本輪例外重用QA scope，早期「每輪新建scope」是各JVM案例歷史範圍。
 
@@ -93,7 +93,7 @@ fixture為backend manifest的PNG（442bytes、64×48、SHA256 `15b8da68f777d7caa
 
 - 新ready QA asset：`09fd30bd-76bf-4276-9aa4-4742bb8147b5`
 - 新QA Node：`edd28f84-0f76-4fc4-9fc2-385df6797236`
-- 實際signed storage origin：`http://192.168.68.67:9000`（不保存query／signature）
+- 實際signed storage origin：`http://192.168.68.65:9000`（不保存query／signature）
 
 僅1個新QA asset／Node保留在上述原QA workspace，沒有自動刪除server資料。fixture自有source／snapshot／下載檔與唯一flat temp目錄已清理；獨立QA test APK仍安裝於模擬器，便於重驗，未改使用者文件。
 
@@ -105,7 +105,7 @@ fixture為backend manifest的PNG（442bytes、64×48、SHA256 `15b8da68f777d7caa
 /Users/wangfuxian/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell am instrument -w -r \
   -e class cg.creamgod.boarderless.AndroidMediaBackendLiveTest \
   -e boarderlessMediaLive true \
-  -e boarderlessMediaBase http://192.168.68.67:3000 \
+  -e boarderlessMediaBase http://192.168.68.65:3000 \
   -e boarderlessMediaUser 8d9cac0b-a741-447c-9f37-97de230de00d \
   -e boarderlessMediaWorkspace 1883808a-7a58-4062-9556-9de88bd55e89 \
   cg.creamgod.boarderless.shared.test/androidx.test.runner.AndroidJUnitRunner
