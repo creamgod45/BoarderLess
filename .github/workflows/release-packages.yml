@@ -3,7 +3,7 @@ name: Release Packages
 # 桌面三平台安裝包、免安裝版、Android APK/AAB、iOS archive / simulator / IPA。
 #
 # jpackage 無法交叉編譯，所以每種格式只能在對應的 OS runner 上產生：
-#   ubuntu  -> .deb / .rpm
+#   ubuntu  -> .deb / .rpm（x64 與 arm64 各打一份）
 #   windows -> .msi
 #   macos   -> .dmg（arm64）
 #
@@ -89,6 +89,9 @@ jobs:
           - os: ubuntu-latest
             name: linux-x64
             tasks: ':desktopApp:packageDeb :desktopApp:packageRpm :desktopApp:createDistributable'
+          - os: ubuntu-24.04-arm
+            name: linux-arm64
+            tasks: ':desktopApp:packageDeb :desktopApp:packageRpm :desktopApp:createDistributable'
           - os: windows-latest
             name: windows-x64
             tasks: ':desktopApp:packageMsi :desktopApp:createDistributable'
@@ -149,7 +152,7 @@ jobs:
           mkdir -p "$OUT"
 
           # 安裝包：deb/rpm/msi/dmg 各自落在 $BIN/<format>/ 底下。
-          # 重新命名帶上平台，避免 macos-arm64 與 macos-x64 的 .dmg 在 Release 撞名。
+          # 重新命名帶上平台與架構，避免 linux-x64 與 linux-arm64 的產物在 Release 撞名。
           while IFS= read -r f; do
             ext="${f##*.}"
             cp "$f" "$OUT/BoarderLess-${VERSION}-${TARGET}.${ext}"
@@ -222,7 +225,7 @@ jobs:
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD || secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
           ./gradlew :androidApp:assembleRelease :androidApp:bundleRelease \
             -PappVersion=${{ needs.resolve-version.outputs.version }} \
