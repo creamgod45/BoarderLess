@@ -15,7 +15,10 @@ import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Image
 import kotlin.coroutines.coroutineContext
 
-class BrowserGifAnimation private constructor(private val data: Data, private val codec: Codec) : GifAnimation {
+class BrowserGifAnimation private constructor(
+    private val data: Data,
+    private val codec: Codec,
+) : GifAnimation {
     private val guard = Mutex()
     private var released = false
     override val frameCount = codec.frameCount
@@ -24,27 +27,35 @@ class BrowserGifAnimation private constructor(private val data: Data, private va
 
     override fun durationMs(frameIndex: Int) = delays[frameIndex]
 
-    override suspend fun frame(frameIndex: Int): ImageBitmap = guard.withLock {
-        check(!released) { "GIF decoder is released" }
-        require(frameIndex in 0 until frameCount)
-        yield()
-        coroutineContext.ensureActive()
-        val bitmap = Bitmap()
-        try {
-            bitmap.allocPixels(codec.imageInfo)
-            codec.readPixels(bitmap, frameIndex)
-            val result = Image.makeFromBitmap(bitmap).toComposeImageBitmap()
+    override suspend fun frame(frameIndex: Int): ImageBitmap =
+        guard.withLock {
+            check(!released) { "GIF decoder is released" }
+            require(frameIndex in 0 until frameCount)
             yield()
             coroutineContext.ensureActive()
-            result
-        } finally { bitmap.close() }
-    }
-
-    override suspend fun release() = withContext(NonCancellable) {
-        guard.withLock {
-            if (!released) { released = true; codec.close(); data.close() }
+            val bitmap = Bitmap()
+            try {
+                bitmap.allocPixels(codec.imageInfo)
+                codec.readPixels(bitmap, frameIndex)
+                val result = Image.makeFromBitmap(bitmap).toComposeImageBitmap()
+                yield()
+                coroutineContext.ensureActive()
+                result
+            } finally {
+                bitmap.close()
+            }
         }
-    }
+
+    override suspend fun release() =
+        withContext(NonCancellable) {
+            guard.withLock {
+                if (!released) {
+                    released = true
+                    codec.close()
+                    data.close()
+                }
+            }
+        }
 
     companion object {
         internal fun decode(bytes: ByteArray): BrowserGifAnimation {
@@ -57,27 +68,50 @@ class BrowserGifAnimation private constructor(private val data: Data, private va
                 AssetPreviewPolicy.validateDimensions(codec.size.x, codec.size.y)
                 require(codec.frameCount in 1..10_000)
                 return BrowserGifAnimation(data, codec)
-            } catch (error: Throwable) { codec?.close(); data.close(); throw error }
+            } catch (error: Throwable) {
+                codec?.close()
+                data.close()
+                throw error
+            }
         }
     }
 }
 
-suspend fun loadBrowserGif(gateway: AssetDownloadGateway, session: WorkspaceSession, assetId: String): GifAnimation {
+suspend fun loadBrowserGif(
+    gateway: AssetDownloadGateway,
+    session: WorkspaceSession,
+    assetId: String,
+): GifAnimation {
     val ticket = gateway.authorize(session, assetId)
     AssetPreviewPolicy.validate(ticket, session, assetId)
     require(ticket.asset.mediaType == "image/gif")
     val sink = BrowserAssetDownloadSink("image/gif")
     var opened: BrowserGifAnimation? = null
     try {
-        val authorized = object : AssetDownloadGateway {
-            override suspend fun authorize(session: WorkspaceSession, assetId: String) = ticket
-            override suspend fun download(ticket: AssetDownloadTicket, onChunk: suspend (ByteArray) -> Unit) = gateway.download(ticket, onChunk)
-        }
+        val authorized =
+            object : AssetDownloadGateway {
+                override suspend fun authorize(
+                    session: WorkspaceSession,
+                    assetId: String,
+                ) = ticket
+
+                override suspend fun download(
+                    ticket: AssetDownloadTicket,
+                    onChunk: suspend (ByteArray) -> Unit,
+                ) = gateway.download(ticket, onChunk)
+            }
         AssetDownloadCoordinator(authorized).download(session, assetId, sink)
         val bytes = sink.takeVerifiedBytes()
         awaitBrowserImageDecoder()
         coroutineContext.ensureActive()
-        return BrowserGifAnimation.decode(bytes).also { opened = it; coroutineContext.ensureActive() }
-    } catch (error: Throwable) { opened?.release(); throw error }
-    finally { sink.release() }
+        return BrowserGifAnimation.decode(bytes).also {
+            opened = it
+            coroutineContext.ensureActive()
+        }
+    } catch (error: Throwable) {
+        opened?.release()
+        throw error
+    } finally {
+        sink.release()
+    }
 }

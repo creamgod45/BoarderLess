@@ -18,14 +18,19 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 /** Bounded transient memory, never IndexedDB/localStorage or a shared canvas payload. */
-internal class BrowserAssetDownloadSink(private val mediaType: String) : AssetDownloadSink {
+internal class BrowserAssetDownloadSink(
+    private val mediaType: String,
+) : AssetDownloadSink {
     private val chunks = mutableListOf<ByteArray>()
     private var size = 0L
     private var verified = false
     private var closed = false
     private val digest = SHA256()
 
-    override suspend fun writeChunk(offset: Long, bytes: ByteArray) {
+    override suspend fun writeChunk(
+        offset: Long,
+        bytes: ByteArray,
+    ) {
         check(!closed && !verified)
         require(bytes.isNotEmpty() && offset == size)
         require(bytes.size.toLong() <= AssetPreviewPolicy.MaxEncodedBytes - size)
@@ -36,7 +41,10 @@ internal class BrowserAssetDownloadSink(private val mediaType: String) : AssetDo
         yield()
     }
 
-    override suspend fun commit(expectedByteSize: Long, expectedChecksum: String): LocalAssetReference {
+    override suspend fun commit(
+        expectedByteSize: Long,
+        expectedChecksum: String,
+    ): LocalAssetReference {
         check(!closed && !verified && expectedByteSize > 0 && size == expectedByteSize)
         coroutineContext.ensureActive()
         val actual = "sha256:" + digest.digest().joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
@@ -57,10 +65,14 @@ internal class BrowserAssetDownloadSink(private val mediaType: String) : AssetDo
                 yield()
             }
             return result
-        } finally { release() }
+        } finally {
+            release()
+        }
     }
 
-    override suspend fun abort() { release() }
+    override suspend fun abort() {
+        release()
+    }
 
     fun release() {
         chunks.clear()
@@ -73,26 +85,39 @@ class BrowserAssetPreviewLoader(
     private val gateway: AssetDownloadGateway,
     private val cache: AuthorizedAssetPreviewCache<ImageBitmap> = bitmapPreviewCache(),
 ) {
-    suspend fun load(session: WorkspaceSession, assetId: String): ImageBitmap {
-        return cache.load(gateway, session, assetId) { ticket -> loadAuthorized(session, assetId, ticket) }
-    }
+    suspend fun load(
+        session: WorkspaceSession,
+        assetId: String,
+    ): ImageBitmap = cache.load(gateway, session, assetId) { ticket -> loadAuthorized(session, assetId, ticket) }
 
-    private suspend fun loadAuthorized(session: WorkspaceSession, assetId: String, ticket: AssetDownloadTicket): ImageBitmap {
+    private suspend fun loadAuthorized(
+        session: WorkspaceSession,
+        assetId: String,
+        ticket: AssetDownloadTicket,
+    ): ImageBitmap {
         val sink = BrowserAssetDownloadSink(ticket.asset.mediaType)
         try {
-            val authorizedGateway = object : AssetDownloadGateway {
-                override suspend fun authorize(session: WorkspaceSession, assetId: String) = ticket
-                override suspend fun download(ticket: AssetDownloadTicket, onChunk: suspend (ByteArray) -> Unit) =
-                    gateway.download(ticket, onChunk)
-            }
+            val authorizedGateway =
+                object : AssetDownloadGateway {
+                    override suspend fun authorize(
+                        session: WorkspaceSession,
+                        assetId: String,
+                    ) = ticket
+
+                    override suspend fun download(
+                        ticket: AssetDownloadTicket,
+                        onChunk: suspend (ByteArray) -> Unit,
+                    ) = gateway.download(ticket, onChunk)
+                }
             AssetDownloadCoordinator(authorizedGateway).download(session, assetId, sink)
             val bytes = sink.takeVerifiedBytes()
             awaitBrowserImageDecoder()
             coroutineContext.ensureActive()
             return decodeBrowserPreview(bytes).also { coroutineContext.ensureActive() }
-        } finally { sink.release() }
+        } finally {
+            sink.release()
+        }
     }
-
 }
 
 internal fun decodeBrowserPreview(bytes: ByteArray): ImageBitmap {
@@ -103,15 +128,29 @@ internal fun decodeBrowserPreview(bytes: ByteArray): ImageBitmap {
         try {
             AssetPreviewPolicy.validateDimensions(codec.size.x, codec.size.y)
             val bitmap = codec.readPixels()
-            try { return Image.makeFromBitmap(bitmap).toComposeImageBitmap() }
-            finally { bitmap.close() }
-        } finally { codec.close() }
-    } finally { data.close() }
+            try {
+                return Image.makeFromBitmap(bitmap).toComposeImageBitmap()
+            } finally {
+                bitmap.close()
+            }
+        } finally {
+            codec.close()
+        }
+    } finally {
+        data.close()
+    }
 }
 
-internal suspend fun awaitBrowserImageDecoder(): Unit = suspendCancellableCoroutine { pending ->
-    awaitSkiko.then(
-        onFulfilled = { if (pending.isActive) pending.resume(Unit); null },
-        onRejected = { if (pending.isActive) pending.resumeWithException(IllegalStateException("Image decoder is unavailable")); null },
-    )
-}
+internal suspend fun awaitBrowserImageDecoder(): Unit =
+    suspendCancellableCoroutine { pending ->
+        awaitSkiko.then(
+            onFulfilled = {
+                if (pending.isActive) pending.resume(Unit)
+                null
+            },
+            onRejected = {
+                if (pending.isActive) pending.resumeWithException(IllegalStateException("Image decoder is unavailable"))
+                null
+            },
+        )
+    }

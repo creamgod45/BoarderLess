@@ -25,9 +25,10 @@ class UiPreferencesTest {
 
     @Test
     fun inspectorCollapseStateNormalizesEmptyAndDuplicateTokens() {
-        val properties = Properties().apply {
-            setProperty("ui.inspector.collapsedSections", " content,content, ,appearance ")
-        }
+        val properties =
+            Properties().apply {
+                setProperty("ui.inspector.collapsedSections", " content,content, ,appearance ")
+            }
 
         assertEquals(
             setOf("content", "appearance"),

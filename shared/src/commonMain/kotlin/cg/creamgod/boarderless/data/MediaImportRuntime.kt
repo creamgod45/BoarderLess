@@ -1,12 +1,15 @@
 package cg.creamgod.boarderless.data
 
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
 import kotlinx.coroutines.flow.StateFlow
 
 /** Epoch prevents a quick hide/show from resuming a previously activated decoder. */
-data class MediaPlaybackActivity(val available: Boolean = true, val epoch: Long = 0)
+data class MediaPlaybackActivity(
+    val available: Boolean = true,
+    val epoch: Long = 0,
+)
 
 /** Device picker handles stay outside shared canvas state and persistent payloads. */
 class MediaImportRuntime(

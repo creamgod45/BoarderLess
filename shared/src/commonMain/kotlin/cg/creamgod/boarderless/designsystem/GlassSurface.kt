@@ -3,12 +3,12 @@ package cg.creamgod.boarderless.designsystem
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -21,8 +21,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -39,17 +39,17 @@ fun GlassSurface(
     val colors = BoarderLessTheme.colors
     val shape = RoundedCornerShape(18.dp)
     Box(
-        modifier = modifier
-            .shadow(elevation = 18.dp, shape = shape)
-            .clip(shape)
-            .background(
-                if (BoarderLessTheme.reduceTransparency) {
-                    colors.shellSurfaceOpaque
-                } else {
-                    colors.shellSurface
-                },
-            )
-            .border(width = 1.dp, color = colors.shellBorder, shape = shape),
+        modifier =
+            modifier
+                .shadow(elevation = 18.dp, shape = shape)
+                .clip(shape)
+                .background(
+                    if (BoarderLessTheme.reduceTransparency) {
+                        colors.shellSurfaceOpaque
+                    } else {
+                        colors.shellSurface
+                    },
+                ).border(width = 1.dp, color = colors.shellBorder, shape = shape),
         content = content,
     )
 }
@@ -71,49 +71,56 @@ fun ShellButton(
     val colors = BoarderLessTheme.colors
     val shape = RoundedCornerShape(if (compact) 8.dp else 12.dp)
     var focused by remember { mutableStateOf(false) }
-    val background = when {
-        !enabled -> Color.Transparent
-        accent -> colors.accent
-        else -> Color.Transparent
-    }
-    val foreground = when {
-        !enabled -> colors.contentMuted.copy(alpha = 0.5f)
-        accent -> Color.White
-        else -> colors.shellText
-    }
+    val background =
+        when {
+            !enabled -> Color.Transparent
+            accent -> colors.accent
+            else -> Color.Transparent
+        }
+    val foreground =
+        when {
+            !enabled -> colors.contentMuted.copy(alpha = 0.5f)
+            accent -> Color.White
+            else -> colors.shellText
+        }
     Box(
         contentAlignment = Alignment.Center,
-        modifier = modifier
-            .onFocusChanged { focused = it.isFocused }
-            .clip(shape)
-            .background(background)
-            .then(
-                if (showLabel) Modifier else Modifier.semantics { contentDescription = label },
-            )
-            .border(
-                width = if (focused && enabled) 2.dp else 0.dp,
-                color = colors.selection,
-                shape = shape,
-            )
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .then(if (compact) Modifier.size(28.dp) else Modifier)
-            .heightIn(min = if (compact) 28.dp else 44.dp)
-            .padding(horizontal = if (compact) 6.dp else 14.dp, vertical = if (compact) 6.dp else 9.dp),
+        modifier =
+            modifier
+                .onFocusChanged { focused = it.isFocused }
+                .clip(shape)
+                .background(background)
+                .then(
+                    if (showLabel) Modifier else Modifier.semantics { contentDescription = label },
+                ).border(
+                    width = if (focused && enabled) 2.dp else 0.dp,
+                    color = colors.selection,
+                    shape = shape,
+                ).clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+                .then(if (compact) Modifier.size(28.dp) else Modifier)
+                .heightIn(min = if (compact) 28.dp else 44.dp)
+                .padding(horizontal = if (compact) 6.dp else 14.dp, vertical = if (compact) 6.dp else 9.dp),
     ) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            icon?.let { ShellIconGlyph(icon = it, tint = foreground,
-                modifier = if (compact) Modifier.size(14.dp) else Modifier) }
+            icon?.let {
+                ShellIconGlyph(
+                    icon = it,
+                    tint = foreground,
+                    modifier = if (compact) Modifier.size(14.dp) else Modifier,
+                )
+            }
             if (showLabel) {
                 BasicText(
                     text = label,
-                    style = TextStyle(
-                        color = foreground,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                    ),
+                    style =
+                        TextStyle(
+                            color = foreground,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        ),
                 )
             }
         }

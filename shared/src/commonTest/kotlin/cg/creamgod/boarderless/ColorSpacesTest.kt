@@ -16,8 +16,11 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ColorSpacesTest {
-    private fun assertClose(expected: Float, actual: Float, tolerance: Float = 0.002f) =
-        assertTrue(abs(expected - actual) <= tolerance, "expected $expected but was $actual")
+    private fun assertClose(
+        expected: Float,
+        actual: Float,
+        tolerance: Float = 0.002f,
+    ) = assertTrue(abs(expected - actual) <= tolerance, "expected $expected but was $actual")
 
     @Test
     fun parsesAndFormatsHex() {

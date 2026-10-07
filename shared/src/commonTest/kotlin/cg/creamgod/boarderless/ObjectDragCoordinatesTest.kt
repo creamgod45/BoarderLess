@@ -19,8 +19,11 @@ class ObjectDragCoordinatesTest {
                     for (screen in listOf(Vec2(60f, 0f), Vec2(0f, -40f), Vec2(-35f, 23f))) {
                         // Compose maps screen movement into the inverse-transformed local layer.
                         val radians = -(angle % 360f) * PI.toFloat() / 180f
-                        val local = Vec2(screen.x * cos(radians) - screen.y * sin(radians),
-                            screen.x * sin(radians) + screen.y * cos(radians)) / scale
+                        val local =
+                            Vec2(
+                                screen.x * cos(radians) - screen.y * sin(radians),
+                                screen.x * sin(radians) + screen.y * cos(radians),
+                            ) / scale
                         assertDelta(screen / zoom, objectLocalDragToWorld(local, angle, zoom, scale))
                     }
                 }
@@ -35,7 +38,10 @@ class ObjectDragCoordinatesTest {
         assertDelta(Vec2.Zero, objectLocalDragToWorld(Vec2.Zero, 123f, 2f))
     }
 
-    private fun assertDelta(expected: Vec2, actual: Vec2) {
+    private fun assertDelta(
+        expected: Vec2,
+        actual: Vec2,
+    ) {
         assertEquals(expected.x, actual.x, .0001f)
         assertEquals(expected.y, actual.y, .0001f)
     }

@@ -2,7 +2,9 @@ package cg.creamgod.boarderless.data
 
 import cg.creamgod.boarderless.domain.model.WorkspaceId
 
-enum class AssetStatus(val token: String) {
+enum class AssetStatus(
+    val token: String,
+) {
     Pending("pending"),
     Ready("ready"),
     Rejected("rejected"),
@@ -44,7 +46,9 @@ data class WorkspaceAsset(
 }
 
 /** Only known machine codes reach presentation; never display arbitrary server error text. */
-enum class AssetRejectionReason(val token: String) {
+enum class AssetRejectionReason(
+    val token: String,
+) {
     UploadMissing("upload_missing"),
     ByteSizeMismatch("byte_size_mismatch"),
     ChecksumMismatch("checksum_mismatch"),
@@ -58,9 +62,10 @@ enum class AssetRejectionReason(val token: String) {
     ;
 
     companion object {
-        fun fromToken(token: String?): AssetRejectionReason? = token?.let { value ->
-            entries.firstOrNull { it.token == value } ?: Unknown
-        }
+        fun fromToken(token: String?): AssetRejectionReason? =
+            token?.let { value ->
+                entries.firstOrNull { it.token == value } ?: Unknown
+            }
     }
 }
 
@@ -70,5 +75,8 @@ enum class AssetRejectionReason(val token: String) {
 interface AssetRepository {
     suspend fun listAssets(session: WorkspaceSession): List<WorkspaceAsset>
 
-    suspend fun getAsset(session: WorkspaceSession, assetId: String): WorkspaceAsset
+    suspend fun getAsset(
+        session: WorkspaceSession,
+        assetId: String,
+    ): WorkspaceAsset
 }

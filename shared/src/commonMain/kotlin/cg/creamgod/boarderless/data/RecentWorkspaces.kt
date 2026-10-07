@@ -11,11 +11,16 @@ import kotlinx.serialization.json.Json
 const val MaxRecentWorkspaces = 5
 
 @Serializable
-data class RecentWorkspace(val id: String, val title: String)
+data class RecentWorkspace(
+    val id: String,
+    val title: String,
+)
 
 /** Most recently opened first, without duplicates, at most [MaxRecentWorkspaces]. */
-fun List<RecentWorkspace>.withOpened(id: String, title: String): List<RecentWorkspace> =
-    (listOf(RecentWorkspace(id, title)) + filterNot { it.id == id }).take(MaxRecentWorkspaces)
+fun List<RecentWorkspace>.withOpened(
+    id: String,
+    title: String,
+): List<RecentWorkspace> = (listOf(RecentWorkspace(id, title)) + filterNot { it.id == id }).take(MaxRecentWorkspaces)
 
 /** Keeps only workspaces the user can still open, with their current titles. */
 fun List<RecentWorkspace>.reconciledWith(available: List<WorkspaceSummary>): List<RecentWorkspace> {
@@ -28,17 +33,25 @@ class RecentWorkspaceStore(
     private val settings: Settings = Settings(),
 ) {
     var items: List<RecentWorkspace>
-        get() = settings.getStringOrNull(RecentWorkspacesKey)
-            ?.let { runCatching { StoreJson.decodeFromString<List<RecentWorkspace>>(it) }.getOrNull() }
-            .orEmpty()
-            .take(MaxRecentWorkspaces)
+        get() =
+            settings
+                .getStringOrNull(RecentWorkspacesKey)
+                ?.let { runCatching { StoreJson.decodeFromString<List<RecentWorkspace>>(it) }.getOrNull() }
+                .orEmpty()
+                .take(MaxRecentWorkspaces)
         private set(value) = settings.putString(RecentWorkspacesKey, StoreJson.encodeToString(value))
 
-    fun recordOpened(id: WorkspaceId, title: String) {
+    fun recordOpened(
+        id: WorkspaceId,
+        title: String,
+    ) {
         items = items.withOpened(id.value, title)
     }
 
-    fun rename(id: WorkspaceId, title: String) {
+    fun rename(
+        id: WorkspaceId,
+        title: String,
+    ) {
         items = items.map { if (it.id == id.value) it.copy(title = title) else it }
     }
 

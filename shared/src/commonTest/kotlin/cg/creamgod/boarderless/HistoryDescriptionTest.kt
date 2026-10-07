@@ -2,9 +2,9 @@ package cg.creamgod.boarderless
 
 import cg.creamgod.boarderless.domain.history.CreateObjectsOperation
 import cg.creamgod.boarderless.domain.history.CreateRelationsOperation
-import cg.creamgod.boarderless.domain.history.TransactionOperation
 import cg.creamgod.boarderless.domain.history.ParentChange
 import cg.creamgod.boarderless.domain.history.ReparentObjectsOperation
+import cg.creamgod.boarderless.domain.history.TransactionOperation
 import cg.creamgod.boarderless.domain.history.TransformChange
 import cg.creamgod.boarderless.domain.history.TransformObjectsOperation
 import cg.creamgod.boarderless.domain.model.CanvasObjectId
@@ -25,10 +25,11 @@ class HistoryDescriptionTest {
 
     @Test
     fun inverseCreateIsDescribedAsTheOriginalCreationWhenUndoing() {
-        val created = CreateObjectsOperation(
-            "create",
-            listOf(TextNode(id = CanvasObjectId("node"), transform = transform, text = "Idea")),
-        )
+        val created =
+            CreateObjectsOperation(
+                "create",
+                listOf(TextNode(id = CanvasObjectId("node"), transform = transform, text = "Idea")),
+            )
 
         assertEquals(
             "Created 1 object",
@@ -39,11 +40,12 @@ class HistoryDescriptionTest {
     @Test
     fun redoUsesTheOperationDirectionDirectly() {
         val source = CanvasObjectId("source")
-        val relation = Relation(
-            id = RelationId("relation"),
-            sourceObjectId = source,
-            targetObjectId = CanvasObjectId("target"),
-        )
+        val relation =
+            Relation(
+                id = RelationId("relation"),
+                sourceObjectId = source,
+                targetObjectId = CanvasObjectId("target"),
+            )
         val operation = CreateRelationsOperation("connect", listOf(relation))
 
         assertEquals("Created 1 connection", describeHistoryOperation(operation, HistoryDirection.Redo))
@@ -51,14 +53,16 @@ class HistoryDescriptionTest {
 
     @Test
     fun transactionsExposeTheirAtomicChangeCount() {
-        val first = CreateObjectsOperation(
-            "first",
-            listOf(TextNode(id = CanvasObjectId("first"), transform = transform, text = "First")),
-        )
-        val second = CreateObjectsOperation(
-            "second",
-            listOf(TextNode(id = CanvasObjectId("second"), transform = transform, text = "Second")),
-        )
+        val first =
+            CreateObjectsOperation(
+                "first",
+                listOf(TextNode(id = CanvasObjectId("first"), transform = transform, text = "First")),
+            )
+        val second =
+            CreateObjectsOperation(
+                "second",
+                listOf(TextNode(id = CanvasObjectId("second"), transform = transform, text = "Second")),
+            )
         val transaction = TransactionOperation("pair", listOf(first, second))
 
         assertEquals("Changed 2 items", describeHistoryOperation(transaction, HistoryDirection.Redo))
@@ -68,19 +72,20 @@ class HistoryDescriptionTest {
     fun moveAndReparentTransactionHasASpecificHistoryDescription() {
         val nodeId = CanvasObjectId("node")
         val moved = transform.copy(position = Vec2(200f, 100f))
-        val transaction = TransactionOperation(
-            "move-reparent-node-1",
-            listOf(
-                TransformObjectsOperation(
-                    "move",
-                    listOf(TransformChange(nodeId, 1, transform, moved)),
+        val transaction =
+            TransactionOperation(
+                "move-reparent-node-1",
+                listOf(
+                    TransformObjectsOperation(
+                        "move",
+                        listOf(TransformChange(nodeId, 1, transform, moved)),
+                    ),
+                    ReparentObjectsOperation(
+                        "reparent",
+                        listOf(ParentChange(nodeId, 2, null, CanvasObjectId("group"))),
+                    ),
                 ),
-                ReparentObjectsOperation(
-                    "reparent",
-                    listOf(ParentChange(nodeId, 2, null, CanvasObjectId("group"))),
-                ),
-            ),
-        )
+            )
 
         assertEquals(
             "Moved object and changed group membership",

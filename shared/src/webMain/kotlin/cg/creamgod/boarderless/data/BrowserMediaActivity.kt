@@ -20,5 +20,9 @@ fun rememberBrowserMediaImportRuntime(): MediaImportRuntime {
     return runtime
 }
 
-internal expect fun browserBindMediaActivity(ownerId: String, onChange: (Boolean) -> Unit)
+internal expect fun browserBindMediaActivity(
+    ownerId: String,
+    onChange: (Boolean) -> Unit,
+)
+
 internal expect fun browserUnbindMediaActivity(ownerId: String)

@@ -16,19 +16,24 @@ import kotlinx.serialization.json.contentOrNull
  */
 
 /** A language listed in files/i18n/languages.json. [matches] are extra system locale prefixes. */
-data class AppLanguage(val tag: String, val nativeName: String, val matches: List<String> = emptyList())
+data class AppLanguage(
+    val tag: String,
+    val nativeName: String,
+    val matches: List<String> = emptyList(),
+)
 
 val DefaultLanguage = AppLanguage("en", "English")
 
 /** The user's choice: a language tag, or [System] to follow the platform locale. */
-data class LanguagePreference(val token: String) {
+data class LanguagePreference(
+    val token: String,
+) {
     companion object {
         val System = LanguagePreference("system")
 
         fun of(language: AppLanguage) = LanguagePreference(language.tag)
 
-        fun fromToken(token: String?): LanguagePreference =
-            token?.takeIf { it.isNotBlank() }?.let(::LanguagePreference) ?: System
+        fun fromToken(token: String?): LanguagePreference = token?.takeIf { it.isNotBlank() }?.let(::LanguagePreference) ?: System
     }
 }
 
@@ -51,10 +56,14 @@ fun resolveLanguage(
 }
 
 internal sealed interface Translation {
-    data class Text(val value: String) : Translation
+    data class Text(
+        val value: String,
+    ) : Translation
 
     /** CLDR-style forms; only "one" and "other" are selected today. */
-    data class Plural(val forms: Map<String, String>) : Translation
+    data class Plural(
+        val forms: Map<String, String>,
+    ) : Translation
 }
 
 /**
@@ -70,7 +79,10 @@ object Localization {
     private var translations: Map<String, Translation> by mutableStateOf(emptyMap())
 
     /** Switches to [language] using [catalogJson] (its <tag>.json); null means built-in English only. */
-    fun install(language: AppLanguage, catalogJson: String?) {
+    fun install(
+        language: AppLanguage,
+        catalogJson: String?,
+    ) {
         translations = catalogJson?.let(::parseCatalog).orEmpty()
         this.language = language
     }
@@ -79,13 +91,20 @@ object Localization {
 }
 
 /** A key without placeholders. Call it to get the text in the current language. */
-class LocalizedText(val key: String, val english: String) {
+class LocalizedText(
+    val key: String,
+    val english: String,
+) {
     operator fun invoke(): String = tr(key, english)
 
     override fun toString(): String = invoke()
 }
 
-fun tr(key: String, english: String, vararg args: Pair<String, Any?>): String {
+fun tr(
+    key: String,
+    english: String,
+    vararg args: Pair<String, Any?>,
+): String {
     val template = (Localization.lookup(key) as? Translation.Text)?.value ?: english
     return formatTemplate(template, args)
 }
@@ -98,16 +117,20 @@ fun trPlural(
     vararg args: Pair<String, Any?>,
 ): String {
     val forms = (Localization.lookup(key) as? Translation.Plural)?.forms
-    val template = if (forms == null) {
-        if (count == 1) englishOne else englishOther
-    } else {
-        (if (count == 1) forms["one"] else null) ?: forms["other"] ?: englishOther
-    }
+    val template =
+        if (forms == null) {
+            if (count == 1) englishOne else englishOther
+        } else {
+            (if (count == 1) forms["one"] else null) ?: forms["other"] ?: englishOther
+        }
     return formatTemplate(template, arrayOf("count" to count, *args))
 }
 
 /** Replaces `{name}` placeholders in one pass, so argument text is never substituted again. */
-internal fun formatTemplate(template: String, args: Array<out Pair<String, Any?>>): String {
+internal fun formatTemplate(
+    template: String,
+    args: Array<out Pair<String, Any?>>,
+): String {
     if (args.isEmpty()) return template
     val values = args.toMap()
     return PlaceholderPattern.replace(template) { match ->
@@ -119,15 +142,28 @@ internal fun formatTemplate(template: String, args: Array<out Pair<String, Any?>
 /** Flattens a namespaced catalog into dotted keys; objects holding only plural forms are plurals. */
 internal fun parseCatalog(json: String): Map<String, Translation> {
     val result = mutableMapOf<String, Translation>()
-    fun visit(prefix: String, element: JsonObject) {
+
+    fun visit(
+        prefix: String,
+        element: JsonObject,
+    ) {
         element.forEach { (name, value) ->
             val key = if (prefix.isEmpty()) name else "$prefix.$name"
             when {
-                value is JsonPrimitive && value.isString -> result[key] = Translation.Text(value.content)
-                value is JsonObject && value.isPluralForms() -> result[key] = Translation.Plural(
-                    value.mapValues { (_, form) -> (form as JsonPrimitive).content },
-                )
-                value is JsonObject -> visit(key, value)
+                value is JsonPrimitive && value.isString -> {
+                    result[key] = Translation.Text(value.content)
+                }
+
+                value is JsonObject && value.isPluralForms() -> {
+                    result[key] =
+                        Translation.Plural(
+                            value.mapValues { (_, form) -> (form as JsonPrimitive).content },
+                        )
+                }
+
+                value is JsonObject -> {
+                    visit(key, value)
+                }
             }
         }
     }

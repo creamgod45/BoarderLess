@@ -1,6 +1,8 @@
 package cg.creamgod.boarderless.feature.canvas
 
-internal enum class InspectorSection(val token: String) {
+internal enum class InspectorSection(
+    val token: String,
+) {
     Content("content"),
     Appearance("appearance"),
     Transform("transform"),
@@ -13,7 +15,9 @@ internal fun toggleInspectorSection(
     section: InspectorSection,
 ): Set<String> = if (section.token in collapsed) collapsed - section.token else collapsed + section.token
 
-internal enum class PanelSection(val token: String) {
+internal enum class PanelSection(
+    val token: String,
+) {
     CreateAndNavigate("compact-menu.create-and-navigate"),
     History("compact-menu.history"),
     CanvasView("compact-menu.canvas-view"),

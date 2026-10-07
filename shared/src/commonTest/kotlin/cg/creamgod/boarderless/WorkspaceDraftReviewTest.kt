@@ -8,13 +8,43 @@ import kotlin.test.*
 
 class WorkspaceDraftReviewTest {
     private val transform = CanvasTransform(Vec2(15f, -20f), CanvasSize(200f, 120f), 45f)
-    private val text = TextNode(CanvasObjectId("text"), transform = transform, text = "Private <script>text</script>", shape = NodeShape.Diamond)
-    private val media = MediaNode(CanvasObjectId("media"), transform = transform, assetId = "asset", mediaKind = MediaKind.Video, thumbnailAssetId = "poster")
-    private val relation = Relation(RelationId("text"), sourceObjectId = text.id, targetObjectId = media.id, intent = "Supports", label = "Edge")
-    private val baseline = Workspace(WorkspaceId("workspace"), "Private board", 8,
-        mapOf(text.id to text, media.id to media), mapOf(relation.id to relation))
-    private fun review(proposed: Workspace, remote: Workspace = baseline) = WorkspaceDraftReview("draft", 8, 19, 8, 19,
-        baseline, proposed, remote, listOf(CreateObjectsOperation("original-local-id", listOf(text))), true, true)
+    private val text =
+        TextNode(CanvasObjectId("text"), transform = transform, text = "Private <script>text</script>", shape = NodeShape.Diamond)
+    private val media =
+        MediaNode(
+            CanvasObjectId("media"),
+            transform = transform,
+            assetId = "asset",
+            mediaKind = MediaKind.Video,
+            thumbnailAssetId = "poster",
+        )
+    private val relation =
+        Relation(RelationId("text"), sourceObjectId = text.id, targetObjectId = media.id, intent = "Supports", label = "Edge")
+    private val baseline =
+        Workspace(
+            WorkspaceId("workspace"),
+            "Private board",
+            8,
+            mapOf(text.id to text, media.id to media),
+            mapOf(relation.id to relation),
+        )
+
+    private fun review(
+        proposed: Workspace,
+        remote: Workspace = baseline,
+    ) = WorkspaceDraftReview(
+        "draft",
+        8,
+        19,
+        8,
+        19,
+        baseline,
+        proposed,
+        remote,
+        listOf(CreateObjectsOperation("original-local-id", listOf(text))),
+        true,
+        true,
+    )
 
     @Test fun detectsAddedChangedRemovedObjectsAndRelationsWithoutConfusingMatchingContentWithAck() {
         val changed = text.copy(version = 2, text = "Draft", transform = transform.copy(rotationDegrees = 90f))
@@ -52,20 +82,39 @@ class WorkspaceDraftReviewTest {
         assertEquals(1, document.getValue("schemaVersion").jsonPrimitive.int)
         assertFalse(document.getValue("importSupported").jsonPrimitive.boolean)
         assertTrue(document.getValue("hasUnconfirmedSubmission").jsonPrimitive.boolean)
-        assertTrue(document.keys.none { it in setOf("scope", "apiBase", "userId", "clientId", "request", "transactionId", "ticket", "apiKey") })
+        assertTrue(
+            document.keys.none {
+                it in
+                    setOf("scope", "apiBase", "userId", "clientId", "request", "transactionId", "ticket", "apiKey")
+            },
+        )
         val json = Json { allowStructuredMapKeys = true }
         assertEquals(baseline, json.decodeFromJsonElement(Workspace.serializer(), document.getValue("baseline")))
         assertEquals(baseline, json.decodeFromJsonElement(Workspace.serializer(), document.getValue("proposed")))
-        assertEquals(reviewed.operations, json.decodeFromJsonElement(kotlinx.serialization.builtins.ListSerializer(WorkspaceOperation.serializer()), document.getValue("operations")))
+        assertEquals(
+            reviewed.operations,
+            json.decodeFromJsonElement(
+                kotlinx.serialization.builtins.ListSerializer(WorkspaceOperation.serializer()),
+                document.getValue("operations"),
+            ),
+        )
         assertTrue("asset" in content && "poster" in content)
-        assertEquals(text.text, (json.decodeFromJsonElement(Workspace.serializer(), document.getValue("baseline")).objects[text.id] as TextNode).text)
+        assertEquals(
+            text.text,
+            (json.decodeFromJsonElement(Workspace.serializer(), document.getValue("baseline")).objects[text.id] as TextNode).text,
+        )
     }
 
     @Test fun publicationRejectsScopeChangesAndLeavingThenReturningWithNewEpoch() {
         val opened = WorkspaceSession("user", "client", WorkspaceMemberRole.Editor, 8, 19, baseline)
         assertTrue(canPublishDraftReview(opened, opened, "epoch", "epoch", "draft", "draft"))
-        val changed = listOf(opened.copy(userId = "other"), opened.copy(clientId = "other"),
-            opened.copy(workspace = baseline.copy(id = WorkspaceId("other"))), null)
+        val changed =
+            listOf(
+                opened.copy(userId = "other"),
+                opened.copy(clientId = "other"),
+                opened.copy(workspace = baseline.copy(id = WorkspaceId("other"))),
+                null,
+            )
         changed.forEach { assertFalse(canPublishDraftReview(opened, it, "epoch", "epoch", "draft", "draft")) }
         assertFalse(canPublishDraftReview(opened, opened, "old", "returned", "draft", "draft"))
         assertFalse(canPublishDraftReview(opened, opened, "epoch", "epoch", "draft", "new-draft"))

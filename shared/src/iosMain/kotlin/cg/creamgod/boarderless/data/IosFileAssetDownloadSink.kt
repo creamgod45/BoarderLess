@@ -19,7 +19,10 @@ class IosFileAssetDownloadSink private constructor(
     private var offset = 0L
     private var finished = false
 
-    override suspend fun writeChunk(offset: Long, bytes: ByteArray) = withContext(Dispatchers.Default) {
+    override suspend fun writeChunk(
+        offset: Long,
+        bytes: ByteArray,
+    ) = withContext(Dispatchers.Default) {
         check(!finished)
         require(offset == this@IosFileAssetDownloadSink.offset && bytes.isNotEmpty())
         coroutineContext.ensureActive()
@@ -30,33 +33,42 @@ class IosFileAssetDownloadSink private constructor(
                 bytes.usePinned { output.writeData(NSData.create(bytes = it.addressOf(0), length = bytes.size.toULong())) }
             }
             this@IosFileAssetDownloadSink.offset += bytes.size
-        } finally { output.closeFile() }
+        } finally {
+            output.closeFile()
+        }
     }
 
-    override suspend fun commit(expectedByteSize: Long, expectedChecksum: String): LocalAssetReference =
+    override suspend fun commit(
+        expectedByteSize: Long,
+        expectedChecksum: String,
+    ): LocalAssetReference =
         withContext(Dispatchers.Default) {
             check(!finished && expectedByteSize > 0 && offset == expectedByteSize)
             val size = (NSFileManager.defaultManager.attributesOfItemAtPath(part, null)?.get(NSFileSize) as? NSNumber)?.longLongValue
             check(size == expectedByteSize) { "Downloaded asset size mismatch" }
             val input = NSFileHandle.fileHandleForReadingAtPath(part) ?: error("Preview part is unavailable")
-            val checksum = try {
-                memScoped {
-                    val digest = alloc<CC_SHA256_CTX>()
-                    CC_SHA256_Init(digest.ptr)
-                    while (true) {
-                        coroutineContext.ensureActive()
-                        val count = autoreleasepool {
-                            val data = input.readDataOfLength(DefaultAssetUploadChunkBytes.toULong())
-                            CC_SHA256_Update(digest.ptr, data.bytes, data.length.toUInt())
-                            data.length
+            val checksum =
+                try {
+                    memScoped {
+                        val digest = alloc<CC_SHA256_CTX>()
+                        CC_SHA256_Init(digest.ptr)
+                        while (true) {
+                            coroutineContext.ensureActive()
+                            val count =
+                                autoreleasepool {
+                                    val data = input.readDataOfLength(DefaultAssetUploadChunkBytes.toULong())
+                                    CC_SHA256_Update(digest.ptr, data.bytes, data.length.toUInt())
+                                    data.length
+                                }
+                            if (count == 0UL) break
                         }
-                        if (count == 0UL) break
+                        val hash = allocArray<UByteVar>(32)
+                        CC_SHA256_Final(hash, digest.ptr)
+                        "sha256:" + (0 until 32).joinToString("") { hash[it].toString(16).padStart(2, '0') }
                     }
-                    val hash = allocArray<UByteVar>(32)
-                    CC_SHA256_Final(hash, digest.ptr)
-                    "sha256:" + (0 until 32).joinToString("") { hash[it].toString(16).padStart(2, '0') }
+                } finally {
+                    input.closeFile()
                 }
-            } finally { input.closeFile() }
             check(checksum.equals(expectedChecksum, ignoreCase = true)) { "Downloaded asset checksum mismatch" }
             coroutineContext.ensureActive()
             val manager = NSFileManager.defaultManager
@@ -65,17 +77,19 @@ class IosFileAssetDownloadSink private constructor(
             LocalAssetReference(target, mediaType)
         }
 
-    override suspend fun abort() = withContext(Dispatchers.Default) {
-        if (!finished) remove(part)
-        finished = true
-    }
+    override suspend fun abort() =
+        withContext(Dispatchers.Default) {
+            if (!finished) remove(part)
+            finished = true
+        }
 
     /** Consumer releases verified content after decoding; never deletes any source/user file. */
-    suspend fun release() = withContext(Dispatchers.Default) {
-        remove(part)
-        remove(target)
-        finished = true
-    }
+    suspend fun release() =
+        withContext(Dispatchers.Default) {
+            remove(part)
+            remove(target)
+            finished = true
+        }
 
     private fun remove(path: String) {
         val manager = NSFileManager.defaultManager
@@ -92,7 +106,12 @@ class IosFileAssetDownloadSink private constructor(
                     check(NSFileManager.defaultManager.createFileAtPath("$base.part", null, null))
                     // AVFoundation uses the local extension to identify its container. The file
                     // remains private and is still published only after size/SHA-256 verification.
-                    val suffix = when (mediaType) { "video/mp4" -> ".mp4"; "video/webm" -> ".webm"; else -> "" }
+                    val suffix =
+                        when (mediaType) {
+                            "video/mp4" -> ".mp4"
+                            "video/webm" -> ".webm"
+                            else -> ""
+                        }
                     IosFileAssetDownloadSink("$base.part", "$base.ready$suffix", mediaType).also { created = it }
                 }
             } catch (error: Throwable) {

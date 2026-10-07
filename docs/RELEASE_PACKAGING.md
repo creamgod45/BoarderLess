@@ -1,6 +1,12 @@
 # Release 打包
 
-`.github/workflows/release-packages.yml` 依 GitHub Actions runner 作業系統產生桌面安裝包與免安裝版，另打 Android、iOS，再收集到同一 GitHub Release。macOS 與 iOS 目前為 arm64。
+`.github/workflows/release-packages.yml` 依 GitHub Actions runner 作業系統產生桌面安裝包與免安裝版，另打 Android、iOS，再收集到同一 GitHub Release。Linux 提供 x64 與 arm64，macOS 與 iOS 目前為 arm64。
+
+## Linux 架構
+
+Linux ARM64 使用 `ubuntu-24.04-arm` runner 原生打包，產生 `BoarderLess-<version>-linux-arm64.deb`、`.rpm` 與 `-portable.tar.gz`；x64 產物保留 `linux-x64` 名稱。兩者會一起上傳 Release。Gradle 依 runner 的架構選用 JRE、Compose／Skia 與 FFmpeg／JavaCPP 原生函式庫。
+
+ARM64 對應 `uname -m` 的 `aarch64`，不包含 32 位元 ARM。Linux runner 與套件以 Ubuntu/glibc 環境打包，不是 Alpine/musl 專用包。
 
 ## 啟動
 
@@ -18,9 +24,9 @@
 | `ANDROID_KEYSTORE_BASE64` | keystore 的 Base64 |
 | `ANDROID_KEYSTORE_PASSWORD` | keystore 密碼 |
 | `ANDROID_KEY_ALIAS` | key alias |
-| `ANDROID_KEY_PASSWORD` | key 密碼 |
+| `ANDROID_KEY_PASSWORD` | 選填；key 密碼不同於 keystore 密碼時才需設定 |
 
-未提供 keystore 時產生未簽署 APK／AAB。缺少其餘必要值時，簽章步驟會失敗。
+未提供 keystore 時產生未簽署 APK／AAB。有 keystore 時必須設定密碼與 alias；未設定或留空 `ANDROID_KEY_PASSWORD` 時，自動沿用 `ANDROID_KEYSTORE_PASSWORD`，因此兩個密碼相同時只需三個 Secrets。若金鑰密碼不同，必須另填 `ANDROID_KEY_PASSWORD`；Base64／alias／密碼不匹配仍會使簽章失敗。
 
 ## iOS 簽章
 
@@ -66,6 +72,8 @@ APP_VERSION=1.2.3 ./scripts/package-ios.sh
 本機 Android：`./gradlew :androidApp:assembleRelease :androidApp:bundleRelease -PappVersion=1.2.3 -PappVersionCode=1002003`。
 
 ## 官方參考
+
+- [GitHub-hosted runner 架構與標籤](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
 
 - [GitHub Actions Apple 憑證與描述檔安裝](https://docs.github.com/en/actions/how-tos/deploy/deploy-to-third-party-platforms/sign-xcode-applications)
 - [Apple：xcodebuild archive／exportArchive](https://developer.apple.com/library/archive/technotes/tn2339/_index.html)

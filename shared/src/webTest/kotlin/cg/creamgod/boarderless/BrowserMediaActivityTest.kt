@@ -12,7 +12,8 @@ class BrowserMediaActivityTest {
             browserActivityHidden(false)
             assertTrue(tracker.activity.value.available)
             val initialEpoch = tracker.activity.value.epoch
-            browserActivityEvent("blur"); browserActivityEvent("focus")
+            browserActivityEvent("blur")
+            browserActivityEvent("focus")
             assertEquals(initialEpoch, tracker.activity.value.epoch)
             browserActivityHidden(true)
             assertFalse(tracker.activity.value.available)
@@ -47,5 +48,7 @@ class BrowserMediaActivityTest {
 }
 
 internal expect fun browserActivityEvent(type: String)
+
 internal expect fun browserActivityHidden(hidden: Boolean)
+
 internal expect fun browserActivityRestoreVisibility()

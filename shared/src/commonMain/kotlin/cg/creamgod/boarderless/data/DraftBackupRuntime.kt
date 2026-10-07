@@ -1,9 +1,9 @@
 package cg.creamgod.boarderless.data
 
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 
 /** User-selected local destination. The adapter checks [canWrite] at the actual write boundary,
@@ -12,15 +12,27 @@ import kotlinx.coroutines.withContext
  * No cloud upload, automatic import, opening or persisted directory preference.
  */
 interface DraftBackupDestination {
-    suspend fun write(json: String, canWrite: () -> Boolean)
+    suspend fun write(
+        json: String,
+        canWrite: () -> Boolean,
+    )
+
     fun close()
+
     /** Native document providers may need awaited IO cleanup, including on cancellation. */
-    suspend fun dispose() { close() }
+    suspend fun dispose() {
+        close()
+    }
 }
 
-class DraftBackupRuntime(val choosesFolder: Boolean = false, val usesBrowserDownload: Boolean = false,
-    val chooseDestination: (suspend (suggestedName: String) -> DraftBackupDestination?)? = null) {
-    companion object { val Unavailable = DraftBackupRuntime() }
+class DraftBackupRuntime(
+    val choosesFolder: Boolean = false,
+    val usesBrowserDownload: Boolean = false,
+    val chooseDestination: (suspend (suggestedName: String) -> DraftBackupDestination?)? = null,
+) {
+    companion object {
+        val Unavailable = DraftBackupRuntime()
+    }
 }
 
 internal enum class DraftBackupResult { Saved, DownloadRequested, Cancelled }
@@ -35,7 +47,11 @@ internal suspend fun exportWorkspaceDraftBackup(
     readFresh: suspend () -> WorkspaceDraftReview,
 ): DraftBackupResult {
     val context = currentCoroutineContext()
-    fun checkCurrent() { context.ensureActive(); check(isCurrent()) { "Draft backup scope changed" } }
+
+    fun checkCurrent() {
+        context.ensureActive()
+        check(isCurrent()) { "Draft backup scope changed" }
+    }
     checkCurrent()
     val choose = checkNotNull(runtime.chooseDestination) { "Draft file export unavailable" }
     val destination = choose("boarderless-draft-backup.json") ?: return DraftBackupResult.Cancelled
@@ -52,7 +68,12 @@ internal suspend fun exportWorkspaceDraftBackup(
         failure = error
         throw error
     } finally {
-        try { withContext(NonCancellable) { destination.dispose() } }
-        catch (closeError: Throwable) { if (failure == null) throw closeError }
+        try {
+            withContext(NonCancellable) { destination.dispose() }
+        } catch (
+            closeError: Throwable,
+        ) {
+            if (failure == null) throw closeError
+        }
     }
 }

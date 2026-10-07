@@ -16,13 +16,15 @@
             input.multiple = false;
             input.style.display = "none";
             let finished = false;
-            let focusTimer;
+            let deadline;
             const finish = (file, error = null) => {
                 if (finished) return;
                 finished = true;
-                clearTimeout(focusTimer);
-                window.removeEventListener("focus", onFocus);
+                clearTimeout(deadline);
+                input.removeEventListener("change", onChange);
+                input.removeEventListener("cancel", onCancel);
                 pickers.delete(id);
+                input.value = "";
                 input.remove();
                 if (!file || error) { done(null, error); return; }
                 const mediaType = file.type.toLowerCase() || extensions[file.name.split(".").pop().toLowerCase()];
@@ -34,16 +36,17 @@
                 files.set(fileId, file);
                 done(JSON.stringify({ fileId, name: file.name, mediaType, byteSize: file.size }), null);
             };
-            const onFocus = () => {
-                // Older browsers do not emit input's cancel event after closing the native picker.
-                focusTimer = setTimeout(() => { if (!input.files?.length) finish(null); }, 250);
-            };
-            input.addEventListener("change", () => finish(input.files?.[0] ?? null));
-            input.addEventListener("cancel", () => finish(null));
-            window.addEventListener("focus", onFocus);
+            const onChange = () => finish(input.files?.[0] ?? null);
+            const onCancel = () => finish(input.files?.[0] ?? null);
+            // Native focus can arrive before a local/cloud File provider delivers change.
+            // Empty files on focus never prove cancellation. Legacy browsers without cancel
+            // remain pending until explicit UI cancellation or a separately reported deadline.
+            input.addEventListener("change", onChange);
+            input.addEventListener("cancel", onCancel);
             pickers.set(id, () => finish(null));
-            document.body.appendChild(input);
-            try { input.click(); } catch (error) { finish(null, String(error)); }
+            deadline = setTimeout(() => finish(null, "Media selection timed out; choose the file again"), 120000);
+            try { document.body.appendChild(input); input.click(); }
+            catch (_) { finish(null, "Media selection is unavailable"); }
         },
         async read(id, offset, maximum, done) {
             try {

@@ -25,25 +25,32 @@ internal class SystemIosVideoAudioSessionPort(
     override fun activate(onLoss: () -> Unit): Boolean {
         check(observers.isEmpty() && !activationAttempted)
         val acquired = ++epoch
+
         fun interrupted() {
             if (epoch == acquired) {
                 // Native notification callbacks must not throw through Foundation.
-                try { onLoss() } catch (_: Exception) { }
+                try {
+                    onLoss()
+                } catch (_: Exception) {
+                }
             }
         }
         val center = NSNotificationCenter.defaultCenter
-        observers += center.addObserverForName(AVAudioSessionInterruptionNotification, session, NSOperationQueue.mainQueue) {
-            val type = (it?.userInfo?.get(AVAudioSessionInterruptionTypeKey) as? NSNumber)?.unsignedLongLongValue
-            if (type == AVAudioSessionInterruptionTypeBegan) interrupted()
-            // Ended / shouldResume never authorizes automatic playback.
-        }
-        observers += center.addObserverForName(AVAudioSessionRouteChangeNotification, session, NSOperationQueue.mainQueue) {
-            val reason = (it?.userInfo?.get(AVAudioSessionRouteChangeReasonKey) as? NSNumber)?.unsignedLongLongValue
-            if (reason == AVAudioSessionRouteChangeReasonOldDeviceUnavailable) interrupted()
-        }
-        observers += center.addObserverForName(AVAudioSessionMediaServicesWereResetNotification, null, NSOperationQueue.mainQueue) {
-            interrupted()
-        }
+        observers +=
+            center.addObserverForName(AVAudioSessionInterruptionNotification, session, NSOperationQueue.mainQueue) {
+                val type = (it?.userInfo?.get(AVAudioSessionInterruptionTypeKey) as? NSNumber)?.unsignedLongLongValue
+                if (type == AVAudioSessionInterruptionTypeBegan) interrupted()
+                // Ended / shouldResume never authorizes automatic playback.
+            }
+        observers +=
+            center.addObserverForName(AVAudioSessionRouteChangeNotification, session, NSOperationQueue.mainQueue) {
+                val reason = (it?.userInfo?.get(AVAudioSessionRouteChangeReasonKey) as? NSNumber)?.unsignedLongLongValue
+                if (reason == AVAudioSessionRouteChangeReasonOldDeviceUnavailable) interrupted()
+            }
+        observers +=
+            center.addObserverForName(AVAudioSessionMediaServicesWereResetNotification, null, NSOperationQueue.mainQueue) {
+                interrupted()
+            }
         if (!configure()) return false
         if (epoch != acquired) return false
         activationAttempted = true

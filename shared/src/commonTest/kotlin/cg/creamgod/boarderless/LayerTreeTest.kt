@@ -16,32 +16,36 @@ class LayerTreeTest {
 
     @Test
     fun rootsAndChildrenAreTopmostFirst() {
-        val group = GroupFrame(
-            id = CanvasObjectId("group"),
-            transform = transform,
-            title = "Research",
-            zIndex = 4,
-        )
-        val childBack = TextNode(
-            id = CanvasObjectId("child-back"),
-            transform = transform,
-            parentId = group.id,
-            text = "Background",
-            zIndex = 1,
-        )
-        val childFront = TextNode(
-            id = CanvasObjectId("child-front"),
-            transform = transform,
-            parentId = group.id,
-            text = "Foreground",
-            zIndex = 9,
-        )
-        val root = TextNode(
-            id = CanvasObjectId("root"),
-            transform = transform,
-            text = "Top root",
-            zIndex = 12,
-        )
+        val group =
+            GroupFrame(
+                id = CanvasObjectId("group"),
+                transform = transform,
+                title = "Research",
+                zIndex = 4,
+            )
+        val childBack =
+            TextNode(
+                id = CanvasObjectId("child-back"),
+                transform = transform,
+                parentId = group.id,
+                text = "Background",
+                zIndex = 1,
+            )
+        val childFront =
+            TextNode(
+                id = CanvasObjectId("child-front"),
+                transform = transform,
+                parentId = group.id,
+                text = "Foreground",
+                zIndex = 9,
+            )
+        val root =
+            TextNode(
+                id = CanvasObjectId("root"),
+                transform = transform,
+                text = "Top root",
+                zIndex = 12,
+            )
 
         val entries = buildLayerTree(listOf(group, childBack, childFront, root))
 
@@ -51,12 +55,13 @@ class LayerTreeTest {
 
     @Test
     fun entriesExposeKindLockAndReadableFallbackTitle() {
-        val group = GroupFrame(
-            id = CanvasObjectId("group"),
-            transform = transform,
-            title = "",
-            locked = true,
-        )
+        val group =
+            GroupFrame(
+                id = CanvasObjectId("group"),
+                transform = transform,
+                title = "",
+                locked = true,
+            )
         val node = TextNode(id = CanvasObjectId("node"), transform = transform, text = "\nsecond line")
 
         val entries = buildLayerTree(listOf(group, node)).associateBy { it.objectId.value }

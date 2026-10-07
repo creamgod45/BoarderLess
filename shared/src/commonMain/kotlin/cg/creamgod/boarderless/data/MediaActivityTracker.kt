@@ -3,8 +3,10 @@ package cg.creamgod.boarderless.data
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-internal fun mediaActivityAllowsPublication(activity: MediaPlaybackActivity, openedEpoch: Long): Boolean =
-    activity.available && activity.epoch == openedEpoch
+internal fun mediaActivityAllowsPublication(
+    activity: MediaPlaybackActivity,
+    openedEpoch: Long,
+): Boolean = activity.available && activity.epoch == openedEpoch
 
 /** UI-thread owned lifecycle state. A quick hide/show retains an epoch change even if
  * StateFlow conflates the unavailable value. Focus changes alone must not update availability.

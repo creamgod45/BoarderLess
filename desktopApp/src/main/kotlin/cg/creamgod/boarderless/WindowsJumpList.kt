@@ -18,17 +18,27 @@ import java.util.concurrent.Executors
  * starts the app's launcher with [OpenWorkspaceArgument]; [DesktopInstanceChannel] hands that to the
  * running app. Only the installed app has a launcher ([launcherPath]), so development runs skip it.
  */
-internal class WindowsJumpList(private val launcherPath: String) {
+internal class WindowsJumpList(
+    private val launcherPath: String,
+) {
     // COM objects live on one single-threaded apartment thread.
-    private val executor = Executors.newSingleThreadExecutor { task ->
-        Thread(task, "BoarderLess jump list").apply { isDaemon = true }
-    }.also { it.execute { Ole32.INSTANCE.CoInitializeEx(null, Ole32.COINIT_APARTMENTTHREADED) } }
+    private val executor =
+        Executors
+            .newSingleThreadExecutor { task ->
+                Thread(task, "BoarderLess jump list").apply { isDaemon = true }
+            }.also { it.execute { Ole32.INSTANCE.CoInitializeEx(null, Ole32.COINIT_APARTMENTTHREADED) } }
 
-    fun publish(category: String, workspaces: List<RecentWorkspace>) {
+    fun publish(
+        category: String,
+        workspaces: List<RecentWorkspace>,
+    ) {
         executor.execute { runCatching { commit(category, workspaces) } }
     }
 
-    private fun commit(category: String, workspaces: List<RecentWorkspace>) {
+    private fun commit(
+        category: String,
+        workspaces: List<RecentWorkspace>,
+    ) {
         val list = create(CLSID_DestinationList, IID_ICustomDestinationList)
         try {
             val removed = PointerByReference()
@@ -66,22 +76,27 @@ internal class WindowsJumpList(private val launcherPath: String) {
         return link
     }
 
-    private fun describe(link: ComObject, workspace: RecentWorkspace) {
+    private fun describe(
+        link: ComObject,
+        workspace: RecentWorkspace,
+    ) {
         link.call(20, WString(launcherPath)) // SetPath
         link.call(11, WString(OpenWorkspaceArgument + workspace.id)) // SetArguments
         link.call(17, WString(launcherPath), 0) // SetIconLocation
         link.call(7, WString(workspace.title)) // SetDescription
         link.query(IID_IPropertyStore).use { properties ->
-            val key = Memory(20).apply {
-                write(0, PKEY_Title.toByteArray(), 0, 16)
-                setInt(16, 2)
-            }
+            val key =
+                Memory(20).apply {
+                    write(0, PKEY_Title.toByteArray(), 0, 16)
+                    setInt(16, 2)
+                }
             val title = Memory((workspace.title.length + 1L) * 2).apply { setWideString(0, workspace.title) }
-            val value = Memory(24).apply {
-                clear()
-                setShort(0, VT_LPWSTR)
-                setPointer(8, title)
-            }
+            val value =
+                Memory(24).apply {
+                    clear()
+                    setShort(0, VT_LPWSTR)
+                    setPointer(8, title)
+                }
             properties.call(6, key, value) // SetValue copies the value
             properties.call(7) // Commit
         }
@@ -100,7 +115,10 @@ internal class WindowsJumpList(private val launcherPath: String) {
         }
     }
 
-    private fun create(clsid: GUID, iid: GUID): ComObject {
+    private fun create(
+        clsid: GUID,
+        iid: GUID,
+    ): ComObject {
         val result = PointerByReference()
         val hr = Ole32.INSTANCE.CoCreateInstance(clsid, null, WTypes.CLSCTX_INPROC_SERVER, iid, result)
         check(hr.toInt() >= 0) { "CoCreateInstance failed: 0x%08x".format(hr.toInt()) }
@@ -108,13 +126,22 @@ internal class WindowsJumpList(private val launcherPath: String) {
     }
 
     /** A COM interface pointer; methods are called by their vtable index. */
-    private class ComObject(val pointer: Pointer) : AutoCloseable {
-        fun call(index: Int, vararg args: Any?) {
+    private class ComObject(
+        val pointer: Pointer,
+    ) : AutoCloseable {
+        fun call(
+            index: Int,
+            vararg args: Any?,
+        ) {
             val hr = method(index).invokeInt(arrayOf(pointer, *args))
             check(hr >= 0) { "COM call $index failed: 0x%08x".format(hr) }
         }
 
-        fun query(iid: GUID): ComObject = PointerByReference().let { call(0, iid, it); ComObject(it.value) }
+        fun query(iid: GUID): ComObject =
+            PointerByReference().let {
+                call(0, iid, it)
+                ComObject(it.value)
+            }
 
         fun release() {
             runCatching { method(2).invokeInt(arrayOf(pointer)) } // Release returns a count, not an HRESULT

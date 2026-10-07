@@ -4,8 +4,12 @@ import androidx.compose.ui.graphics.ImageBitmap
 
 /** Device-local normalized image region, never part of a canvas operation. */
 data class ViewportImageRequest(
-    val left: Float, val top: Float, val right: Float, val bottom: Float,
-    val displayWidth: Int, val displayHeight: Int,
+    val left: Float,
+    val top: Float,
+    val right: Float,
+    val bottom: Float,
+    val displayWidth: Int,
+    val displayHeight: Int,
 ) {
     init {
         require(left.isFinite() && top.isFinite() && right.isFinite() && bottom.isFinite())
@@ -16,6 +20,10 @@ data class ViewportImageRequest(
 
 data class ImagePreviewTile(
     val bitmap: ImageBitmap,
-    val left: Float, val top: Float, val right: Float, val bottom: Float,
-    val sourceWidth: Int, val sourceHeight: Int,
+    val left: Float,
+    val top: Float,
+    val right: Float,
+    val bottom: Float,
+    val sourceWidth: Int,
+    val sourceHeight: Int,
 )

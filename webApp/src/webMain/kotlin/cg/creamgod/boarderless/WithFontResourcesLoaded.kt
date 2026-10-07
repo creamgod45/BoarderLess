@@ -3,17 +3,14 @@ package cg.creamgod.boarderless
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalFontFamilyResolver
 import androidx.compose.ui.text.font.FontFamily
+import boarderless.webapp.generated.resources.NotoSansSC
+import boarderless.webapp.generated.resources.Res
 import org.jetbrains.compose.resources.ExperimentalResourceApi
 import org.jetbrains.compose.resources.preloadFont
 
-import boarderless.webapp.generated.resources.NotoSansSC
-import boarderless.webapp.generated.resources.Res
-
 @OptIn(ExperimentalResourceApi::class)
 @Composable
-internal inline fun WithFontResourcesLoaded(
-    content: @Composable () -> Unit
-) {
+internal inline fun WithFontResourcesLoaded(content: @Composable () -> Unit) {
     val font by preloadFont(Res.font.NotoSansSC)
 
     var fontFallbackInitialized by remember { mutableStateOf(false) }

@@ -26,9 +26,10 @@ class WorkspaceSubmissionQueueTest {
         val second = createOperation("second", "node-2")
         val afterSecond = (second.applyTo(afterFirst) as cg.creamgod.boarderless.domain.history.OperationResult.Applied).workspace
 
-        var queue = WorkspaceSubmissionQueue()
-            .enqueue(first, afterFirst)
-            .enqueue(second, afterSecond)
+        var queue =
+            WorkspaceSubmissionQueue()
+                .enqueue(first, afterFirst)
+                .enqueue(second, afterSecond)
 
         assertEquals(2, queue.size)
         assertEquals("first", queue.first?.operation?.operationId)
@@ -58,21 +59,24 @@ class WorkspaceSubmissionQueueTest {
     fun rapidDependentChangesKeepTheirOwnOptimisticSnapshots() {
         val create = createOperation("create", "node-1")
         val afterCreate = (create.applyTo(initial) as cg.creamgod.boarderless.domain.history.OperationResult.Applied).workspace
-        val edit = EditTextOperation(
-            operationId = "edit",
-            changes = listOf(
-                TextChange(
-                    objectId = CanvasObjectId("node-1"),
-                    expectedVersion = 1,
-                    before = "create",
-                    after = "edited before save completed",
-                ),
-            ),
-        )
+        val edit =
+            EditTextOperation(
+                operationId = "edit",
+                changes =
+                    listOf(
+                        TextChange(
+                            objectId = CanvasObjectId("node-1"),
+                            expectedVersion = 1,
+                            before = "create",
+                            after = "edited before save completed",
+                        ),
+                    ),
+            )
         val afterEdit = (edit.applyTo(afterCreate) as cg.creamgod.boarderless.domain.history.OperationResult.Applied).workspace
-        var queue = WorkspaceSubmissionQueue()
-            .enqueue(create, afterCreate)
-            .enqueue(edit, afterEdit)
+        var queue =
+            WorkspaceSubmissionQueue()
+                .enqueue(create, afterCreate)
+                .enqueue(edit, afterEdit)
 
         assertEquals("create", assertIs<TextNode>(queue.first?.workspaceAfter?.objectById(CanvasObjectId("node-1"))).text)
         queue = queue.accept(queue.first!!.token)
@@ -82,7 +86,10 @@ class WorkspaceSubmissionQueueTest {
         )
     }
 
-    private fun createOperation(operationId: String, nodeId: String) = CreateObjectsOperation(
+    private fun createOperation(
+        operationId: String,
+        nodeId: String,
+    ) = CreateObjectsOperation(
         operationId,
         listOf(
             TextNode(

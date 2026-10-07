@@ -5,24 +5,67 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
-internal fun CanvasTransform.containsVectorWorldPoint(path: VectorPath, point: Vec2): Boolean {
+internal fun CanvasTransform.containsVectorWorldPoint(
+    path: VectorPath,
+    point: Vec2,
+): Boolean {
     val local = vectorLocalPoint(path, point) ?: return false
     return path.containsFill(local) || path.containsStroke(local)
 }
 
 /** Returns contour/centreline intersection; exact stroked silhouette offset remains a caller concern. */
-internal fun vectorBoundaryWorldPoint(transform: CanvasTransform, path: VectorPath, toward: Vec2): Vec2? {
+internal fun vectorBoundaryWorldPoint(
+    transform: CanvasTransform,
+    path: VectorPath,
+    toward: Vec2,
+): Vec2? {
     val local = transform.vectorLocalPoint(path, toward) ?: return null
     val origin = Vec2(path.viewBox.width / 2f, path.viewBox.height / 2f)
-    val boundary = path.firstBoundaryAlongRay(origin, local - origin) ?: return null
+    val boundary =
+        path.firstBoundaryAlongRay(origin, local - origin) ?: path
+            .flatten()
+            .flatMap { contour ->
+                val pairs =
+                    contour.points.zipWithNext() +
+                        if (contour.closed || path.style.fillColorToken != null) {
+                            listOf(contour.points.last() to contour.points.first())
+                        } else {
+                            emptyList()
+                        }
+                pairs.map { (a, b) ->
+                    val delta = b - a
+                    val length = delta.x.toDouble() * delta.x + delta.y.toDouble() * delta.y
+                    val fraction =
+                        if (length ==
+                            0.0
+                        ) {
+                            0f
+                        } else {
+                            (((local.x - a.x).toDouble() * delta.x + (local.y - a.y).toDouble() * delta.y) / length)
+                                .coerceIn(
+                                    0.0,
+                                    1.0,
+                                ).toFloat()
+                        }
+                    a + delta * fraction
+                }
+            }.minByOrNull { p ->
+                val d = p - local
+                d.x.toDouble() * d.x + d.y.toDouble() * d.y
+            } ?: return null
     val angle = (transform.rotationDegrees.toDouble() % 360.0) * PI / 180
     val x = (boundary.x - origin.x) * transform.size.width / path.viewBox.width
     val y = (boundary.y - origin.y) * transform.size.height / path.viewBox.height
-    return Vec2((transform.position.x + transform.size.width / 2.0 + x * cos(angle) - y * sin(angle)).toFloat(),
-        (transform.position.y + transform.size.height / 2.0 + x * sin(angle) + y * cos(angle)).toFloat())
+    return Vec2(
+        (transform.position.x + transform.size.width / 2.0 + x * cos(angle) - y * sin(angle)).toFloat(),
+        (transform.position.y + transform.size.height / 2.0 + x * sin(angle) + y * cos(angle)).toFloat(),
+    )
 }
 
-private fun CanvasTransform.vectorLocalPoint(path: VectorPath, point: Vec2): Vec2? {
+private fun CanvasTransform.vectorLocalPoint(
+    path: VectorPath,
+    point: Vec2,
+): Vec2? {
     if (size.width <= 0f || size.height <= 0f) return null
     val angle = (rotationDegrees.toDouble() % 360.0) * PI / 180
     val x = point.x - (position.x + size.width / 2.0)

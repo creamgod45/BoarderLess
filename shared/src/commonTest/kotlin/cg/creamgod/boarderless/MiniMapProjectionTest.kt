@@ -20,13 +20,14 @@ class MiniMapProjectionTest {
 
     @Test
     fun projectionIncludesBothContentAndVisibleViewport() {
-        val projection = createMiniMapProjection(
-            contentBounds = CanvasObjectBounds(Vec2(200f, 100f), Vec2(400f, 300f)),
-            viewport = Viewport(pan = Vec2.Zero, zoom = 1f),
-            canvasSize = CanvasSize(100f, 80f),
-            miniMapSize = CanvasSize(200f, 120f),
-            padding = 10f,
-        )
+        val projection =
+            createMiniMapProjection(
+                contentBounds = CanvasObjectBounds(Vec2(200f, 100f), Vec2(400f, 300f)),
+                viewport = Viewport(pan = Vec2.Zero, zoom = 1f),
+                canvasSize = CanvasSize(100f, 80f),
+                miniMapSize = CanvasSize(200f, 120f),
+                padding = 10f,
+            )
 
         assertEquals(Vec2.Zero, projection.worldBounds.topLeft)
         assertEquals(Vec2(400f, 300f), projection.worldBounds.bottomRight)
@@ -38,13 +39,14 @@ class MiniMapProjectionTest {
 
     @Test
     fun miniMapAndWorldCoordinatesRoundTrip() {
-        val projection = createMiniMapProjection(
-            contentBounds = CanvasObjectBounds(Vec2(-500f, -100f), Vec2(800f, 600f)),
-            viewport = Viewport(pan = Vec2(90f, 40f), zoom = 1.5f),
-            canvasSize = CanvasSize(1200f, 700f),
-            miniMapSize = CanvasSize(180f, 112f),
-            padding = 8f,
-        )
+        val projection =
+            createMiniMapProjection(
+                contentBounds = CanvasObjectBounds(Vec2(-500f, -100f), Vec2(800f, 600f)),
+                viewport = Viewport(pan = Vec2(90f, 40f), zoom = 1.5f),
+                canvasSize = CanvasSize(1200f, 700f),
+                miniMapSize = CanvasSize(180f, 112f),
+                padding = 8f,
+            )
         val worldPoint = Vec2(375f, 240f)
 
         val restored = projection.miniMapToWorld(projection.worldToMiniMap(worldPoint))
@@ -67,7 +69,10 @@ class MiniMapProjectionTest {
         assertTrue(zoomedInWidth < zoomedOutWidth)
     }
 
-    private fun assertClose(expected: Float, actual: Float) {
+    private fun assertClose(
+        expected: Float,
+        actual: Float,
+    ) {
         assertTrue(abs(expected - actual) < 0.001f, "Expected $expected, got $actual")
     }
 }

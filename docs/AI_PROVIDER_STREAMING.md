@@ -1,5 +1,34 @@
 # AI provider 串流接線
 
+最新預設表達已改 Mermaid flowchart＋短 ID 精簡 inventory，依建立時明確圖型選擇才可使用特殊語法，詳 AI_DIAGRAM_EXPRESSION_SPEC。以下完整 scene JSON 為此前接線紀錄，不是現在默认送出內容；Router 兩方言與逐次批准規則不變。
+
+2026-10-05 新增唯讀「AI 理解驗證」3 步驟 UI：選取／整畫布結構 JSON → 相容 Router endpoint／協定／模型／本次記憶體認證 → 審查同意送出、串流與 inventory 核對。可複製提示詞手動驗證。這不是完整 AI agent 設定持久化與工具執行已完成；詳 [AI_UNDERSTANDING_ACCEPTANCE.md](AI_UNDERSTANDING_ACCEPTANCE.md)。下方「尚無設定 UI」為此前狀態，現有測試入口以本段為準。
+
+## 第一階段範圍與設定精靈（2026-10-05，依使用者收斂）
+
+產品面向補充：AI需理解BoarderLess能力並調用工具完成圖形規劃，不僅文字聊天。下方「tools／自動執行」暫不支援的意思是**目前實作及禁止直接自動改正式畫布**；工具規劃為下一階段必要交付，採隔離方案→預覽／審核→確認交易。詳AI_DIAGRAM_TOOL_WORKFLOW，text-only decoder不可當工具支援。
+
+第一階段以 Local AI Router 為連線入口，只支援 **OpenAI-compatible Chat Completions**、**Claude／Anthropic-compatible Messages** 兩種明確方言。Local 是部署位置，不是第三套原生協定；Router 可路由雲端或本機模型，APP 不猜模型來源，也不直接保管各上游供應商金鑰。不新增其他 local 原生 API、Responses、Realtime、影像／音訊生成、未經確認的畫布自動修改或多供應商 fallback。工具規劃依AI_DIAGRAM_TOOL_WORKFLOW接續。此規範優先於下方早期「三類 provider」敘述；已有兩方言 serializer／adapter／ConfiguredAiProvider 可沿用，不能宣稱任意 Router 已相容。
+
+**目前 APP 確實沒有 AI 設定入口或設定精靈，也沒有可用的 AI 操作 UI。** 底層 composition 測試不等於使用者能設定／使用；下一個 AI 交付先做入口与精靈，再接串流與審核操作。不因縮小協定範圍省略憑證、安全、context 同意與版本檢查。
+
+### UI 交付順序（待實作，非已上線）
+
+1. 畫布主選單新增「AI 設定」入口；未設定時按 AI 操作也進精靈。手機置中 modal 配合 safe area／鍵盤與可捲動內容；不因點 Node 自動開啟。不與 Node 屬性 bottom sheet 互相強制關閉。
+2. **Router 連線**：名稱、完整 API endpoint、Local／Remote；本機 HTTP 明確提示明文風險並需主動允許。沒有預設主機／model、偷偷偵測或自動連線；若提供 Base URL 輸入，必須顯示且確認實際完整 endpoint 後才產生 profile。
+3. **相容協定**：只選 OpenAI Chat 或 Claude Messages；後者的 API version 明確輸入。不要用「雲端／本地」當第三個協定；也不混用兩種事件格式。
+4. **模型與認證**：model ID、輸出 token 上限；Router token 的認證方式明確選擇（支援既有 Authorization／x-api-key，無認證需 Router 明確允許）。上游 OpenAI／Claude key 留在 Router。token 顯示遮罩，可貼上／刪除；輸入框聚焦停用畫布快捷鍵。endpoint／model 非敏感設定可保存在裝置；token 不寫一般 Settings、workspace、operation、QA 報告或同步資料。安全儲存未接好前只允許明確告知的 session-only，不能假裝「記住金鑰」已完成。
+5. **測試與完成**：僅使用者按「測試連線」才發一筆小型固定文字測試，明示可能產生費用、不夾帶畫布內容。顯示成功／認證錯誤／不相容／連線錯誤，支持取消、不自動retry或fallback。保存／返回上一步／取消都清楚；取消不覆蓋既有設定。未測試設定顯示未驗證，不能假裝可用。
+
+精靈完成後的真正 AI request 仍需逐次 context 摘要與送出同意；串流文字不能直接當畫布 operation。proposal review、確認後正式提交、fresh ACL／版本及 Undo／Redo另接；不能用固定approve=true替代UI。換帳號／workspace／endpoint及關閉頁面取消請求並清暫態內容。
+
+### 驗收與缺件
+
+- 尚需 Local AI Router 的實際 endpoint／支援方言、認證與 CORS／TLS 配置；未取得實際服務規格，不猜預設 path 或測試服務。
+- 工程回歸：步驟導航與驗證、取消不保存、敏感欄位不落一般prefs、輸入焦點／貼上／Delete、HTTP／SSE取消、安全錯誤、不重試、不混用方言。
+- 真實 Router 兩方言與四平台連線另驗；設定介面、safe area／鍵盤／VoiceOver／遮擋由使用者按QA SOP簽核；效能最後。
+- 使用 OpenAI Docs 核對 [Chat Completions](https://developers.openai.com/api/reference/chat-completions/overview) 的協定名稱。本輪只更新範圍與交付順序，未新增UI、讀取金鑰或發送AI請求。
+
 ## 最新：configured provider composition（2026-10-05）
 
 最終證據：96784 JVM／Desktop／JS／Wasm／AndroidHost tests與APP／Device APK／Web entries成功1m11s，composition各7 cases零fail/error/skip；72724 iOS成功55s，7cases零fail/error/skip，本次boot恢復shutdown。97780首輪2m46s因取消fixture在response交付前取消而channel斷言失敗；fixture改成首TextDelta確認讀取後取消，仍要求channel關閉、無Completed／Failed／retry。曾嘗試 `--deviceUUID` 被Gradle拒絕（783ms，無執行tests），後續72724正式task成功。實際socket／UI／provider仍Pending。

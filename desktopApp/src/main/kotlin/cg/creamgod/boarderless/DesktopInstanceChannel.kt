@@ -20,40 +20,70 @@ internal object DesktopInstanceChannel {
     private const val ConnectTimeoutMillis = 1000
     private const val ReadTimeoutMillis = 2000
     private const val ClaimIntervalMillis = 3000L
-    private val endpointFile: File = run {
-        val localAppData = System.getenv("LOCALAPPDATA")?.takeIf { isWindows && it.isNotBlank() }
-        val directory = if (localAppData != null) File(localAppData, "BoarderLess") else File(System.getProperty("user.home"), ".boarderless")
-        File(directory, "instance")
-    }
+    private val endpointFile: File =
+        run {
+            val localAppData = System.getenv("LOCALAPPDATA")?.takeIf { isWindows && it.isNotBlank() }
+            val directory =
+                if (localAppData !=
+                    null
+                ) {
+                    File(localAppData, "BoarderLess")
+                } else {
+                    File(System.getProperty("user.home"), ".boarderless")
+                }
+            File(directory, "instance")
+        }
 
     /** True when the running app accepted the request, so this process should exit. */
-    fun forward(workspaceId: String): Boolean = runCatching {
-        val (port, token) = endpointFile.readText().trim().split(' ').takeIf { it.size == 2 } ?: return false
-        Socket().use { socket ->
-            socket.connect(InetSocketAddress(InetAddress.getLoopbackAddress(), port.toInt()), ConnectTimeoutMillis)
-            socket.soTimeout = ReadTimeoutMillis
-            allowRunningInstanceToComeForward()
-            socket.getOutputStream().bufferedWriter().apply { write("$token open $workspaceId\n"); flush() }
-            socket.getInputStream().bufferedReader().readLine() == "ok"
-        }
-    }.getOrDefault(false)
+    fun forward(workspaceId: String): Boolean =
+        runCatching {
+            if (!WorkspaceLaunchRequests.isWorkspaceId(workspaceId)) return false
+            send("open $workspaceId")
+        }.getOrDefault(false)
+
+    fun focus(): Boolean = send("focus")
+
+    private fun send(command: String): Boolean =
+        runCatching {
+            val (port, token) =
+                endpointFile
+                    .readText()
+                    .trim()
+                    .split(' ')
+                    .takeIf { it.size == 2 } ?: return false
+            Socket().use { socket ->
+                socket.connect(InetSocketAddress(InetAddress.getLoopbackAddress(), port.toInt()), ConnectTimeoutMillis)
+                socket.soTimeout = ReadTimeoutMillis
+                allowRunningInstanceToComeForward()
+                socket.getOutputStream().bufferedWriter().apply {
+                    write("$token $command\n")
+                    flush()
+                }
+                socket.getInputStream().bufferedReader().readLine() == "ok"
+            }
+        }.getOrDefault(false)
 
     /**
-     * Accepts forwarded requests for as long as the app runs. Several instances can run; the endpoint
-     * file names one that is alive, and another instance claims it when that one exits.
+     * Accepts forwarded requests for as long as the app runs. The APP storage lifetime lease,
+     * not this discovery socket, excludes cooperating writers; old builds can ignore that lease.
      */
-    fun listen(onOpen: (String) -> Unit) {
+    fun listen(
+        onOpen: (String) -> Unit,
+        onFocus: () -> Unit,
+    ) {
         runCatching {
             val token = UUID.randomUUID().toString()
             val server = ServerSocket(0, 8, InetAddress.getLoopbackAddress())
             val endpoint = "${server.localPort} $token"
-            Runtime.getRuntime().addShutdownHook(thread(start = false) {
-                if (runCatching { endpointFile.readText().trim() == endpoint }.getOrDefault(false)) endpointFile.delete()
-            })
+            Runtime.getRuntime().addShutdownHook(
+                thread(start = false) {
+                    if (runCatching { endpointFile.readText().trim() == endpoint }.getOrDefault(false)) endpointFile.delete()
+                },
+            )
             thread(isDaemon = true, name = "BoarderLess instance channel") {
                 while (true) {
                     val socket = runCatching { server.accept() }.getOrNull() ?: break
-                    runCatching { socket.use { handle(it, token, onOpen) } }
+                    runCatching { socket.use { handle(it, token, onOpen, onFocus) } }
                 }
             }
             thread(isDaemon = true, name = "BoarderLess instance endpoint") {
@@ -65,18 +95,30 @@ internal object DesktopInstanceChannel {
         }
     }
 
-    private fun endpointIsLive(): Boolean = runCatching {
-        val port = endpointFile.readText().trim().substringBefore(' ').toInt()
-        Socket().use { it.connect(InetSocketAddress(InetAddress.getLoopbackAddress(), port), ConnectTimeoutMillis) }
-        true
-    }.getOrDefault(false)
+    private fun endpointIsLive(): Boolean =
+        runCatching {
+            val port =
+                endpointFile
+                    .readText()
+                    .trim()
+                    .substringBefore(' ')
+                    .toInt()
+            Socket().use { it.connect(InetSocketAddress(InetAddress.getLoopbackAddress(), port), ConnectTimeoutMillis) }
+            true
+        }.getOrDefault(false)
 
-    private fun handle(socket: Socket, token: String, onOpen: (String) -> Unit) {
+    private fun handle(
+        socket: Socket,
+        token: String,
+        onOpen: (String) -> Unit,
+        onFocus: () -> Unit,
+    ) {
         socket.soTimeout = ReadTimeoutMillis
-        val parts = socket.getInputStream().bufferedReader().readLine()?.split(' ').orEmpty()
-        val accepted = parts.size == 3 && parts[0] == token && parts[1] == "open" && WorkspaceLaunchRequests.isWorkspaceId(parts[2])
-        if (accepted) onOpen(parts[2])
-        socket.getOutputStream().bufferedWriter().apply { write(if (accepted) "ok\n" else "rejected\n"); flush() }
+        val accepted = dispatchDesktopInstanceCommand(socket.getInputStream().bufferedReader().readLine(), token, onOpen, onFocus)
+        socket.getOutputStream().bufferedWriter().apply {
+            write(if (accepted) "ok\n" else "rejected\n")
+            flush()
+        }
     }
 
     /** Owner-only from the start on POSIX; on Windows %LOCALAPPDATA% is already private to the user. */
@@ -92,10 +134,29 @@ internal object DesktopInstanceChannel {
     private fun allowRunningInstanceToComeForward() {
         if (!isWindows) return
         runCatching {
-            com.sun.jna.NativeLibrary.getInstance("user32").getFunction("AllowSetForegroundWindow")
+            com.sun.jna.NativeLibrary
+                .getInstance("user32")
+                .getFunction("AllowSetForegroundWindow")
                 .invokeInt(arrayOf(-1)) // ASFW_ANY
         }
     }
+}
+
+internal fun dispatchDesktopInstanceCommand(
+    command: String?,
+    token: String,
+    onOpen: (String) -> Unit,
+    onFocus: () -> Unit,
+): Boolean {
+    val parts = command?.split(' ').orEmpty()
+    val open = parts.size == 3 && parts[0] == token && parts[1] == "open" && WorkspaceLaunchRequests.isWorkspaceId(parts[2])
+    val focus = parts.size == 2 && parts[0] == token && parts[1] == "focus"
+    if (open) {
+        onOpen(parts[2])
+    } else if (focus) {
+        onFocus()
+    }
+    return open || focus
 }
 
 internal val isWindows = System.getProperty("os.name").orEmpty().startsWith("Windows", ignoreCase = true)

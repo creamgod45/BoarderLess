@@ -3,7 +3,9 @@ package cg.creamgod.boarderless.domain.model
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class CanvasObjectId(val value: String) {
+data class CanvasObjectId(
+    val value: String,
+) {
     init {
         require(value.isNotBlank()) { "Canvas object id must not be blank" }
     }
@@ -20,7 +22,9 @@ sealed interface CanvasObject {
 }
 
 @Serializable
-enum class NodeShape(val token: String) {
+enum class NodeShape(
+    val token: String,
+) {
     RoundedRectangle("rounded"),
     Rectangle("rectangle"),
     Ellipse("ellipse"),
@@ -64,9 +68,14 @@ data class TextNode(
     val text: String,
     val colorToken: String = "paper",
     val shape: NodeShape = NodeShape.RoundedRectangle,
+    /** Optional structured custom outline; shape is the fallback for ordinary nodes. */
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+    @kotlinx.serialization.EncodeDefault(kotlinx.serialization.EncodeDefault.Mode.NEVER)
+    val vectorPath: VectorPath? = null,
 ) : CanvasObject {
     init {
         require(version >= 1) { "text node version must be positive" }
+        if (vectorPath != null) require(transform.size.width > 0f && transform.size.height > 0f)
     }
 }
 
@@ -93,7 +102,9 @@ data class GroupFrame(
  * Workspace without leaking a signed URL into the canvas projection.
  */
 @Serializable
-enum class MediaKind(val token: String) {
+enum class MediaKind(
+    val token: String,
+) {
     Image("image"),
     Gif("gif"),
     Video("video"),
@@ -127,23 +138,26 @@ data class MediaNode(
 fun CanvasObject.withTransform(
     transform: CanvasTransform,
     version: Long = this.version + 1,
-): CanvasObject = when (this) {
-    is TextNode -> copy(transform = transform, version = version)
-    is GroupFrame -> copy(transform = transform, version = version)
-    is MediaNode -> copy(transform = transform, version = version)
-}
+): CanvasObject =
+    when (this) {
+        is TextNode -> copy(transform = transform, version = version)
+        is GroupFrame -> copy(transform = transform, version = version)
+        is MediaNode -> copy(transform = transform, version = version)
+    }
 
-fun CanvasObject.withVersion(version: Long): CanvasObject = when (this) {
-    is TextNode -> copy(version = version)
-    is GroupFrame -> copy(version = version)
-    is MediaNode -> copy(version = version)
-}
+fun CanvasObject.withVersion(version: Long): CanvasObject =
+    when (this) {
+        is TextNode -> copy(version = version)
+        is GroupFrame -> copy(version = version)
+        is MediaNode -> copy(version = version)
+    }
 
 fun CanvasObject.withParentId(
     parentId: CanvasObjectId?,
     version: Long = this.version + 1,
-): CanvasObject = when (this) {
-    is TextNode -> copy(parentId = parentId, version = version)
-    is GroupFrame -> copy(parentId = parentId, version = version)
-    is MediaNode -> copy(parentId = parentId, version = version)
-}
+): CanvasObject =
+    when (this) {
+        is TextNode -> copy(parentId = parentId, version = version)
+        is GroupFrame -> copy(parentId = parentId, version = version)
+        is MediaNode -> copy(parentId = parentId, version = version)
+    }

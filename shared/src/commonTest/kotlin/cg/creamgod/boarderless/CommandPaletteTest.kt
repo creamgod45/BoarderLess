@@ -1,34 +1,35 @@
 package cg.creamgod.boarderless
 
-import cg.creamgod.boarderless.feature.canvas.PaletteEntry
-import cg.creamgod.boarderless.feature.canvas.ComponentLibraryEntry
-import cg.creamgod.boarderless.feature.canvas.diagramShapePaletteEntries
-import cg.creamgod.boarderless.feature.canvas.diagramTemplatePaletteEntries
-import cg.creamgod.boarderless.feature.canvas.filterPaletteEntries
-import cg.creamgod.boarderless.feature.canvas.relationPaletteEntries
-import cg.creamgod.boarderless.feature.canvas.connectionTargetPaletteEntries
-import cg.creamgod.boarderless.feature.canvas.relationNavigationPaletteEntries
-import cg.creamgod.boarderless.feature.canvas.groupNavigationPaletteEntries
 import cg.creamgod.boarderless.domain.model.CanvasObjectId
 import cg.creamgod.boarderless.domain.model.CanvasSize
 import cg.creamgod.boarderless.domain.model.CanvasTransform
-import cg.creamgod.boarderless.domain.model.TextNode
-import cg.creamgod.boarderless.domain.model.Vec2
+import cg.creamgod.boarderless.domain.model.GroupFrame
+import cg.creamgod.boarderless.domain.model.NodeShape
 import cg.creamgod.boarderless.domain.model.Relation
 import cg.creamgod.boarderless.domain.model.RelationDirection
 import cg.creamgod.boarderless.domain.model.RelationId
-import cg.creamgod.boarderless.domain.model.GroupFrame
-import cg.creamgod.boarderless.domain.model.NodeShape
+import cg.creamgod.boarderless.domain.model.TextNode
+import cg.creamgod.boarderless.domain.model.Vec2
+import cg.creamgod.boarderless.feature.canvas.ComponentLibraryEntry
+import cg.creamgod.boarderless.feature.canvas.PaletteEntry
+import cg.creamgod.boarderless.feature.canvas.connectionTargetPaletteEntries
+import cg.creamgod.boarderless.feature.canvas.diagramShapePaletteEntries
+import cg.creamgod.boarderless.feature.canvas.diagramTemplatePaletteEntries
+import cg.creamgod.boarderless.feature.canvas.filterPaletteEntries
+import cg.creamgod.boarderless.feature.canvas.groupNavigationPaletteEntries
+import cg.creamgod.boarderless.feature.canvas.relationNavigationPaletteEntries
+import cg.creamgod.boarderless.feature.canvas.relationPaletteEntries
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class CommandPaletteTest {
-    private val entries = listOf(
-        PaletteEntry("new", "New thought", "Create a node", "add capture"),
-        PaletteEntry("group", "Group selection", "Create a frame", "organize"),
-        PaletteEntry("node:a", "Research direction", "Jump to thought", "content node"),
-    )
+    private val entries =
+        listOf(
+            PaletteEntry("new", "New thought", "Create a node", "add capture"),
+            PaletteEntry("group", "Group selection", "Create a frame", "organize"),
+            PaletteEntry("node:a", "Research direction", "Jump to thought", "content node"),
+        )
 
     @Test
     fun emptyQueryKeepsOriginalOrder() {
@@ -45,10 +46,11 @@ class CommandPaletteTest {
 
     @Test
     fun titlePrefixRanksBeforeOtherMatches() {
-        val matches = filterPaletteEntries(
-            entries + PaletteEntry("other", "Capture later", "New note", "thought"),
-            "new",
-        )
+        val matches =
+            filterPaletteEntries(
+                entries + PaletteEntry("other", "Capture later", "New note", "thought"),
+                "new",
+            )
         assertEquals(listOf("new", "other"), matches.map(PaletteEntry::id))
     }
 
@@ -70,30 +72,33 @@ class CommandPaletteTest {
 
     @Test
     fun diagramTemplateCommandsExposeEveryStarterWithoutIncludingOrdinaryComponents() {
-        val componentIds = listOf(
-            "thought",
-            "flowchart-starter",
-            "swimlane-starter",
-            "org-chart-starter",
-            "architecture-starter",
-            "relationship-map",
-            "topology-starter",
-            "tree-starter",
-        )
-        val components = componentIds.map { id ->
-            ComponentLibraryEntry(
-                id = id,
-                title = id.replace('-', ' '),
-                description = "Editable diagram component",
-                colorToken = "paper",
+        val componentIds =
+            listOf(
+                "thought",
+                "flowchart-starter",
+                "swimlane-starter",
+                "org-chart-starter",
+                "architecture-starter",
+                "relationship-map",
+                "topology-starter",
+                "tree-starter",
             )
-        }
+        val components =
+            componentIds.map { id ->
+                ComponentLibraryEntry(
+                    id = id,
+                    title = id.replace('-', ' '),
+                    description = "Editable diagram component",
+                    colorToken = "paper",
+                )
+            }
 
-        val templates = diagramTemplatePaletteEntries(
-            components = components,
-            enabled = true,
-            disabledReason = "",
-        )
+        val templates =
+            diagramTemplatePaletteEntries(
+                components = components,
+                enabled = true,
+                disabledReason = "",
+            )
 
         assertEquals(
             componentIds.drop(1).map { "insert-component:$it" },
@@ -128,18 +133,20 @@ class CommandPaletteTest {
     fun connectionTargetCommandsExcludeSourceAndSearchTargetText() {
         val sourceId = CanvasObjectId("source")
         val transform = CanvasTransform(Vec2.Zero, CanvasSize(120f, 72f))
-        val nodes = listOf(
-            TextNode(sourceId, transform = transform, text = "Source"),
-            TextNode(CanvasObjectId("research"), transform = transform, text = "Research direction", zIndex = 2),
-            TextNode(CanvasObjectId("evidence"), transform = transform, text = "Supporting evidence", zIndex = 1),
-        )
+        val nodes =
+            listOf(
+                TextNode(sourceId, transform = transform, text = "Source"),
+                TextNode(CanvasObjectId("research"), transform = transform, text = "Research direction", zIndex = 2),
+                TextNode(CanvasObjectId("evidence"), transform = transform, text = "Supporting evidence", zIndex = 1),
+            )
 
-        val targets = connectionTargetPaletteEntries(
-            sourceId = sourceId,
-            nodes = nodes,
-            enabled = true,
-            disabledReason = "",
-        )
+        val targets =
+            connectionTargetPaletteEntries(
+                sourceId = sourceId,
+                nodes = nodes,
+                enabled = true,
+                disabledReason = "",
+            )
 
         assertEquals(listOf("connect-target:research", "connect-target:evidence"), targets.map(PaletteEntry::id))
         assertEquals(
@@ -154,18 +161,20 @@ class CommandPaletteTest {
         val sourceId = CanvasObjectId("source")
         val targetId = CanvasObjectId("target")
         val transform = CanvasTransform(Vec2.Zero, CanvasSize(120f, 72f))
-        val nodes = listOf(
-            TextNode(sourceId, transform = transform, text = "Research direction"),
-            TextNode(targetId, transform = transform, text = "Supporting evidence"),
-        ).associateBy { it.id }
-        val relation = Relation(
-            id = RelationId("relation"),
-            sourceObjectId = sourceId,
-            targetObjectId = targetId,
-            direction = RelationDirection.Forward,
-            intent = "supports",
-            label = "Primary source",
-        )
+        val nodes =
+            listOf(
+                TextNode(sourceId, transform = transform, text = "Research direction"),
+                TextNode(targetId, transform = transform, text = "Supporting evidence"),
+            ).associateBy { it.id }
+        val relation =
+            Relation(
+                id = RelationId("relation"),
+                sourceObjectId = sourceId,
+                targetObjectId = targetId,
+                direction = RelationDirection.Forward,
+                intent = "supports",
+                label = "Primary source",
+            )
 
         val entries = relationNavigationPaletteEntries(listOf(relation), nodes)
 
@@ -183,10 +192,11 @@ class CommandPaletteTest {
     @Test
     fun groupNavigationCommandsSearchTitlesAndExcludeNoGroups() {
         val transform = CanvasTransform(Vec2.Zero, CanvasSize(240f, 160f))
-        val groups = listOf(
-            GroupFrame(CanvasObjectId("lane"), transform = transform, title = "Design swimlane", zIndex = 4),
-            GroupFrame(CanvasObjectId("archive"), transform = transform, title = "Archived ideas", zIndex = 1),
-        )
+        val groups =
+            listOf(
+                GroupFrame(CanvasObjectId("lane"), transform = transform, title = "Design swimlane", zIndex = 4),
+                GroupFrame(CanvasObjectId("archive"), transform = transform, title = "Archived ideas", zIndex = 1),
+            )
 
         val entries = groupNavigationPaletteEntries(groups)
 

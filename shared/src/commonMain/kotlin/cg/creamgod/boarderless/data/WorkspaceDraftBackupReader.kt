@@ -11,7 +11,10 @@ import kotlinx.serialization.json.*
 internal class WorkspaceDraftBackupReader {
     private val json = Json { allowStructuredMapKeys = true }
 
-    fun read(content: String, expectedWorkspaceId: WorkspaceId): WorkspaceDraftReview {
+    fun read(
+        content: String,
+        expectedWorkspaceId: WorkspaceId,
+    ): WorkspaceDraftReview {
         try {
             require(content.length in 1..MaximumBytes)
             require(content.encodeToByteArray().size <= MaximumBytes)
@@ -24,28 +27,49 @@ internal class WorkspaceDraftBackupReader {
             val saved = json.decodeFromJsonElement(DraftReviewBackup.serializer(), root)
             require(saved.workspaceId == expectedWorkspaceId.value && saved.draftId.isNotBlank())
             require(saved.draftId.length <= 256)
-            require(listOf(saved.baseVersion, saved.baseServerSeq, saved.currentVersion, saved.currentServerSeq)
-                .all { it in 0..MaxSafeSequence })
+            require(
+                listOf(saved.baseVersion, saved.baseServerSeq, saved.currentVersion, saved.currentServerSeq)
+                    .all { it in 0..MaxSafeSequence },
+            )
             require(saved.currentVersion >= saved.baseVersion && saved.currentServerSeq >= saved.baseServerSeq)
             listOf(saved.baseline, saved.proposed, saved.current).forEach { validate(it, expectedWorkspaceId) }
             require(saved.operations.size <= 200)
             require(saved.operations.all { it.operationId.isNotBlank() && it.operationId.length <= 256 })
-            require(saved.operations.map { it.operationId }.distinct().size == saved.operations.size)
-            val replayed = saved.operations.fold(saved.baseline) { workspace, operation ->
-                (operation.applyTo(workspace) as? OperationResult.Applied)?.workspace
-                    ?: error("Invalid draft replay")
-            }
+            require(
+                saved.operations
+                    .map { it.operationId }
+                    .distinct()
+                    .size == saved.operations.size,
+            )
+            val replayed =
+                saved.operations.fold(saved.baseline) { workspace, operation ->
+                    (operation.applyTo(workspace) as? OperationResult.Applied)?.workspace
+                        ?: error("Invalid draft replay")
+                }
             require(replayed == saved.proposed)
-            return WorkspaceDraftReview(saved.draftId, saved.baseVersion, saved.baseServerSeq,
-                saved.currentVersion, saved.currentServerSeq, saved.baseline, saved.proposed, saved.current,
-                saved.operations, saved.quarantined, saved.hasUnconfirmedSubmission)
+            return WorkspaceDraftReview(
+                saved.draftId,
+                saved.baseVersion,
+                saved.baseServerSeq,
+                saved.currentVersion,
+                saved.currentServerSeq,
+                saved.baseline,
+                saved.proposed,
+                saved.current,
+                saved.operations,
+                saved.quarantined,
+                saved.hasUnconfirmedSubmission,
+            )
         } catch (_: Exception) {
             // Neither private payload nor decoder diagnostics escape into UI/logs.
             throw IllegalArgumentException("Draft backup is invalid, unsupported or belongs to another workspace")
         }
     }
 
-    private fun validate(workspace: Workspace, expected: WorkspaceId) {
+    private fun validate(
+        workspace: Workspace,
+        expected: WorkspaceId,
+    ) {
         require(workspace.id == expected && workspace.version in 0..MaxSafeSequence)
         require(workspace.objects.size <= 10_000 && workspace.relations.size <= 10_000)
         workspace.objects.forEach { (id, obj) ->
@@ -67,8 +91,23 @@ internal class WorkspaceDraftBackupReader {
     private companion object {
         const val MaximumBytes = 4 * 1024 * 1024
         const val MaxSafeSequence = 9_007_199_254_740_991L
-        val RequiredKeys = setOf("format", "schemaVersion", "importSupported", "draftId", "workspaceId",
-            "baseVersion", "baseServerSeq", "currentVersion", "currentServerSeq", "quarantined",
-            "hasUnconfirmedSubmission", "baseline", "proposed", "current", "operations")
+        val RequiredKeys =
+            setOf(
+                "format",
+                "schemaVersion",
+                "importSupported",
+                "draftId",
+                "workspaceId",
+                "baseVersion",
+                "baseServerSeq",
+                "currentVersion",
+                "currentServerSeq",
+                "quarantined",
+                "hasUnconfirmedSubmission",
+                "baseline",
+                "proposed",
+                "current",
+                "operations",
+            )
     }
 }

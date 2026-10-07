@@ -14,22 +14,24 @@ import kotlin.test.assertTrue
 class MarqueeSelectionTest {
     @Test
     fun marqueeHitsTheVisiblePartOfARotatedNode() {
-        val transform = CanvasTransform(
-            position = Vec2(100f, 100f),
-            size = CanvasSize(200f, 100f),
-            rotationDegrees = 90f,
-        )
+        val transform =
+            CanvasTransform(
+                position = Vec2(100f, 100f),
+                size = CanvasSize(200f, 100f),
+                rotationDegrees = 90f,
+            )
 
         assertTrue(marqueeIntersectsTransform(transform, Vec2(160f, 60f), Vec2(170f, 70f)))
     }
 
     @Test
     fun marqueeRejectsEmptyCornersOfTheRotatedBoundingBox() {
-        val transform = CanvasTransform(
-            position = Vec2.Zero,
-            size = CanvasSize(100f, 100f),
-            rotationDegrees = 45f,
-        )
+        val transform =
+            CanvasTransform(
+                position = Vec2.Zero,
+                size = CanvasSize(100f, 100f),
+                rotationDegrees = 45f,
+            )
 
         assertFalse(marqueeIntersectsTransform(transform, Vec2(-20f, -20f), Vec2(-10f, -10f)))
     }

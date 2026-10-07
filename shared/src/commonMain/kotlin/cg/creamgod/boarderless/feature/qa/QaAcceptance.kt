@@ -1,6 +1,8 @@
 package cg.creamgod.boarderless.feature.qa
 
-enum class QaAnswer(val token: String) {
+enum class QaAnswer(
+    val token: String,
+) {
     Pending("pending"),
     Passed("passed"),
     Failed("failed"),
@@ -98,41 +100,44 @@ class QaRuntime(
     }
 }
 
-fun QaReportDraft.overallAnswer(): QaAnswer = when {
-    questions.any { it.answer == QaAnswer.Failed } -> QaAnswer.Failed
-    questions.any { it.answer == QaAnswer.Pending } -> QaAnswer.Pending
-    questions.all { it.answer == QaAnswer.NotApplicable } -> QaAnswer.NotApplicable
-    else -> QaAnswer.Passed
-}
+fun QaReportDraft.overallAnswer(): QaAnswer =
+    when {
+        questions.any { it.answer == QaAnswer.Failed } -> QaAnswer.Failed
+        questions.any { it.answer == QaAnswer.Pending } -> QaAnswer.Pending
+        questions.all { it.answer == QaAnswer.NotApplicable } -> QaAnswer.NotApplicable
+        else -> QaAnswer.Passed
+    }
 
 fun QaReportDraft.toQaHtml(sopReference: String): String {
     val safeTitle = title.ifBlank { "BoarderLess QA Acceptance" }.escapeHtml()
     val status = overallAnswer()
-    val rows = questions.joinToString("\n") { result ->
-        """
-        <tr>
-          <td>${result.question.category.escapeHtml()}</td>
-          <td>${result.question.prompt.escapeHtml()}${if (result.question.requiresProductSignoff) " <span class=\"owner\">Product sign-off</span>" else ""}
-            ${if (result.question.sopSection.isNotBlank()) "<div class=\"muted\">SOP §${result.question.sopSection.escapeHtml()}</div>" else ""}
-            ${if (result.question.evidenceHint.isNotBlank()) "<div class=\"muted\">${result.question.evidenceHint.escapeHtml()}</div>" else ""}
-          </td>
-          <td><span class=\"status ${result.answer.token}\">${result.answer.token.replace('_', ' ').escapeHtml()}</span></td>
-          <td>${result.note.escapeHtml().replace("\n", "<br>")}</td>
-        </tr>
-        """.trimIndent()
-    }
-    val screenshotHtml = if (screenshots.isEmpty()) {
-        "<p class=\"muted\">No screenshots attached.</p>"
-    } else {
-        screenshots.joinToString("\n") { screenshot ->
+    val rows =
+        questions.joinToString("\n") { result ->
             """
-            <figure>
-              <img src="${screenshot.dataUrl}" alt="${screenshot.caption.ifBlank { screenshot.fileName }.escapeHtml()}">
-              <figcaption>${screenshot.caption.ifBlank { screenshot.fileName }.escapeHtml()}</figcaption>
-            </figure>
+            <tr>
+              <td>${result.question.category.escapeHtml()}</td>
+              <td>${result.question.prompt.escapeHtml()}${if (result.question.requiresProductSignoff) " <span class=\"owner\">Product sign-off</span>" else ""}
+                ${if (result.question.sopSection.isNotBlank()) "<div class=\"muted\">SOP §${result.question.sopSection.escapeHtml()}</div>" else ""}
+                ${if (result.question.evidenceHint.isNotBlank()) "<div class=\"muted\">${result.question.evidenceHint.escapeHtml()}</div>" else ""}
+              </td>
+              <td><span class=\"status ${result.answer.token}\">${result.answer.token.replace('_', ' ').escapeHtml()}</span></td>
+              <td>${result.note.escapeHtml().replace("\n", "<br>")}</td>
+            </tr>
             """.trimIndent()
         }
-    }
+    val screenshotHtml =
+        if (screenshots.isEmpty()) {
+            "<p class=\"muted\">No screenshots attached.</p>"
+        } else {
+            screenshots.joinToString("\n") { screenshot ->
+                """
+                <figure>
+                  <img src="${screenshot.dataUrl}" alt="${screenshot.caption.ifBlank { screenshot.fileName }.escapeHtml()}">
+                  <figcaption>${screenshot.caption.ifBlank { screenshot.fileName }.escapeHtml()}</figcaption>
+                </figure>
+                """.trimIndent()
+            }
+        }
     return """
         <!doctype html>
         <html lang="en">
@@ -175,48 +180,50 @@ fun QaReportDraft.toQaHtml(sopReference: String): String {
           <section><h2>General notes</h2><p>${generalNotes.escapeHtml().replace("\n", "<br>")}</p></section>
         </body>
         </html>
-    """.trimIndent()
+        """.trimIndent()
 }
 
-fun QaReportDraft.toPlainText(): String = buildString {
-    appendLine(title.ifBlank { "BoarderLess QA Acceptance" })
-    appendLine("Overall: ${overallAnswer().token}")
-    appendLine("Version: $version")
-    appendLine("Platform: $platform")
-    appendLine("Device / orientation: $deviceAndOrientation")
-    appendLine("Tester: $tester")
-    appendLine("Date: $date")
-    appendLine("Scope: $scope")
-    appendLine("Exclusions: $exclusions")
-    appendLine("Automated evidence: $automatedEvidence")
-    appendLine()
-    appendLine("Acceptance questionnaire")
-    questions.forEach { result ->
-        append("[${result.answer.token}] ${result.question.category}: ${result.question.prompt}")
-        if (result.question.requiresProductSignoff) append(" (Product sign-off)")
+fun QaReportDraft.toPlainText(): String =
+    buildString {
+        appendLine(title.ifBlank { "BoarderLess QA Acceptance" })
+        appendLine("Overall: ${overallAnswer().token}")
+        appendLine("Version: $version")
+        appendLine("Platform: $platform")
+        appendLine("Device / orientation: $deviceAndOrientation")
+        appendLine("Tester: $tester")
+        appendLine("Date: $date")
+        appendLine("Scope: $scope")
+        appendLine("Exclusions: $exclusions")
+        appendLine("Automated evidence: $automatedEvidence")
         appendLine()
-        if (result.question.sopSection.isNotBlank()) appendLine("  SOP §${result.question.sopSection}")
-        if (result.question.evidenceHint.isNotBlank()) appendLine("  Evidence: ${result.question.evidenceHint}")
-        if (result.note.isNotBlank()) appendLine("  Note: ${result.note}")
+        appendLine("Acceptance questionnaire")
+        questions.forEach { result ->
+            append("[${result.answer.token}] ${result.question.category}: ${result.question.prompt}")
+            if (result.question.requiresProductSignoff) append(" (Product sign-off)")
+            appendLine()
+            if (result.question.sopSection.isNotBlank()) appendLine("  SOP §${result.question.sopSection}")
+            if (result.question.evidenceHint.isNotBlank()) appendLine("  Evidence: ${result.question.evidenceHint}")
+            if (result.note.isNotBlank()) appendLine("  Note: ${result.note}")
+        }
+        appendLine()
+        appendLine("Screenshots: ${screenshots.size}")
+        screenshots.forEach { appendLine("- ${it.caption.ifBlank { it.fileName }}") }
+        appendLine()
+        appendLine("General notes: $generalNotes")
     }
-    appendLine()
-    appendLine("Screenshots: ${screenshots.size}")
-    screenshots.forEach { appendLine("- ${it.caption.ifBlank { it.fileName }}") }
-    appendLine()
-    appendLine("General notes: $generalNotes")
-}
 
-internal fun String.escapeHtml(): String = buildString(length) {
-    this@escapeHtml.forEach { character ->
-        append(
-            when (character) {
-                '&' -> "&amp;"
-                '<' -> "&lt;"
-                '>' -> "&gt;"
-                '"' -> "&quot;"
-                '\'' -> "&#39;"
-                else -> character
-            },
-        )
+internal fun String.escapeHtml(): String =
+    buildString(length) {
+        this@escapeHtml.forEach { character ->
+            append(
+                when (character) {
+                    '&' -> "&amp;"
+                    '<' -> "&lt;"
+                    '>' -> "&gt;"
+                    '"' -> "&quot;"
+                    '\'' -> "&#39;"
+                    else -> character
+                },
+            )
+        }
     }
-}

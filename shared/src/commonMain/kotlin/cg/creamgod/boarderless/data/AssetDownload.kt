@@ -2,9 +2,9 @@ package cg.creamgod.boarderless.data
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 internal const val AssetDownloadCleanupTimeoutMillis: Long = 5_000
@@ -31,16 +31,25 @@ data class LocalAssetReference(
 }
 
 interface AssetDownloadSink {
-    suspend fun writeChunk(offset: Long, bytes: ByteArray)
+    suspend fun writeChunk(
+        offset: Long,
+        bytes: ByteArray,
+    )
 
     /** Atomically exposes the completed cache entry after size/checksum verification. */
-    suspend fun commit(expectedByteSize: Long, expectedChecksum: String): LocalAssetReference
+    suspend fun commit(
+        expectedByteSize: Long,
+        expectedChecksum: String,
+    ): LocalAssetReference
 
     suspend fun abort()
 }
 
 interface AssetDownloadGateway {
-    suspend fun authorize(session: WorkspaceSession, assetId: String): AssetDownloadTicket
+    suspend fun authorize(
+        session: WorkspaceSession,
+        assetId: String,
+    ): AssetDownloadTicket
 
     suspend fun download(
         ticket: AssetDownloadTicket,
@@ -50,9 +59,17 @@ interface AssetDownloadGateway {
 
 sealed interface AssetDownloadStage {
     data object Authorizing : AssetDownloadStage
-    data class Downloading(val downloadedBytes: Long, val totalBytes: Long) : AssetDownloadStage
+
+    data class Downloading(
+        val downloadedBytes: Long,
+        val totalBytes: Long,
+    ) : AssetDownloadStage
+
     data object Verifying : AssetDownloadStage
-    data class Ready(val local: LocalAssetReference) : AssetDownloadStage
+
+    data class Ready(
+        val local: LocalAssetReference,
+    ) : AssetDownloadStage
 }
 
 enum class AssetDownloadIssue {

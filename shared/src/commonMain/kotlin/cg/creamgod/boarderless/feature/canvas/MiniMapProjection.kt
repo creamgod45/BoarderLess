@@ -40,35 +40,41 @@ internal fun createMiniMapProjection(
 
     val viewportTopLeft = viewport.screenToWorld(Vec2.Zero)
     val viewportBottomRight = viewport.screenToWorld(Vec2(canvasSize.width, canvasSize.height))
-    val worldBounds = MiniMapRect(
-        topLeft = Vec2(
-            x = minOf(contentBounds.topLeft.x, viewportTopLeft.x),
-            y = minOf(contentBounds.topLeft.y, viewportTopLeft.y),
-        ),
-        bottomRight = Vec2(
-            x = maxOf(contentBounds.bottomRight.x, viewportBottomRight.x),
-            y = maxOf(contentBounds.bottomRight.y, viewportBottomRight.y),
-        ),
-    )
+    val worldBounds =
+        MiniMapRect(
+            topLeft =
+                Vec2(
+                    x = minOf(contentBounds.topLeft.x, viewportTopLeft.x),
+                    y = minOf(contentBounds.topLeft.y, viewportTopLeft.y),
+                ),
+            bottomRight =
+                Vec2(
+                    x = maxOf(contentBounds.bottomRight.x, viewportBottomRight.x),
+                    y = maxOf(contentBounds.bottomRight.y, viewportBottomRight.y),
+                ),
+        )
     val worldWidth = (worldBounds.bottomRight.x - worldBounds.topLeft.x).coerceAtLeast(1f)
     val worldHeight = (worldBounds.bottomRight.y - worldBounds.topLeft.y).coerceAtLeast(1f)
     val availableWidth = (miniMapSize.width - padding * 2f).coerceAtLeast(1f)
     val availableHeight = (miniMapSize.height - padding * 2f).coerceAtLeast(1f)
     val scale = min(availableWidth / worldWidth, availableHeight / worldHeight)
     val renderedSize = Vec2(worldWidth * scale, worldHeight * scale)
-    val offset = Vec2(
-        x = (miniMapSize.width - renderedSize.x) / 2f,
-        y = (miniMapSize.height - renderedSize.y) / 2f,
-    )
+    val offset =
+        Vec2(
+            x = (miniMapSize.width - renderedSize.x) / 2f,
+            y = (miniMapSize.height - renderedSize.y) / 2f,
+        )
+
     fun project(point: Vec2): Vec2 = (point - worldBounds.topLeft) * scale + offset
 
     return MiniMapProjection(
         worldBounds = worldBounds,
         scale = scale,
         offset = offset,
-        viewportRect = MiniMapRect(
-            topLeft = project(viewportTopLeft),
-            bottomRight = project(viewportBottomRight),
-        ),
+        viewportRect =
+            MiniMapRect(
+                topLeft = project(viewportTopLeft),
+                bottomRight = project(viewportBottomRight),
+            ),
     )
 }

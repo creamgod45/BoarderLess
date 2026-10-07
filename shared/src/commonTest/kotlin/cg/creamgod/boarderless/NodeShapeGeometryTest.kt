@@ -8,31 +8,33 @@ import cg.creamgod.boarderless.domain.model.TextNode
 import cg.creamgod.boarderless.domain.model.Vec2
 import cg.creamgod.boarderless.feature.canvas.connectorDropTargetId
 import cg.creamgod.boarderless.feature.canvas.containsLocalPoint
-import cg.creamgod.boarderless.feature.canvas.shapeBoundaryWorldPoint
-import cg.creamgod.boarderless.feature.canvas.shapeConnectionOriginWorldPoint
 import cg.creamgod.boarderless.feature.canvas.polygonVertices
 import cg.creamgod.boarderless.feature.canvas.rotateVector
+import cg.creamgod.boarderless.feature.canvas.shapeBoundaryWorldPoint
+import cg.creamgod.boarderless.feature.canvas.shapeConnectionOriginWorldPoint
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class NodeShapeGeometryTest {
-    private val source = TextNode(
-        id = CanvasObjectId("source"),
-        transform = CanvasTransform(Vec2(-200f, 0f), CanvasSize(100f, 80f)),
-        text = "Source",
-    )
+    private val source =
+        TextNode(
+            id = CanvasObjectId("source"),
+            transform = CanvasTransform(Vec2(-200f, 0f), CanvasSize(100f, 80f)),
+            text = "Source",
+        )
 
     @Test
     fun connectorTargetingRespectsNonRectangularSilhouettes() {
-        val diamond = TextNode(
-            id = CanvasObjectId("diamond"),
-            zIndex = 1,
-            transform = CanvasTransform(Vec2.Zero, CanvasSize(100f, 100f)),
-            text = "Decision",
-            shape = NodeShape.Diamond,
-        )
+        val diamond =
+            TextNode(
+                id = CanvasObjectId("diamond"),
+                zIndex = 1,
+                transform = CanvasTransform(Vec2.Zero, CanvasSize(100f, 100f)),
+                text = "Decision",
+                shape = NodeShape.Diamond,
+            )
 
         assertEquals(
             diamond.id,
@@ -45,11 +47,12 @@ class NodeShapeGeometryTest {
     fun relationBoundaryFollowsDiamondEdge() {
         val transform = CanvasTransform(Vec2.Zero, CanvasSize(200f, 100f))
 
-        val boundary = shapeBoundaryWorldPoint(
-            transform = transform,
-            shape = NodeShape.Diamond,
-            toward = Vec2(300f, 150f),
-        )
+        val boundary =
+            shapeBoundaryWorldPoint(
+                transform = transform,
+                shape = NodeShape.Diamond,
+                toward = Vec2(300f, 150f),
+            )
 
         assertTrue(kotlin.math.abs(boundary.x - 150f) < 0.01f)
         assertTrue(kotlin.math.abs(boundary.y - 75f) < 0.01f)
@@ -57,7 +60,13 @@ class NodeShapeGeometryTest {
 
     @Test
     fun everyShapeTokenIsStableAndUnique() {
-        assertEquals(NodeShape.entries.size, NodeShape.entries.map(NodeShape::token).distinct().size)
+        assertEquals(
+            NodeShape.entries.size,
+            NodeShape.entries
+                .map(NodeShape::token)
+                .distinct()
+                .size,
+        )
         NodeShape.entries.forEach { shape -> assertEquals(shape, NodeShape.fromToken(shape.token)) }
         assertNull(NodeShape.fromToken("future-shape"))
     }
@@ -84,8 +93,12 @@ class NodeShapeGeometryTest {
     }
 
     @Test fun concaveArrowUsesNearestExitRatherThanReenteringHead() {
-        val boundary = shapeBoundaryWorldPoint(CanvasTransform(Vec2.Zero, CanvasSize(200f, 100f)),
-            NodeShape.ArrowRight, Vec2(160f, 150f))
+        val boundary =
+            shapeBoundaryWorldPoint(
+                CanvasTransform(Vec2.Zero, CanvasSize(200f, 100f)),
+                NodeShape.ArrowRight,
+                Vec2(160f, 150f),
+            )
         assertEquals(115f, boundary.x, .01f)
         assertEquals(75f, boundary.y, .01f)
         assertTrue(!NodeShape.Plus.containsLocalPoint(Vec2(-90f, -40f), 100f, 50f))
@@ -111,8 +124,12 @@ class NodeShapeGeometryTest {
                 val local = rotateVector(origin - center, -rotation)
                 assertEquals(expectedLocal.x, local.x, .001f)
                 assertEquals(expectedLocal.y, local.y, .001f)
-                val boundary = shapeBoundaryWorldPoint(transform, NodeShape.RightTriangle,
-                    origin + rotateVector(Vec2(-1000f, 0f), rotation))
+                val boundary =
+                    shapeBoundaryWorldPoint(
+                        transform,
+                        NodeShape.RightTriangle,
+                        origin + rotateVector(Vec2(-1000f, 0f), rotation),
+                    )
                 val boundaryLocal = rotateVector(boundary - center, -rotation)
                 assertEquals(-size.width / 2f, boundaryLocal.x, .001f)
                 assertEquals(size.height / 6f, boundaryLocal.y, .001f)

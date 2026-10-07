@@ -1,7 +1,7 @@
 package cg.creamgod.boarderless
 
-import cg.creamgod.boarderless.domain.model.CanvasSize
 import cg.creamgod.boarderless.domain.model.CanvasObjectId
+import cg.creamgod.boarderless.domain.model.CanvasSize
 import cg.creamgod.boarderless.domain.model.CanvasTransform
 import cg.creamgod.boarderless.domain.model.GroupFrame
 import cg.creamgod.boarderless.domain.model.TextNode
@@ -9,8 +9,8 @@ import cg.creamgod.boarderless.domain.model.Vec2
 import cg.creamgod.boarderless.domain.model.Viewport
 import cg.creamgod.boarderless.feature.canvas.canvasObjectBounds
 import cg.creamgod.boarderless.feature.canvas.containsWorldPoint
-import cg.creamgod.boarderless.feature.canvas.groupFrameTransform
 import cg.creamgod.boarderless.feature.canvas.fittedGroupFrameTransform
+import cg.creamgod.boarderless.feature.canvas.groupFrameTransform
 import cg.creamgod.boarderless.feature.canvas.rotatedTransformCorners
 import kotlin.math.abs
 import kotlin.test.Test
@@ -45,12 +45,13 @@ class ViewportTest {
 
     @Test
     fun fitCentersContentInsidePaddedScreen() {
-        val fitted = Viewport().fit(
-            worldTopLeft = Vec2(100f, 50f),
-            worldBottomRight = Vec2(500f, 250f),
-            screenSize = CanvasSize(1000f, 600f),
-            padding = 100f,
-        )
+        val fitted =
+            Viewport().fit(
+                worldTopLeft = Vec2(100f, 50f),
+                worldBottomRight = Vec2(500f, 250f),
+                screenSize = CanvasSize(1000f, 600f),
+                padding = 100f,
+            )
 
         assertClose(2f, fitted.zoom)
         assertClose(100f, fitted.worldToScreen(Vec2(100f, 50f)).x)
@@ -61,15 +62,17 @@ class ViewportTest {
 
     @Test
     fun canvasBoundsIncludeRotatedCorners() {
-        val rotated = TextNode(
-            id = CanvasObjectId("rotated"),
-            transform = CanvasTransform(
-                position = Vec2(100f, 100f),
-                size = CanvasSize(200f, 100f),
-                rotationDegrees = 90f,
-            ),
-            text = "Rotated",
-        )
+        val rotated =
+            TextNode(
+                id = CanvasObjectId("rotated"),
+                transform =
+                    CanvasTransform(
+                        position = Vec2(100f, 100f),
+                        size = CanvasSize(200f, 100f),
+                        rotationDegrees = 90f,
+                    ),
+                text = "Rotated",
+            )
 
         val bounds = canvasObjectBounds(listOf(rotated))
 
@@ -82,15 +85,17 @@ class ViewportTest {
 
     @Test
     fun canvasBoundsIncludeGroupFramesAndTextNodes() {
-        val group = GroupFrame(
-            id = CanvasObjectId("group"),
-            transform = CanvasTransform(Vec2(-400f, -200f), CanvasSize(300f, 250f)),
-        )
-        val node = TextNode(
-            id = CanvasObjectId("node"),
-            transform = CanvasTransform(Vec2(600f, 450f), CanvasSize(200f, 100f)),
-            text = "Far away",
-        )
+        val group =
+            GroupFrame(
+                id = CanvasObjectId("group"),
+                transform = CanvasTransform(Vec2(-400f, -200f), CanvasSize(300f, 250f)),
+            )
+        val node =
+            TextNode(
+                id = CanvasObjectId("node"),
+                transform = CanvasTransform(Vec2(600f, 450f), CanvasSize(200f, 100f)),
+                text = "Far away",
+            )
 
         val bounds = canvasObjectBounds(listOf(group, node))
 
@@ -105,15 +110,17 @@ class ViewportTest {
 
     @Test
     fun groupFrameContainsRotatedContentWithPadding() {
-        val rotated = TextNode(
-            id = CanvasObjectId("rotated"),
-            transform = CanvasTransform(
-                position = Vec2(100f, 100f),
-                size = CanvasSize(200f, 100f),
-                rotationDegrees = 90f,
-            ),
-            text = "Rotated",
-        )
+        val rotated =
+            TextNode(
+                id = CanvasObjectId("rotated"),
+                transform =
+                    CanvasTransform(
+                        position = Vec2(100f, 100f),
+                        size = CanvasSize(200f, 100f),
+                        rotationDegrees = 90f,
+                    ),
+                text = "Rotated",
+            )
 
         val frame = groupFrameTransform(listOf(rotated), padding = 40f)
 
@@ -128,24 +135,28 @@ class ViewportTest {
 
     @Test
     fun fittingARotatedGroupPreservesItsAngleAndContainsRotatedDescendants() {
-        val group = GroupFrame(
-            id = CanvasObjectId("group"),
-            transform = CanvasTransform(
-                position = Vec2(0f, 0f),
-                size = CanvasSize(100f, 100f),
-                rotationDegrees = 30f,
-            ),
-        )
-        val first = TextNode(
-            id = CanvasObjectId("first"),
-            transform = CanvasTransform(Vec2(200f, 120f), CanvasSize(180f, 80f), rotationDegrees = 20f),
-            text = "First",
-        )
-        val second = TextNode(
-            id = CanvasObjectId("second"),
-            transform = CanvasTransform(Vec2(460f, 300f), CanvasSize(100f, 160f), rotationDegrees = -15f),
-            text = "Second",
-        )
+        val group =
+            GroupFrame(
+                id = CanvasObjectId("group"),
+                transform =
+                    CanvasTransform(
+                        position = Vec2(0f, 0f),
+                        size = CanvasSize(100f, 100f),
+                        rotationDegrees = 30f,
+                    ),
+            )
+        val first =
+            TextNode(
+                id = CanvasObjectId("first"),
+                transform = CanvasTransform(Vec2(200f, 120f), CanvasSize(180f, 80f), rotationDegrees = 20f),
+                text = "First",
+            )
+        val second =
+            TextNode(
+                id = CanvasObjectId("second"),
+                transform = CanvasTransform(Vec2(460f, 300f), CanvasSize(100f, 160f), rotationDegrees = -15f),
+                text = "Second",
+            )
 
         val fitted = fittedGroupFrameTransform(group, listOf(first, second), padding = 40f)!!
 
@@ -155,7 +166,10 @@ class ViewportTest {
         }
     }
 
-    private fun assertClose(expected: Float, actual: Float) {
+    private fun assertClose(
+        expected: Float,
+        actual: Float,
+    ) {
         assertTrue(abs(expected - actual) < 0.001f, "Expected $expected, got $actual")
     }
 }

@@ -1,6 +1,5 @@
 package cg.creamgod.boarderless.designsystem.color
 
-import cg.creamgod.boarderless.i18n.Strings
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -58,11 +57,11 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.Dp
@@ -74,11 +73,16 @@ import cg.creamgod.boarderless.designsystem.ButtonGap
 import cg.creamgod.boarderless.designsystem.GlassSurface
 import cg.creamgod.boarderless.designsystem.ShellButton
 import cg.creamgod.boarderless.designsystem.ShellIcon
+import cg.creamgod.boarderless.i18n.Strings
 import kotlin.math.roundToInt
 
 /** A named color the picker can offer; [token] is what the caller stores when it is chosen. */
 @Immutable
-data class ColorSwatchOption(val token: String, val label: String, val color: Color)
+data class ColorSwatchOption(
+    val token: String,
+    val label: String,
+    val color: Color,
+)
 
 /**
  * A floating, draggable color picker in the spirit of Adobe's: a saturation/brightness field with a
@@ -118,13 +122,20 @@ fun ColorPickerWindow(
     val currentOnPreview by rememberUpdatedState(onPreview)
     LaunchedEffect(token) { currentOnPreview(token) }
 
-    fun pick(color: RgbColor, preset: String? = null, keepDraft: List<Float>? = null) {
+    fun pick(
+        color: RgbColor,
+        preset: String? = null,
+        keepDraft: List<Float>? = null,
+    ) {
         hsb = hsb.adopt(color)
         presetToken = preset
         draft = keepDraft
     }
 
-    fun setChannel(index: Int, value: Float) {
+    fun setChannel(
+        index: Int,
+        value: Float,
+    ) {
         val next = channelValues.toMutableList().also { it[index] = model.channels[index].coerce(value) }
         if (model == ColorModel.Hsb) {
             hsb = HsbState(next[0], next[1] / 100f, next[2] / 100f)
@@ -136,34 +147,37 @@ fun ColorPickerWindow(
     }
 
     GlassSurface(
-        modifier = modifier
-            .offset { IntOffset(windowOffset.x.roundToInt(), windowOffset.y.roundToInt()) }
-            .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown && event.key == Key.Escape) {
-                    onCancel()
-                    true
-                } else {
-                    false
-                }
-            },
+        modifier =
+            modifier
+                .offset { IntOffset(windowOffset.x.roundToInt(), windowOffset.y.roundToInt()) }
+                .onPreviewKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyDown && event.key == Key.Escape) {
+                        onCancel()
+                        true
+                    } else {
+                        false
+                    }
+                },
     ) {
         Column(
-            modifier = Modifier
-                .width(fieldSize + 124.dp)
-                .heightIn(max = 620.dp)
-                .verticalScroll(rememberScrollState())
-                .padding(12.dp),
+            modifier =
+                Modifier
+                    .width(fieldSize + 124.dp)
+                    .heightIn(max = 620.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .pointerInput(Unit) {
-                        detectDragGestures { change, dragAmount ->
-                            change.consume()
-                            windowOffset += dragAmount
-                        }
-                    },
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .pointerInput(Unit) {
+                            detectDragGestures { change, dragAmount ->
+                                change.consume()
+                                windowOffset += dragAmount
+                            }
+                        },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 BasicText(
@@ -171,8 +185,12 @@ fun ColorPickerWindow(
                     modifier = Modifier.weight(1f).padding(start = 4.dp),
                     style = TextStyle(color = colors.contentText, fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
                 )
-                ShellButton(label = Strings.common.close(),
-icon = ShellIcon.Close, showLabel = false, onClick = onCancel)
+                ShellButton(
+                    label = Strings.common.close(),
+                    icon = ShellIcon.Close,
+                    showLabel = false,
+                    onClick = onCancel,
+                )
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -204,24 +222,27 @@ icon = ShellIcon.Close, showLabel = false, onClick = onCancel)
                     // Adobe-style preview: the new color stacked on the current one, framed so dark
                     // colors stay visible against the glass surface.
                     Column(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .border(1.dp, colors.contentBorder, RoundedCornerShape(10.dp)),
+                        modifier =
+                            Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .border(1.dp, colors.contentBorder, RoundedCornerShape(10.dp)),
                     ) {
                         Box(
-                            modifier = Modifier
-                                .size(width = 62.dp, height = 48.dp)
-                                .background(rgb.toComposeColor())
-                                .semantics { contentDescription = Strings.colorPicker.newColor(rgb.toHex()) },
+                            modifier =
+                                Modifier
+                                    .size(width = 62.dp, height = 48.dp)
+                                    .background(rgb.toComposeColor())
+                                    .semantics { contentDescription = Strings.colorPicker.newColor(rgb.toHex()) },
                         )
                         Box(
-                            modifier = Modifier
-                                .size(width = 62.dp, height = 48.dp)
-                                .background(initialColor.toComposeColor())
-                                .clickable(role = Role.Button) { pick(initialColor, initialPreset) }
-                                .semantics {
-                                    contentDescription = Strings.colorPicker.revertToCurrentColor(initialColor.toHex())
-                                },
+                            modifier =
+                                Modifier
+                                    .size(width = 62.dp, height = 48.dp)
+                                    .background(initialColor.toComposeColor())
+                                    .clickable(role = Role.Button) { pick(initialColor, initialPreset) }
+                                    .semantics {
+                                        contentDescription = Strings.colorPicker.revertToCurrentColor(initialColor.toHex())
+                                    },
                         )
                     }
                     SwatchCaption(Strings.colorPicker.current())
@@ -296,8 +317,11 @@ icon = ShellIcon.Close, showLabel = false, onClick = onCancel)
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(ButtonGap, Alignment.End),
             ) {
-                ShellButton(label = Strings.colorPicker.cancel(),
-icon = ShellIcon.Close, onClick = onCancel)
+                ShellButton(
+                    label = Strings.colorPicker.cancel(),
+                    icon = ShellIcon.Close,
+                    onClick = onCancel,
+                )
                 ShellButton(label = Strings.colorPicker.apply(), accent = true, onClick = { onApply(token) })
             }
         }
@@ -317,25 +341,27 @@ fun ColorSwatchButton(
     val colors = BoarderLessTheme.colors
     val shape = RoundedCornerShape(12.dp)
     Row(
-        modifier = modifier
-            .clip(shape)
-            .background(if (selected && enabled) colors.selection.copy(alpha = 0.16f) else Color.Transparent)
-            .border(if (selected && enabled) 1.5.dp else 0.dp, colors.selection, shape)
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .semantics { if (selected) stateDescription = Strings.colorPicker.selected() }
-            .heightIn(min = 44.dp)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+        modifier =
+            modifier
+                .clip(shape)
+                .background(if (selected && enabled) colors.selection.copy(alpha = 0.16f) else Color.Transparent)
+                .border(if (selected && enabled) 1.5.dp else 0.dp, colors.selection, shape)
+                .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+                .semantics { if (selected) stateDescription = Strings.colorPicker.selected() }
+                .heightIn(min = 44.dp)
+                .padding(horizontal = 10.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val alpha = if (enabled) 1f else 0.45f
         if (color != null) {
             Box(
-                modifier = Modifier
-                    .size(18.dp)
-                    .clip(RoundedCornerShape(5.dp))
-                    .background(color.copy(alpha = alpha))
-                    .border(1.dp, colors.contentBorder, RoundedCornerShape(5.dp)),
+                modifier =
+                    Modifier
+                        .size(18.dp)
+                        .clip(RoundedCornerShape(5.dp))
+                        .background(color.copy(alpha = alpha))
+                        .border(1.dp, colors.contentBorder, RoundedCornerShape(5.dp)),
             )
         } else {
             Canvas(modifier = Modifier.size(18.dp)) {
@@ -345,17 +371,22 @@ fun ColorSwatchButton(
         }
         BasicText(
             text = label,
-            style = TextStyle(
-                color = if (enabled) colors.shellText else colors.contentMuted.copy(alpha = 0.5f),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-            ),
+            style =
+                TextStyle(
+                    color = if (enabled) colors.shellText else colors.contentMuted.copy(alpha = 0.5f),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                ),
         )
     }
 }
 
 /** HSB is the picker's source of truth so hue and saturation survive passing through gray or black. */
-private data class HsbState(val hue: Float, val saturation: Float, val brightness: Float) {
+private data class HsbState(
+    val hue: Float,
+    val saturation: Float,
+    val brightness: Float,
+) {
     fun toRgb(): RgbColor = hsbToRgb(hue, saturation, brightness)
 
     fun adopt(color: RgbColor): HsbState {
@@ -367,13 +398,22 @@ private data class HsbState(val hue: Float, val saturation: Float, val brightnes
         )
     }
 
-    fun valuesIn(model: ColorModel): List<Float> = when (model) {
-        ColorModel.Hsb -> listOf(hue, saturation * 100f, brightness * 100f)
-        ColorModel.Hsl -> model.fromRgb(toRgb()).let { values ->
-            if (values[1] < 0.01f) listOf(hue) + values.drop(1) else values
+    fun valuesIn(model: ColorModel): List<Float> =
+        when (model) {
+            ColorModel.Hsb -> {
+                listOf(hue, saturation * 100f, brightness * 100f)
+            }
+
+            ColorModel.Hsl -> {
+                model.fromRgb(toRgb()).let { values ->
+                    if (values[1] < 0.01f) listOf(hue) + values.drop(1) else values
+                }
+            }
+
+            else -> {
+                model.fromRgb(toRgb())
+            }
         }
-        else -> model.fromRgb(toRgb())
-    }
 
     companion object {
         fun from(color: RgbColor): HsbState = rgbToHsb(color).let { HsbState(it[0], it[1], it[2]) }
@@ -395,28 +435,29 @@ private fun SaturationBrightnessField(
     val currentOnChange by rememberUpdatedState(onChange)
     val hueColor = Color(hsbToRgb(hue, 1f, 1f).toArgb())
     Canvas(
-        modifier = Modifier
-            .size(size)
-            .clip(RoundedCornerShape(10.dp))
-            .semantics {
-                contentDescription = Strings.colorPicker.saturationAndBrightness()
-                stateDescription = "S ${(saturation * 100).roundToInt()}% • B ${(brightness * 100).roundToInt()}%"
-            }
-            .pointerInput(Unit) {
-                fun report(position: Offset) = currentOnChange(
-                    (position.x / this.size.width).coerceIn(0f, 1f),
-                    1f - (position.y / this.size.height).coerceIn(0f, 1f),
-                )
-                awaitEachGesture {
-                    val down = awaitFirstDown()
-                    down.consume()
-                    report(down.position)
-                    drag(down.id) { change ->
-                        change.consume()
-                        report(change.position)
+        modifier =
+            Modifier
+                .size(size)
+                .clip(RoundedCornerShape(10.dp))
+                .semantics {
+                    contentDescription = Strings.colorPicker.saturationAndBrightness()
+                    stateDescription = "S ${(saturation * 100).roundToInt()}% • B ${(brightness * 100).roundToInt()}%"
+                }.pointerInput(Unit) {
+                    fun report(position: Offset) =
+                        currentOnChange(
+                            (position.x / this.size.width).coerceIn(0f, 1f),
+                            1f - (position.y / this.size.height).coerceIn(0f, 1f),
+                        )
+                    awaitEachGesture {
+                        val down = awaitFirstDown()
+                        down.consume()
+                        report(down.position)
+                        drag(down.id) { change ->
+                            change.consume()
+                            report(change.position)
+                        }
                     }
-                }
-            },
+                },
     ) {
         drawRect(Brush.horizontalGradient(listOf(Color.White, hueColor)))
         drawRect(Brush.verticalGradient(listOf(Color.Transparent, Color.Black)))
@@ -427,29 +468,32 @@ private fun SaturationBrightnessField(
 }
 
 @Composable
-private fun HueStrip(hue: Float, height: Dp, onChange: (Float) -> Unit) {
+private fun HueStrip(
+    hue: Float,
+    height: Dp,
+    onChange: (Float) -> Unit,
+) {
     val currentOnChange by rememberUpdatedState(onChange)
     Canvas(
-        modifier = Modifier
-            .size(width = 22.dp, height = height)
-            .clip(RoundedCornerShape(8.dp))
-            .semantics {
-                contentDescription = Strings.colorPicker.hue()
-                stateDescription = "${hue.roundToInt()}°"
-            }
-            .pointerInput(Unit) {
-                fun report(position: Offset) =
-                    currentOnChange((position.y / size.height).coerceIn(0f, 1f) * 359.99f)
-                awaitEachGesture {
-                    val down = awaitFirstDown()
-                    down.consume()
-                    report(down.position)
-                    drag(down.id) { change ->
-                        change.consume()
-                        report(change.position)
+        modifier =
+            Modifier
+                .size(width = 22.dp, height = height)
+                .clip(RoundedCornerShape(8.dp))
+                .semantics {
+                    contentDescription = Strings.colorPicker.hue()
+                    stateDescription = "${hue.roundToInt()}°"
+                }.pointerInput(Unit) {
+                    fun report(position: Offset) = currentOnChange((position.y / size.height).coerceIn(0f, 1f) * 359.99f)
+                    awaitEachGesture {
+                        val down = awaitFirstDown()
+                        down.consume()
+                        report(down.position)
+                        drag(down.id) { change ->
+                            change.consume()
+                            report(change.position)
+                        }
                     }
-                }
-            },
+                },
     ) {
         drawRect(Brush.verticalGradient(HueStops))
         val y = hue / 360f * size.height
@@ -464,13 +508,18 @@ private fun HueStrip(hue: Float, height: Dp, onChange: (Float) -> Unit) {
 }
 
 @Composable
-private fun HexField(hex: String, onHexChange: (RgbColor) -> Unit, onEditingChange: (Boolean) -> Unit) {
+private fun HexField(
+    hex: String,
+    onHexChange: (RgbColor) -> Unit,
+    onEditingChange: (Boolean) -> Unit,
+) {
     val colors = BoarderLessTheme.colors
     var field by remember { mutableStateOf(TextFieldValue(hex.removePrefix("#"))) }
     var focused by remember { mutableStateOf(false) }
     // The pointer that focuses the field also places the caret; skip that one collapse of the selection.
     var keepSelectAll by remember { mutableStateOf(false) }
     LaunchedEffect(hex, focused) { if (!focused) field = TextFieldValue(hex.removePrefix("#")) }
+
     fun commit() {
         val committed = (RgbColor.parseHex(field.text)?.also(onHexChange)?.toHex() ?: hex).removePrefix("#")
         field = TextFieldValue(committed, TextRange(committed.length))
@@ -481,11 +530,12 @@ private fun HexField(hex: String, onHexChange: (RgbColor) -> Unit, onEditingChan
             style = TextStyle(color = colors.contentMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
         )
         Row(
-            modifier = Modifier
-                .weight(1f)
-                .background(colors.canvas.copy(alpha = 0.78f), RoundedCornerShape(8.dp))
-                .border(1.dp, if (focused) colors.selection else colors.contentBorder, RoundedCornerShape(8.dp))
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .background(colors.canvas.copy(alpha = 0.78f), RoundedCornerShape(8.dp))
+                    .border(1.dp, if (focused) colors.selection else colors.contentBorder, RoundedCornerShape(8.dp))
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             BasicText("#", style = TextStyle(color = colors.contentMuted, fontSize = 14.sp, fontFamily = FontFamily.Monospace))
@@ -497,37 +547,42 @@ private fun HexField(hex: String, onHexChange: (RgbColor) -> Unit, onEditingChan
                         return@BasicTextField
                     }
                     keepSelectAll = false
-                    val cleaned = next.text.trim().removePrefix("#").take(6)
+                    val cleaned =
+                        next.text
+                            .trim()
+                            .removePrefix("#")
+                            .take(6)
                     field = next.copy(text = cleaned, selection = TextRange(minOf(next.selection.end, cleaned.length)))
                     // Six valid digits apply immediately, so pasting a code is a single step.
                     if (cleaned.length == 6) RgbColor.parseHex(cleaned)?.let(onHexChange)
                 },
-                modifier = Modifier
-                    .weight(1f)
-                    .semantics { contentDescription = Strings.colorPicker.hexColorCode() }
-                    .onFocusChanged { state ->
-                        if (focused && !state.isFocused) commit()
-                        if (!focused && state.isFocused) {
-                            field = field.copy(selection = TextRange(0, field.text.length))
-                            keepSelectAll = true
-                        }
-                        focused = state.isFocused
-                        onEditingChange(state.isFocused)
-                    }
-                    .onPreviewKeyEvent { event ->
-                        if (event.type == KeyEventType.KeyDown && event.key == Key.Enter) {
-                            commit()
-                            true
-                        } else {
-                            false
-                        }
-                    },
-                textStyle = TextStyle(
-                    color = colors.contentText,
-                    fontSize = 14.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.SemiBold,
-                ),
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .semantics { contentDescription = Strings.colorPicker.hexColorCode() }
+                        .onFocusChanged { state ->
+                            if (focused && !state.isFocused) commit()
+                            if (!focused && state.isFocused) {
+                                field = field.copy(selection = TextRange(0, field.text.length))
+                                keepSelectAll = true
+                            }
+                            focused = state.isFocused
+                            onEditingChange(state.isFocused)
+                        }.onPreviewKeyEvent { event ->
+                            if (event.type == KeyEventType.KeyDown && event.key == Key.Enter) {
+                                commit()
+                                true
+                            } else {
+                                false
+                            }
+                        },
+                textStyle =
+                    TextStyle(
+                        color = colors.contentText,
+                        fontSize = 14.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.SemiBold,
+                    ),
                 cursorBrush = SolidColor(colors.selection),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { commit() }),
@@ -549,13 +604,14 @@ private fun ChannelRow(
     val colors = BoarderLessTheme.colors
     val value = values[index]
     val currentOnChange by rememberUpdatedState(onChange)
-    val trackStops = remember(model, values, index) {
-        (0..16).map { step ->
-            val sample = values.toMutableList()
-            sample[index] = channel.min + (channel.max - channel.min) * step / 16f
-            model.toRgb(sample).toComposeColor()
+    val trackStops =
+        remember(model, values, index) {
+            (0..16).map { step ->
+                val sample = values.toMutableList()
+                sample[index] = channel.min + (channel.max - channel.min) * step / 16f
+                model.toRgb(sample).toComposeColor()
+            }
         }
-    }
     val fraction = ((value - channel.min) / (channel.max - channel.min)).coerceIn(0f, 1f)
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         BasicText(
@@ -564,27 +620,28 @@ private fun ChannelRow(
             style = TextStyle(color = colors.contentMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
         )
         Canvas(
-            modifier = Modifier
-                .weight(1f)
-                .height(22.dp)
-                .semantics {
-                    contentDescription = channel.name()
-                    stateDescription = channel.format(value) + channel.unit
-                }
-                .pointerInput(channel) {
-                    fun report(position: Offset) = currentOnChange(
-                        channel.min + (channel.max - channel.min) * (position.x / size.width).coerceIn(0f, 1f),
-                    )
-                    awaitEachGesture {
-                        val down = awaitFirstDown()
-                        down.consume()
-                        report(down.position)
-                        drag(down.id) { change ->
-                            change.consume()
-                            report(change.position)
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .height(22.dp)
+                    .semantics {
+                        contentDescription = channel.name()
+                        stateDescription = channel.format(value) + channel.unit
+                    }.pointerInput(channel) {
+                        fun report(position: Offset) =
+                            currentOnChange(
+                                channel.min + (channel.max - channel.min) * (position.x / size.width).coerceIn(0f, 1f),
+                            )
+                        awaitEachGesture {
+                            val down = awaitFirstDown()
+                            down.consume()
+                            report(down.position)
+                            drag(down.id) { change ->
+                                change.consume()
+                                report(change.position)
+                            }
                         }
-                    }
-                },
+                    },
         ) {
             val trackHeight = 10.dp.toPx()
             val top = (size.height - trackHeight) / 2f
@@ -614,38 +671,46 @@ private fun ChannelField(
     var text by remember(channel) { mutableStateOf(channel.format(value)) }
     var focused by remember { mutableStateOf(false) }
     LaunchedEffect(value, focused, channel) { if (!focused) text = channel.format(value) }
+
     fun commit() {
-        val parsed = text.trim().removeSuffix(channel.unit).replace(',', '.').trim().toFloatOrNull()
+        val parsed =
+            text
+                .trim()
+                .removeSuffix(channel.unit)
+                .replace(',', '.')
+                .trim()
+                .toFloatOrNull()
         if (parsed != null) onCommit(channel.coerce(parsed))
         text = channel.format(parsed?.let(channel::coerce) ?: value)
     }
     Row(
-        modifier = Modifier
-            .width(64.dp)
-            .background(colors.canvas.copy(alpha = 0.78f), RoundedCornerShape(8.dp))
-            .border(1.dp, if (focused) colors.selection else colors.contentBorder, RoundedCornerShape(8.dp))
-            .padding(horizontal = 7.dp, vertical = 6.dp),
+        modifier =
+            Modifier
+                .width(64.dp)
+                .background(colors.canvas.copy(alpha = 0.78f), RoundedCornerShape(8.dp))
+                .border(1.dp, if (focused) colors.selection else colors.contentBorder, RoundedCornerShape(8.dp))
+                .padding(horizontal = 7.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         BasicTextField(
             value = text,
             onValueChange = { if (it.length <= 7) text = it },
-            modifier = Modifier
-                .weight(1f)
-                .semantics { contentDescription = channel.name() }
-                .onFocusChanged { state ->
-                    if (focused && !state.isFocused) commit()
-                    focused = state.isFocused
-                    onEditingChange(state.isFocused)
-                }
-                .onPreviewKeyEvent { event ->
-                    if (event.type == KeyEventType.KeyDown && event.key == Key.Enter) {
-                        commit()
-                        true
-                    } else {
-                        false
-                    }
-                },
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .semantics { contentDescription = channel.name() }
+                    .onFocusChanged { state ->
+                        if (focused && !state.isFocused) commit()
+                        focused = state.isFocused
+                        onEditingChange(state.isFocused)
+                    }.onPreviewKeyEvent { event ->
+                        if (event.type == KeyEventType.KeyDown && event.key == Key.Enter) {
+                            commit()
+                            true
+                        } else {
+                            false
+                        }
+                    },
             textStyle = TextStyle(color = colors.contentText, fontSize = 11.sp, fontFamily = FontFamily.Monospace),
             cursorBrush = SolidColor(colors.selection),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
@@ -659,28 +724,37 @@ private fun ChannelField(
 }
 
 @Composable
-private fun PickerChip(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun PickerChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
     val colors = BoarderLessTheme.colors
     val shape = RoundedCornerShape(8.dp)
     BasicText(
         text = label,
-        modifier = Modifier
-            .clip(shape)
-            .background(if (selected) colors.accent else colors.canvas.copy(alpha = 0.6f))
-            .border(1.dp, if (selected) colors.accent else colors.contentBorder, shape)
-            .clickable(role = Role.Tab, onClick = onClick)
-            .semantics { if (selected) stateDescription = Strings.colorPicker.selected() }
-            .padding(horizontal = 10.dp, vertical = 6.dp),
-        style = TextStyle(
-            color = if (selected) Color.White else colors.shellText,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-        ),
+        modifier =
+            Modifier
+                .clip(shape)
+                .background(if (selected) colors.accent else colors.canvas.copy(alpha = 0.6f))
+                .border(1.dp, if (selected) colors.accent else colors.contentBorder, shape)
+                .clickable(role = Role.Tab, onClick = onClick)
+                .semantics { if (selected) stateDescription = Strings.colorPicker.selected() }
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+        style =
+            TextStyle(
+                color = if (selected) Color.White else colors.shellText,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+            ),
     )
 }
 
 @Composable
-private fun SwatchSection(title: String, content: @Composable () -> Unit) {
+private fun SwatchSection(
+    title: String,
+    content: @Composable () -> Unit,
+) {
     val colors = BoarderLessTheme.colors
     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
         BasicText(title, style = TextStyle(color = colors.contentMuted, fontSize = 10.sp, fontWeight = FontWeight.SemiBold))
@@ -692,16 +766,22 @@ private fun SwatchSection(title: String, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun PickerSwatch(color: Color, selected: Boolean, description: String, onClick: () -> Unit) {
+private fun PickerSwatch(
+    color: Color,
+    selected: Boolean,
+    description: String,
+    onClick: () -> Unit,
+) {
     val colors = BoarderLessTheme.colors
     Box(
-        modifier = Modifier
-            .size(26.dp)
-            .clip(CircleShape)
-            .background(color)
-            .border(if (selected) 2.5.dp else 1.dp, if (selected) colors.selection else colors.contentBorder, CircleShape)
-            .clickable(role = Role.Button, onClick = onClick)
-            .semantics { contentDescription = description },
+        modifier =
+            Modifier
+                .size(26.dp)
+                .clip(CircleShape)
+                .background(color)
+                .border(if (selected) 2.5.dp else 1.dp, if (selected) colors.selection else colors.contentBorder, CircleShape)
+                .clickable(role = Role.Button, onClick = onClick)
+                .semantics { contentDescription = description },
     )
 }
 

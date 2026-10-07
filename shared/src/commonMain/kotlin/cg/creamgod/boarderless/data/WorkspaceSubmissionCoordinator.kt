@@ -37,19 +37,24 @@ internal suspend fun submitNextWorkspaceChange(
     val pending = queue.first ?: return WorkspaceSubmissionStep.Idle
     return try {
         when (val outcome = repository.submit(session, pending.operation)) {
-            is SubmitOutcome.Accepted -> WorkspaceSubmissionStep.Accepted(
-                session = session.copy(
-                    workspaceVersion = outcome.workspaceVersion,
-                    lastServerSeq = outcome.lastServerSeq,
-                    workspace = pending.workspaceAfter,
-                ),
-                acceptedToken = pending.token,
-            )
+            is SubmitOutcome.Accepted -> {
+                WorkspaceSubmissionStep.Accepted(
+                    session =
+                        session.copy(
+                            workspaceVersion = outcome.workspaceVersion,
+                            lastServerSeq = outcome.lastServerSeq,
+                            workspace = pending.workspaceAfter,
+                        ),
+                    acceptedToken = pending.token,
+                )
+            }
 
-            is SubmitOutcome.Conflict -> WorkspaceSubmissionStep.Conflict(
-                session = outcome.current,
-                discardedCount = queue.size,
-            )
+            is SubmitOutcome.Conflict -> {
+                WorkspaceSubmissionStep.Conflict(
+                    session = outcome.current,
+                    discardedCount = queue.size,
+                )
+            }
         }
     } catch (error: CancellationException) {
         throw error

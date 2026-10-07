@@ -1,7 +1,47 @@
 # BoarderLess 產品 QA 品質檢驗 SOP
 
+## Desktop單一寫入程序驗收（2026-10-05）
+
+使用新build；先自行退出其他舊build／CLI writer，勿把取得新鎖當作已排除舊程式。此項尚未人工簽核，不啟用migration。
+
+1. 正常啟動，記錄build／OS／程序與工作區；再從相同launcher啟動，應聚焦原視窗，不另建立寫入APP。測第二次帶工作區參數，應在原程序開啟該workspace。
+2. Mac關閉視窗再開：仍應回到原程序，不能因視窗隱藏而放棄lease；Dock reopen與workspace launcher各驗一次。
+3. 原程序尚在啟動且不能接socket時，第二程序只顯示持鎖提示並停止，不可建立另一APP／重設Settings。提示可讀性與遮擋由使用者判斷。
+4. 明確Quit後重新啟動應成功。若測強制終止，先用隔離QA資料／測試程序；鎖可再取得不代表草稿已durable，資料恢復另依receipt驗收，不拿使用者未備份草稿做kill測試。
+5. lockfile不得以刪除／替換方式解除；遇安全權限錯誤應停止並保留資料，不教使用者刪鎖繞過排他。Windows／Linux各記錄實際結果，macOS自動測試不能代簽其他OS。
+
+保存第二launch、open、focus、close／Quit與故障提示的結果及截圖；不記錄instance token或認證。GUI／VoiceOver／遮擋由使用者簽核，效能仍最後。
+
+## AI 預設 flowchart 補充（2026-10-05）
+
+新 build 理解驗證預設顯示 Mermaid flowchart，N/E 短 ID、群組 subgraph、四種箭頭方向與 label／非泛用 intent 均須保留；回應用短 ID 核對。驗證包不得包含原 UUID／工作區名稱／版本／座標／素材 assetId。node text 可能本身有私密內容，仍需審查。只有建立時正式選定特殊圖型才可換語法，不按外觀／座標猜圖型；目前特殊類型 metadata 尚未接入。空名稱、Emoji、特殊符號、平行線、反向線、群組 nesting 均須重驗。詳 AI_DIAGRAM_EXPRESSION_SPEC；此前完整 scene JSON 檢查項以新合約為準，視覺／語意人工簽核與效能最後保持。
+
+## 連線標籤自動布局補充（2026-10-05）
+
+新 build 建立至少兩條重疊／交叉線與長標籤，確認標籤優先在線側、相互分離且文字完整換行；移動、旋轉節點／縮放 viewport 後確認位置重算、不改資料或增加 Undo。文字含中文／換行、系統大字級與手機版皆需重驗。密集布局不保證零衝突，遮擋由使用者簽核；效能最後。手動拖曳、自循環、插線與時序精靈目前僅規格，依 SEQUENCE_AND_RELATION_INTERACTION_SPEC 後續驗收，不列已通過。
+
+## AI 理解驗證補充（2026-10-05）
+
+依 [AI_UNDERSTANDING_ACCEPTANCE.md](AI_UNDERSTANDING_ACCEPTANCE.md) 執行唯讀驗證。保存 scope JSON／模型／完整回應／inventory 結果／人工語意結論，不記錄認證。用群組階層、循環／分支、反向／雙向、同名不同 ID、旋轉交疊與 scope 外資訊檢驗模型。自動 ID／方向／parent 核對通過不代表理解；圖片無像素不可推測內容。使用者另簽核 modal 可讀性、鍵盤貼上刪字、取消、手機安全區／遮擋及 VoiceOver。真 API 必須在審查後明確同意，確認驗證不改畫布，效能留至最後。
+
 更新日期：2026-10-02
 文件狀態：執行基準 v1
+
+## 手機多選模式觸控回歸（2026-10-05）
+
+新 build／安裝後，iOS 與 Android 分別驗文字、圖片／GIF／影片及群組。工程修正：觸控使用系統 touch slop，多選時不進入物件移動；手勢 callback 使用最新 selection state，模式切換重啟手勢，隱藏單物件旋轉／縮放／連線 handle；退出清除選取及 preview。滑鼠拖曳維持原即時反應。
+
+1. 開多選，輕點 A 時手指稍微抖動，應只切換 A 選取，不移動、不新增 history／後端 move、不搶成單物件編輯。
+2. 再點 B，A＋B 都保留；再點 A 應只取消 A。重複快速點按，不受 focus 或舊 callback 覆寫。
+3. 多選時在物件上明顯拖曳，不得移動物件或選成單物件；跨過觸控容差的拖曳不算一次點選。取消手勢不留下 preview。
+4. 關閉多選，原選取高亮清空；點 A 再點 B 應只有 B。退出／重新開啟數次，以及 Escape（外接鍵盤）退出，均無殘留選取模式。
+5. 關閉後正常拖曳仍可移動，輕微抖動仍當點選；旋轉過的物件方向正常。Desktop 滑鼠／Shift 多選維持原行為。
+
+記錄平台／OS／build、物件型別、預期／實際結果、操作錄影或截圖。純手勢 classifier 測試與 native compile 不代替實機 UI、VoiceOver、遮擋與視覺簽核；效能最後。
+
+2026-10-05 Undo／Redo 還原：按 UNDO_RESTORE_ACCEPTANCE 的专用QA畫布步驟驗新增Undo/Redo、群組／child／連線delete Undo/Redo反覆循環、保持ID／內容／parent／intent、還原後再編輯、relation-only與media asset引用。工程live不代替四平台UI／VoiceOver／遮擋簽核。正式fixtures16／20問題由後端維護者修，不能簽31份全面通過；效能最後。
+
+2026-10-05 iOS picker返回修正重驗：新build/install後，從照片格子點選一張，應直接關閉system picker回APP匯入；按X應關閉並顯示取消，不得僵住。連續取消／重開、選照片／影片、慢速iCloud、APP取消時late callback不得新增Node。原生wrapper身份回歸已過，不等於GUI已過；不需新增完成button。記錄OS／build／步驟／實際結果與截圖，視覺與遮擋由使用者判定。
 
 2026-10-05 品牌resource工程驗收路由：AndroidHost需depends本次APP APK並把APK作test input，直接讀精確packaged entry，仍驗原PNG bytes／signature／dimensions／hash；缺APK／entry或超量不得source fallback，不設Android stub return-defaults或ignore。AndroidDevice與其他平台保留真正Res reader。76671完整Host656cases零fail/skip，但APP與Device APK建置不代替實際Device資源載入、品牌位置／清晰度／VoiceOver、正式GIPHY整合批准；人工視覺由使用者簽核，效能最後。
 
@@ -22,6 +62,14 @@
 2026-10-05 AI HTTP 補充：MockEngine＋channel 可驗 status／mime／charset／declared-size拒絕、redirect不轉向、單次呼叫、不自動retry、取消／consumer error／terminal釋放。正式接線後再驗實際request／socket逾時、JS request-only與Darwin缺connect timeout的引擎差異、TLS／LAN／CORS／認證／撤權；不以配置值當 elapsed-time 證明、不把response gate當完整AI上線。取消不得變成失敗重試；401／403／格式／大小錯誤不能提示可retry，429／5xx／網路錯誤的手動重試須有使用者操作，不靜默重送或雲端fallback。context同意／proposal逐筆確認／commit與Undo仍Pending；沒有新的APP AI入口，視覺／VoiceOver／遮擋由使用者簽核，效能最後。
 
 2026-10-05 AI SSE 補充：有界 byte parser 的 channel fixture 可驗分片 UTF-8／換行／多行事件／EOF／取消／大小拒絕與資源釋放，不是正式 socket、HTTP status／Content-Type／timeout、三類 provider、Key 或 UI 驗收。正式 transport 接線後才驗真實中斷／取消／撤權及 context 同意、proposal 逐筆确认、提交與 Undo；文字串流不得自動改畫布。單 byte 與 8 MiB 上限 case 是功能邊界測試，不當效能測試。視覺／VoiceOver／動態島與遮擋由使用者簽核，效能最後；本輪沒有新的 APP AI 入口，不以 fixture 代簽。
+
+## iOS 照片／影片來源驗收（2026-10-05）
+
+重新build/install後，匯入應先有「照片與影片／檔案／取消」來源選擇。兩來源分別驗取消／重開、選取、上傳與Node重開；Photos只能讀明確選取項目，不要求整庫權限、不刪照片原件。驗PNG/JPEG、GIF保留動態、MP4；HEIC/MOV需記錄Compatible實際輸出，無支援representation應提示不支援，不當原格式完整支援。另測iCloud下載失敗／120s匯出timeout、等待時APP取消／背景／換workspace、不會晚到建立Node、暫存清理與資料隔離。工程helper4cases與雙iOS target compile不代替PHPicker GUI／真實callback取消／實機storage驗收。來源menu、Photos system UI與鍵盤／safearea遮擋、VoiceOver及視覺由產品負責人簽核，效能最後。
+
+## Web 選檔取消競態重驗（2026-10-05）
+
+工程已重現並修focus早於change的250ms取消競態。產品重驗需記錄瀏覽器／版本、JS或Wasm build、檔案來源（本機／雲端）及格式，先重建／重新載入新media-import.js。選完檔案應进入prepare／upload，而非顯示已取消；檔案provider較慢、多次window focus也不得取消。另測native取消與APP取消、同檔重選、取消後late change不啟動上傳。缺input cancel的舊瀏覽器會維持等待，需explicit取消或120s選擇錯誤；timeout不能簽為使用者取消。Node競態測試不是實際storage上傳或瀏覽器原生picker驗收。視覺／VoiceOver／遮擋由使用者簽核；效能最後。
 
 ## iPhone API 配置修正重驗流程（2026-10-05）
 
@@ -878,6 +926,28 @@ journal 保存一致性補充（2026-10-04）：invalid scope／version／sequen
 - VoiceOver 等必要無障礙項目已有實機結論；未完成時不得誤寫為已驗收。
 - 已知 P2／P3 有負責人、處置決策及後續追蹤位置。
 # AI 請求設定／上下文驗收補充（2026-10-05，UI 尚未交付）
+
+原子核對記錄保存驗收：先確認實際 adapter 與 activation。預設 Settings 必須顯示原子保存尚未啟用、沒有保存按鈕；不能僅以 Desktop 平台判定已啟用。只有已正式完成遷移及 writer 排他的 atomic adapter 才驗「重新核對並保存記錄（不套用）」：重新讀服務，不沿用舊視窗proof；保存前捕捉generation，並行writer／generation漂移必須拒絕。確認保存與重開後 exact wire／原草稿／tail／quarantine 都保留，v2 evidence完整，client sequence不變，沒有submit／fences／Apply。隔離故障測試分DataForced、Published、DirectoryForced：發布前保留舊版，發布後錯誤不當取消、需按「重新讀取封存」，只本機讀取、不自動retry或清另一pending的查詢／fence狀態。重開顯示已有核對記錄但不是當前授權；再保存若完整commit值／defaults或terminal矛盾要拒絕，不覆蓋舊證據。此APP仍未預設啟用，正式OS kill／native adapter／GUI簽核不得冒稱通過；視覺／VoiceOver由使用者判定，效能最後。
+
+封存完整核對驗收：先查到 committed 或 fenced 才提供「核對完整記錄與最新畫布」，unknown 不提供。committed 重查receipt／完整log／fresh metadata-state；缺段、重複／超量operation、錯payload／baseVersion／commit時間／scope、撤權或 state 比此次 receipt head 舊都不得成功。fenced 只查receipt及fresh state，不假造commit記錄。取消／逾時／關窗／scope切換不得發布成功。成功明示唯讀核對完成但尚未保存 ACK、解除隔離或 Apply，archive／active pending／sequence／journal前後不變。原子保存是另一明確動作，受adapter能力門禁；此階段不是新交易授權。工程故障 fixture 用隔離測試，真服務／GUI另驗，視覺與VoiceOver由使用者簽核，效能最後。
+
+封存查詢 UI 驗收：重建新版，在隔離 QA 畫布的既有停止重送資料上，按「檢視已停止重送的交易」。檢查中央視窗 safe area／長交易 ID／滾動清單／關閉及快捷鍵隔離；逐筆按查詢，只有 receipts POST，不能有 submit 或 fences。分別驗 committed／fenced／unknown／403／錯格式及逾時，訊息保留在正確交易；committed 明示摘要不是完整 ACK，需另按完整核對，Apply 尚未接，不清封存或隔離草稿。關窗及切換工作區／client／使用者後不得發布舊結果；刪草稿後新格式封存仍可列出，其他 scope 不露出。舊 metadata 缺失、損毀或超量應顯示需恢復，不自動清除。工程 tests 與編譯不當 GUI／實機通過；視覺、遮擋、VoiceOver 由使用者簽核，效能最後。
+
+停止重送封存驗收：只用隔離 QA 草稿，記錄 transaction 與 build；明確停止重送後，核對完整 wire（含刪除 provenance）仍有封存、草稿隔離、沒有新增 server 操作或自動 merge。工程故障測試需驗封存分塊／manifest 或 journal quarantine 寫入丟失時 pending 保留，舊草稿分塊不被回收；禁止在正式偏好資料製造損毀。明確刪草稿仍保留 wire，但不能宣稱可恢復整份草稿。原生落盤／OS kill／多 writer／完整 Apply 尚待交付，視覺與遮擋由使用者簽核、效能最後；詳 ORIGINAL_SUBMISSION_RECEIPT_ACCEPTANCE。
+
+Fence保存驗收增補：確認前寫Unconfirmed失敗不得HTTP，保存後送出／取消／timeout再重開APP應顯示需查詢且不能重送原wire；unknown不清限制，terminal結果與full-log ACK分開。測marker exact scope／transaction／wire digest，損毀或矛盾不可自動清空；不用正式資料製造fault。現有InMemorySettings重建與讀寫故障測試不是OS kill/native flush證据，四平台需另附進程關閉／重開、checked commit/flush失敗及多writer證據，手機訊息/VoiceOver/遮擋由使用者簽核，效能最後。詳ORIGINAL_SUBMISSION_RECEIPT_ACCEPTANCE；尚無損毀marker的完整quarantine修復UI。
+
+原交易fence新增驗收：隔離QA workspace先查unknown，第一下「封鎖原請求…」僅警告＋取消、零HTTP；第二下才送fences exact transaction，需清楚說明不可撤銷、送出後取消不撤销server。檢查commit先贏採committed；unknown／timeout不宣稱fenced、不自動resend／merge，原草稿不清、同transaction当前重送disabled。換workspace／身份／原交易取消arming，晚到結果不發布錯scope；viewer不顯示可操作fence。普通MockEngine不替代真DB race，正式測試會永久封鎖QA交易，勿使用正式資料。durable proof／重開APP與完整merge尚待驗，視覺／觸控／VoiceOver由使用者簽核、效能最後，詳ORIGINAL_SUBMISSION_RECEIPT_ACCEPTANCE。
+
+原提交完整恢復追加：committed查詢結果後另按「核對完整記錄並確認恢復」。測試環境驗receipt/log身份、完整range、baseVersion、payload supplied值與fresh ACL一致時才清pending并載最新state；缺段、錯payload、unknown/fenced、撤權/403都保留原wire，不POST原交易/fences。驗數字1/1.0及server defaults不誤拒、string型別不混淆；原交易版本不能被新head取代。Settings斷電原子、跨重啟Undo及真實服務尚需專項；入口視覺／手機遮擋／VoiceOver由使用者判定，效能最後，詳ORIGINAL_SUBMISSION_RECEIPT_ACCEPTANCE。
+
+原提交查詢新增验收：依 ORIGINAL_SUBMISSION_RECEIPT_ACCEPTANCE，在非重要QA workspace既有pending的恢復區按「查詢原提交結果」，分別驗committed／unknown／fenced／403／格式錯誤／scope切換。前後原交易與pending不變，不新增node、不submit/fence、不更新history或清草稿；unknown不能記為未提交，fenced當前重送disabled，committed不是完整ACK。保存安全結果及build，人工判定手機按鈕／狀態／VoiceOver／遮擋；MockEngine不代簽真實服務或GUI，效能最後。
+
+最新補充：唯讀 AI 理解驗證入口與設定精靈現已交付，完整 cowork 設定持久化／proposal 尚未完成；本節下方「UI 尚未交付」為先前紀錄。理解驗證的正式操作以 AI_UNDERSTANDING_ACCEPTANCE 為準。
+
+安全除錯 UI 人工驗收：先關閉舊 Desktop APP，重新以 `./gradlew :desktopApp:run` 建置啟動。AI 視窗標題下應有「尚未送出 AI 請求」與「複製安全除錯資訊」，作為新版確認，不以 source 修改／編譯成功宣稱既有視窗更新。送出後記錄 Preparing／CheckingWorkspace／Connecting／HttpResponse／Receiving 與終態；快速中間階段可由階段記錄核對。滾動長提示詞時狀態應固定可見，失敗／取消後保留，人工判定手機鍵盤、動態島、遮擋及 VoiceOver。
+
+以測試環境驗 HTTP 拒絕、200 JSON／HTML、損毀／空 SSE、取消與成功；HTTP 200 不等於完成。前置 scope／version／snapshot 不符或畫布後端不可達時不得送 AI，WorkspaceBackend 的 HTTP 不可誤記為 AI 服務回應。每次重送重新同意，不自動重試。保存安全診斷文字至 QA form：應只有固定階段／錯誤碼、HTTP 狀態與粗略 Content-Type，不得含 token、endpoint、模型、提示詞、回應本文、原始 headers 或 signed URL。實際模型內容需另依已授權資料規範保存；自動 MockEngine 測試不代替真實 Router／GUI 簽核，效能最後。
 
 Configured provider 已接 body／HTTP／SSE／文字adapter與必填approve callback，但沒有正式同意UI，以上狀態不改本章Pending。正式接線後另驗：完整endpoint不得把key放query/userinfo/fragment；遠端HTTPS，Local HTTP需顯示明文／LAN風險並明確同意，不能默認允許；每次request／手動retry都重新review並驗fresh scope，拒絕或取消同意時不得讀secret／發請求。Messages版本明確設定；不能用框選Local來證明地址真的在內網。
 

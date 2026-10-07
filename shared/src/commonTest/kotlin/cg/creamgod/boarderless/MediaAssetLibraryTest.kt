@@ -16,27 +16,60 @@ class MediaAssetLibraryTest {
             assertFalse(canRetryLibraryPreview(MediaAssetLibraryEntry(asset(status = it), "Photo"), true, true, false))
         }
         assertFalse(canRetryLibraryPreview(MediaAssetLibraryEntry(asset(type = "video/mp4"), "Video"), true, true, false))
-        assertFalse(canRetryLibraryPreview(MediaAssetLibraryEntry(asset().copy(byteSize = AssetPreviewPolicy.MaxEncodedBytes + 1), "Large"), true, true, false))
-        assertTrue(canRetryLibraryPreview(MediaAssetLibraryEntry(asset(type = "video/mp4").copy(thumbnailAssetId = "poster"), "Video"), true, true, false))
+        assertFalse(
+            canRetryLibraryPreview(
+                MediaAssetLibraryEntry(asset().copy(byteSize = AssetPreviewPolicy.MaxEncodedBytes + 1), "Large"),
+                true,
+                true,
+                false,
+            ),
+        )
+        assertTrue(
+            canRetryLibraryPreview(
+                MediaAssetLibraryEntry(asset(type = "video/mp4").copy(thumbnailAssetId = "poster"), "Video"),
+                true,
+                true,
+                false,
+            ),
+        )
     }
+
     @Test fun lateVideoThumbnailAppearsWithoutChangingThePersistedNode() {
         val original = asset(type = "video/mp4")
         val persisted = node(original)
         val before = persisted.copy()
         assertNull(persisted.thumbnailAssetId)
         assertNull(mediaNodePreviewAssetId(persisted, original, workspaceId))
-        assertEquals("late-poster", mediaNodePreviewAssetId(persisted,
-            original.copy(thumbnailAssetId = "late-poster"), workspaceId))
+        assertEquals(
+            "late-poster",
+            mediaNodePreviewAssetId(
+                persisted,
+                original.copy(thumbnailAssetId = "late-poster"),
+                workspaceId,
+            ),
+        )
         assertEquals(before, persisted)
     }
 
     @Test fun latestReadyMetadataOverridesStalePersistedThumbnail() {
         val original = asset(type = "video/mp4").copy(thumbnailAssetId = "old-poster")
         val persisted = node(original)
-        assertEquals("new-poster", mediaNodePreviewAssetId(persisted,
-            original.copy(thumbnailAssetId = "new-poster"), workspaceId))
-        assertEquals("old-poster", mediaNodePreviewAssetId(persisted,
-            original.copy(thumbnailAssetId = null), workspaceId))
+        assertEquals(
+            "new-poster",
+            mediaNodePreviewAssetId(
+                persisted,
+                original.copy(thumbnailAssetId = "new-poster"),
+                workspaceId,
+            ),
+        )
+        assertEquals(
+            "old-poster",
+            mediaNodePreviewAssetId(
+                persisted,
+                original.copy(thumbnailAssetId = null),
+                workspaceId,
+            ),
+        )
         assertEquals("old-poster", persisted.thumbnailAssetId)
     }
 
@@ -64,10 +97,17 @@ class MediaAssetLibraryTest {
             val original = asset(type = type)
             val persisted = node(original)
             assertEquals("a", mediaNodePreviewAssetId(persisted, original, workspaceId))
-            assertEquals("poster", mediaNodePreviewAssetId(persisted,
-                original.copy(thumbnailAssetId = "poster"), workspaceId))
+            assertEquals(
+                "poster",
+                mediaNodePreviewAssetId(
+                    persisted,
+                    original.copy(thumbnailAssetId = "poster"),
+                    workspaceId,
+                ),
+            )
         }
     }
+
     @Test fun onlyRejectedEntriesDisplayLocalizedValidationReasonsAndNeverBecomeInsertable() {
         AssetRejectionReason.entries.forEach { reason ->
             assertTrue(assetRejectionReasonLabel(reason).isNotBlank())
@@ -78,6 +118,7 @@ class MediaAssetLibraryTest {
             }
         }
     }
+
     @Test fun recoveryReadPreservesAllFormalStatusesWithoutGrantingInsertion() {
         AssetStatus.entries.forEach { status ->
             val metadata = asset(status = status)
@@ -103,14 +144,26 @@ class MediaAssetLibraryTest {
     }
 
     private val workspaceId = WorkspaceId("w")
-    private fun asset(id: String = "a", type: String = "image/png", status: AssetStatus = AssetStatus.Ready) =
-        WorkspaceAsset(id, workspaceId, "u", type, 123, "sha256:abc", 640, 480, null, status, "2026-10-02")
-    private fun node(asset: WorkspaceAsset) = mediaNodeFromReadyAsset(asset, workspaceId, CanvasObjectId("node"), Vec2(500f, 400f), 1f, 4, "Photo")
-    private fun session(user: String = "u", client: String = "c", role: WorkspaceMemberRole = WorkspaceMemberRole.Editor,
-        id: WorkspaceId = workspaceId) = WorkspaceSession(user, client, role, 0, 0, Workspace(id, "Library"))
+
+    private fun asset(
+        id: String = "a",
+        type: String = "image/png",
+        status: AssetStatus = AssetStatus.Ready,
+    ) = WorkspaceAsset(id, workspaceId, "u", type, 123, "sha256:abc", 640, 480, null, status, "2026-10-02")
+
+    private fun node(asset: WorkspaceAsset) =
+        mediaNodeFromReadyAsset(asset, workspaceId, CanvasObjectId("node"), Vec2(500f, 400f), 1f, 4, "Photo")
+
+    private fun session(
+        user: String = "u",
+        client: String = "c",
+        role: WorkspaceMemberRole = WorkspaceMemberRole.Editor,
+        id: WorkspaceId = workspaceId,
+    ) = WorkspaceSession(user, client, role, 0, 0, Workspace(id, "Library"))
 
     @Test fun catalogIsWorkspaceScopedDeduplicatedSearchableAndStable() {
-        val first = asset(); val later = asset("b", "video/mp4").copy(createdAt = "2026-10-03")
+        val first = asset()
+        val later = asset("b", "video/mp4").copy(createdAt = "2026-10-03")
         val foreign = asset("foreign").copy(workspaceId = WorkspaceId("other"))
         val assets = listOf(first, later, first, foreign)
         assertEquals(listOf("b", "a"), mediaAssetLibraryEntries(workspaceId, assets, emptyList()).map { it.asset.id })
@@ -120,7 +173,9 @@ class MediaAssetLibraryTest {
     }
 
     @Test fun onlyReadySupportedAndWithinSizeLimitIsInsertable() {
-        AssetStatus.entries.forEach { status -> assertEquals(status == AssetStatus.Ready, MediaAssetLibraryEntry(asset(status = status), "a").insertable) }
+        AssetStatus.entries.forEach { status ->
+            assertEquals(status == AssetStatus.Ready, MediaAssetLibraryEntry(asset(status = status), "a").insertable)
+        }
         assertFalse(MediaAssetLibraryEntry(asset(type = "application/pdf"), "a").insertable)
         assertFalse(MediaAssetLibraryEntry(asset().copy(byteSize = MaxWorkspaceAssetBytes + 1), "a").insertable)
         assertTrue(MediaAssetLibraryEntry(asset().copy(byteSize = MaxWorkspaceAssetBytes), "a").insertable)
@@ -139,8 +194,10 @@ class MediaAssetLibraryTest {
     @Test fun reusableNodeReferencesExistingAssetAndThumbnailWithSameSizingAsImport() {
         val stored = asset(type = "video/mp4").copy(thumbnailAssetId = "poster")
         val reused = node(stored)
-        assertEquals("a", reused.assetId); assertEquals("poster", reused.thumbnailAssetId)
-        assertEquals(MediaKind.Video, reused.mediaKind); assertEquals("Photo", reused.altText)
+        assertEquals("a", reused.assetId)
+        assertEquals("poster", reused.thumbnailAssetId)
+        assertEquals(MediaKind.Video, reused.mediaKind)
+        assertEquals("Photo", reused.altText)
         assertEquals(CanvasSize(320f, 240f), reused.transform.size)
         assertEquals(Vec2(340f, 280f), reused.transform.position)
         assertEquals(4L, reused.zIndex)
@@ -174,7 +231,11 @@ class MediaAssetLibraryTest {
     }
 
     @Test fun invalidPlacementIsRejectedWithoutChangingAsset() {
-        assertFailsWith<IllegalArgumentException> { mediaNodeFromReadyAsset(asset(), workspaceId, CanvasObjectId("n"), Vec2.Zero, Float.NaN, 0, "a") }
-        assertFailsWith<IllegalArgumentException> { mediaNodeFromReadyAsset(asset(), workspaceId, CanvasObjectId("n"), Vec2(Float.POSITIVE_INFINITY, 0f), 1f, 0, "a") }
+        assertFailsWith<IllegalArgumentException> {
+            mediaNodeFromReadyAsset(asset(), workspaceId, CanvasObjectId("n"), Vec2.Zero, Float.NaN, 0, "a")
+        }
+        assertFailsWith<IllegalArgumentException> {
+            mediaNodeFromReadyAsset(asset(), workspaceId, CanvasObjectId("n"), Vec2(Float.POSITIVE_INFINITY, 0f), 1f, 0, "a")
+        }
     }
 }

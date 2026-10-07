@@ -4,16 +4,19 @@ package cg.creamgod.boarderless.data
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.viewinterop.UIKitView
 import androidx.compose.ui.viewinterop.UIKitInteropProperties
-import platform.AVFoundation.AVPlayerLayer
+import androidx.compose.ui.viewinterop.UIKitView
 import platform.AVFoundation.AVLayerVideoGravityResizeAspect
-import platform.QuartzCore.CATransaction
+import platform.AVFoundation.AVPlayerLayer
 import platform.CoreGraphics.CGRectMake
+import platform.QuartzCore.CATransaction
 import platform.UIKit.UIView
 
 @Composable
-fun IosVideoSurface(playback: VideoPlayback, modifier: Modifier) {
+fun IosVideoSurface(
+    playback: VideoPlayback,
+    modifier: Modifier,
+) {
     val native = playback as IosVideoPlayback
     UIKitView(
         factory = { VideoLayerView(native) },
@@ -23,8 +26,11 @@ fun IosVideoSurface(playback: VideoPlayback, modifier: Modifier) {
     )
 }
 
-private class VideoLayerView(private val playback: IosVideoPlayback) : UIView(frame = CGRectMake(0.0, 0.0, 0.0, 0.0)) {
+private class VideoLayerView(
+    private val playback: IosVideoPlayback,
+) : UIView(frame = CGRectMake(0.0, 0.0, 0.0, 0.0)) {
     private val videoLayer = AVPlayerLayer()
+
     init {
         userInteractionEnabled = false
         clipsToBounds = true
@@ -32,6 +38,7 @@ private class VideoLayerView(private val playback: IosVideoPlayback) : UIView(fr
         layer.addSublayer(videoLayer)
         playback.attach(videoLayer, this)
     }
+
     override fun layoutSubviews() {
         super.layoutSubviews()
         CATransaction.begin()
@@ -39,6 +46,7 @@ private class VideoLayerView(private val playback: IosVideoPlayback) : UIView(fr
         videoLayer.frame = bounds
         CATransaction.commit()
     }
+
     fun detachPlayer() {
         playback.detach(videoLayer, this)
         videoLayer.removeFromSuperlayer()

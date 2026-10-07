@@ -6,8 +6,8 @@ import cg.creamgod.boarderless.domain.model.CanvasTransform
 import cg.creamgod.boarderless.domain.model.GroupFrame
 import cg.creamgod.boarderless.domain.model.TextNode
 import cg.creamgod.boarderless.domain.model.Vec2
-import cg.creamgod.boarderless.feature.canvas.selectionAfterObjectTap
 import cg.creamgod.boarderless.feature.canvas.hierarchyAwareSelectionAfterObjectTap
+import cg.creamgod.boarderless.feature.canvas.selectionAfterObjectTap
 import cg.creamgod.boarderless.feature.canvas.selectionPropertySummary
 import cg.creamgod.boarderless.feature.canvas.topLevelSelectionIds
 import kotlin.test.Test
@@ -61,11 +61,12 @@ class SelectionPropertyTest {
         val childId = CanvasObjectId("child")
         val siblingId = CanvasObjectId("sibling")
         val transform = CanvasTransform(Vec2.Zero, CanvasSize(240f, 120f))
-        val objects = listOf(
-            GroupFrame(groupId, transform = transform),
-            TextNode(childId, parentId = groupId, transform = transform, text = "Child"),
-            TextNode(siblingId, transform = transform, text = "Sibling"),
-        ).associateBy { it.id }
+        val objects =
+            listOf(
+                GroupFrame(groupId, transform = transform),
+                TextNode(childId, parentId = groupId, transform = transform, text = "Child"),
+                TextNode(siblingId, transform = transform, text = "Sibling"),
+            ).associateBy { it.id }
 
         assertEquals(
             setOf(siblingId, childId),
@@ -85,12 +86,13 @@ class SelectionPropertyTest {
         val nestedGroupId = CanvasObjectId("nested")
         val nestedChildId = CanvasObjectId("nested-child")
         val transform = CanvasTransform(Vec2.Zero, CanvasSize(240f, 120f))
-        val objects = listOf(
-            GroupFrame(groupId, transform = transform),
-            TextNode(childId, parentId = groupId, transform = transform, text = "Child"),
-            GroupFrame(nestedGroupId, parentId = groupId, transform = transform),
-            TextNode(nestedChildId, parentId = nestedGroupId, transform = transform, text = "Nested"),
-        ).associateBy { it.id }
+        val objects =
+            listOf(
+                GroupFrame(groupId, transform = transform),
+                TextNode(childId, parentId = groupId, transform = transform, text = "Child"),
+                GroupFrame(nestedGroupId, parentId = groupId, transform = transform),
+                TextNode(nestedChildId, parentId = nestedGroupId, transform = transform, text = "Nested"),
+            ).associateBy { it.id }
 
         assertEquals(
             setOf(groupId),

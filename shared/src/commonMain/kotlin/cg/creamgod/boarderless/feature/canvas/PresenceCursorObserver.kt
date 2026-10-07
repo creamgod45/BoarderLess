@@ -29,11 +29,17 @@ internal fun Modifier.presenceCursorObserver(
                 while (true) {
                     val event = awaitPointerEvent(PointerEventPass.Initial)
                     val pointer = event.changes.firstOrNull()
-                    val clear = event.type == PointerEventType.Exit ||
-                        (event.type == PointerEventType.Release && pointer?.type == PointerType.Touch)
+                    val clear =
+                        event.type == PointerEventType.Exit ||
+                            (event.type == PointerEventType.Release && pointer?.type == PointerType.Touch)
                     val position = pointer?.position
-                    publishSample(if (clear || position == null || !position.x.isFinite() || !position.y.isFinite())
-                        null else Vec2(position.x, position.y))
+                    publishSample(
+                        if (clear || position == null || !position.x.isFinite() || !position.y.isFinite()) {
+                            null
+                        } else {
+                            Vec2(position.x, position.y)
+                        },
+                    )
                 }
             }
         } finally {

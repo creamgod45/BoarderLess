@@ -1,5 +1,12 @@
 # 共用 Canvas Style APP／Backend 合約草案
 
+2026-10-06 背景文件保存與Undo／Redo已接線：Workspace新增strict CanvasStyle／canvasStyleVersion；預設Desktop FileRepo宣告支持。背景Apply沿execute→retainDraft→既有history／queue，完整style隨atomic文件保存，重開讀回；render依history style即時顯示Undo／Redo結果。viewport／showGrid／snap仍個人Settings，本機document mode不再把background回寫Settings，亦不自動搬移舊偏好。server mode支持旗標維持false，背景仍裝置偏好；正式Backend缺state／operation／capability，沒有發明endpoint或宣稱跨裝置同步。
+
+UpdateCanvasStyleOperation有before-state＋style CAS；Undo／Redo只rebase版本並保留before guard，styleVersion單調增加，安全整數上限拒絕。schema1的default／warm／cool／lowercase hex、grid none／lines／dots與auto／hex嚴格驗證；grid renderer可讀這些正式樣式，spacing沿現有規則，未宣稱跨density合約已驗。picker捕捉user/client/workspace/style/version；scope／撤權取消、style drift拒絕Apply、Preview／Cancel零operation；未變更零operation。首次保存嘗試凍結同一operation/after，換token不能沿用identity。草稿三方合併增加workspaceStyle row與完整style比較，明確KeepRemote／UseDraft後產生新guarded operation；Backend contract gap阻擋未支持的樣式提交，retainDraft亦在任何append前拒絕（包含nested transactions），DTO conversion拒絕而不reserve seq／HTTP。
+
+驗證：CanvasStyleOperationTest6cases（history單調／新identity、remote Undo與整數上限、strict serialization與transaction rollback、picker scopes／no-op／個人preferences、backend零Settings寫入／零HTTP、三方合併style conflict與新operation），FileRepo新增真Apply／Undo／Redo檔案reopen。50802最終隔離build成功79s：JVM887（6既有skip）、JS805、Wasm805、Desktop46均0failure/error；iOS arm64／Android main compile、新Desktop包通過，更新desktopApp/build/verified/BoarderLess.app並核class。首次fixture漏canEditContent import、使用不存在MapSettings與漏TextNode transform已修正；既有contract-gap test以entries全量集合推斷舊3種改為明確3種，新增style gap另驗。尚無GUI驗收／正式多人樣式同步或方案簿CRUD；沒有新AI安全log，實際Router401未排除。完整六主線goal active，測試資料遷移不作前置。
+
+
 日期：2026-10-02。對應 Priority 4／BAI-005。
 
 狀態：**Proposal／待後端確認及雙端實作**。目前 APP 背景仍為 per-device preference，後端 projection／snapshot／operation reducer 沒有 canvasStyle。本文不代表已共享或可 Undo；不修改／啟動其他 agent 維護的後端，也不改既定 Priority 1→2→3→4 順序。

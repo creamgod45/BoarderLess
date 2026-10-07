@@ -13,6 +13,10 @@ import org.jetbrains.compose.resources.painterResource
 
 /** Original approved static mark; no tint, crop, redraw, animation or GIPHY API/CDN request. */
 @Composable internal fun GiphyAttribution() {
-    Image(painterResource(Res.drawable.giphy_powered_by), contentDescription = "Powered By GIPHY",
-        contentScale = ContentScale.Fit, modifier = Modifier.width(200.dp).height(42.dp))
+    Image(
+        painterResource(Res.drawable.giphy_powered_by),
+        contentDescription = "Powered By GIPHY",
+        contentScale = ContentScale.Fit,
+        modifier = Modifier.width(200.dp).height(42.dp),
+    )
 }

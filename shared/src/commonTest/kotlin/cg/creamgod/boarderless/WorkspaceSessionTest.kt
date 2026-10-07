@@ -1,7 +1,7 @@
 package cg.creamgod.boarderless
 
-import cg.creamgod.boarderless.data.WorkspaceSession
 import cg.creamgod.boarderless.data.WorkspaceMemberRole
+import cg.creamgod.boarderless.data.WorkspaceSession
 import cg.creamgod.boarderless.data.hasRemoteChangesComparedTo
 import cg.creamgod.boarderless.domain.model.Workspace
 import cg.creamgod.boarderless.domain.model.WorkspaceId
@@ -57,10 +57,11 @@ class WorkspaceSessionTest {
         role = role,
         workspaceVersion = version,
         lastServerSeq = version,
-        workspace = Workspace(
-            id = WorkspaceId(workspaceId),
-            title = title,
-            version = version,
-        ),
+        workspace =
+            Workspace(
+                id = WorkspaceId(workspaceId),
+                title = title,
+                version = version,
+            ),
     )
 }

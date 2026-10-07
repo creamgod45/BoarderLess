@@ -31,10 +31,11 @@ internal fun groupFrameTransform(
     val bounds = canvasObjectBounds(objects) ?: return null
     return CanvasTransform(
         position = bounds.topLeft - Vec2(padding, padding),
-        size = CanvasSize(
-            width = bounds.bottomRight.x - bounds.topLeft.x + padding * 2f,
-            height = bounds.bottomRight.y - bounds.topLeft.y + padding * 2f,
-        ),
+        size =
+            CanvasSize(
+                width = bounds.bottomRight.x - bounds.topLeft.x + padding * 2f,
+                height = bounds.bottomRight.y - bounds.topLeft.y + padding * 2f,
+            ),
     )
 }
 
@@ -45,9 +46,10 @@ internal fun fittedGroupFrameTransform(
 ): CanvasTransform? {
     require(padding >= 0f) { "Group padding must not be negative" }
     if (contents.isEmpty()) return null
-    val localCorners = contents
-        .flatMap { rotatedTransformCorners(it.transform) }
-        .map { point -> rotateVector(point, -group.transform.rotationDegrees) }
+    val localCorners =
+        contents
+            .flatMap { rotatedTransformCorners(it.transform) }
+            .map { point -> rotateVector(point, -group.transform.rotationDegrees) }
     val left = localCorners.minOf(Vec2::x) - padding
     val top = localCorners.minOf(Vec2::y) - padding
     val right = localCorners.maxOf(Vec2::x) + padding

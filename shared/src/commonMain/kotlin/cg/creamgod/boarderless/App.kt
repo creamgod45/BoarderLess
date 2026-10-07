@@ -1,25 +1,25 @@
 package cg.creamgod.boarderless
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.tooling.preview.Preview
-import cg.creamgod.boarderless.data.persistence.UiPreferences
+import cg.creamgod.boarderless.data.DraftBackupRuntime
+import cg.creamgod.boarderless.data.DraftImportRuntime
 import cg.creamgod.boarderless.data.MediaImportRuntime
 import cg.creamgod.boarderless.data.RecentWorkspacesPublisher
+import cg.creamgod.boarderless.data.persistence.UiPreferences
 import cg.creamgod.boarderless.designsystem.BoarderLessTheme
 import cg.creamgod.boarderless.feature.canvas.WorkspaceMenuBridge
 import cg.creamgod.boarderless.feature.canvas.WorkspaceScreen
 import cg.creamgod.boarderless.feature.qa.QaRuntime
-import cg.creamgod.boarderless.data.DraftBackupRuntime
-import cg.creamgod.boarderless.data.DraftImportRuntime
 import cg.creamgod.boarderless.feature.qa.QaWorkbenchHost
 import cg.creamgod.boarderless.i18n.Localization
 import cg.creamgod.boarderless.i18n.activateLanguage
@@ -29,12 +29,14 @@ import cg.creamgod.boarderless.i18n.resolveLanguage
 @Composable
 @Preview
 fun App(
+    workspaceRepository: cg.creamgod.boarderless.data.CanvasWorkspaceRepository? = null,
     qaRuntime: QaRuntime = QaRuntime.Disabled,
     mediaImportRuntime: MediaImportRuntime = MediaImportRuntime.Unavailable,
     menuBridge: WorkspaceMenuBridge? = null,
     recentWorkspacesPublisher: RecentWorkspacesPublisher = RecentWorkspacesPublisher.None,
     draftBackupRuntime: DraftBackupRuntime = DraftBackupRuntime.Unavailable,
     draftImportRuntime: DraftImportRuntime = DraftImportRuntime.Unavailable,
+    schemeBundleRuntime: cg.creamgod.boarderless.feature.canvas.SchemeBundleRuntime = cg.creamgod.boarderless.feature.canvas.SchemeBundleRuntime.Unavailable,
 ) {
     val uiPreferences = remember { UiPreferences() }
     var reduceTransparency by remember { mutableStateOf(uiPreferences.reduceTransparency) }
@@ -52,9 +54,11 @@ fun App(
     BoarderLessTheme(reduceTransparency = reduceTransparency) {
         Box(modifier = Modifier.fillMaxSize()) {
             WorkspaceScreen(
+                workspaceRepository = workspaceRepository,
                 mediaImportRuntime = mediaImportRuntime,
                 draftBackupRuntime = draftBackupRuntime,
                 draftImportRuntime = draftImportRuntime,
+                schemeBundleRuntime = schemeBundleRuntime,
                 menuBridge = menuBridge,
                 recentWorkspacesPublisher = recentWorkspacesPublisher,
                 reduceTransparency = reduceTransparency,

@@ -10,11 +10,11 @@ import cg.creamgod.boarderless.domain.model.TextNode
 import cg.creamgod.boarderless.domain.model.Vec2
 import cg.creamgod.boarderless.feature.canvas.DiagramLayoutMode
 import cg.creamgod.boarderless.feature.canvas.autoLayoutNodeTransforms
+import kotlin.math.abs
+import kotlin.math.sqrt
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import kotlin.math.abs
-import kotlin.math.sqrt
 
 class DiagramAutoLayoutTest {
     @Test
@@ -22,18 +22,20 @@ class DiagramAutoLayoutTest {
         val end = node("end", x = 20f, y = 400f, z = 0)
         val start = node("start", x = 500f, y = 0f, z = 2)
         val process = node("process", x = 200f, y = 300f, z = 1)
-        val relations = listOf(
-            relation("start", "process"),
-            relation("process", "end"),
-        )
+        val relations =
+            listOf(
+                relation("start", "process"),
+                relation("process", "end"),
+            )
 
-        val result = autoLayoutNodeTransforms(
-            nodes = listOf(end, start, process),
-            relations = relations,
-            mode = DiagramLayoutMode.HorizontalFlow,
-            horizontalGap = 40f,
-            verticalGap = 60f,
-        )
+        val result =
+            autoLayoutNodeTransforms(
+                nodes = listOf(end, start, process),
+                relations = relations,
+                mode = DiagramLayoutMode.HorizontalFlow,
+                horizontalGap = 40f,
+                verticalGap = 60f,
+            )
 
         assertEquals(20f, result.getValue(start.id).position.x)
         assertEquals(160f, result.getValue(process.id).position.x)
@@ -47,13 +49,14 @@ class DiagramAutoLayoutTest {
         val left = node("left", 0f, 0f, 1)
         val right = node("right", 600f, 500f, 2)
 
-        val result = autoLayoutNodeTransforms(
-            nodes = listOf(root, left, right),
-            relations = listOf(relation("root", "left"), relation("root", "right")),
-            mode = DiagramLayoutMode.VerticalTree,
-            horizontalGap = 40f,
-            verticalGap = 60f,
-        )
+        val result =
+            autoLayoutNodeTransforms(
+                nodes = listOf(root, left, right),
+                relations = listOf(relation("root", "left"), relation("root", "right")),
+                mode = DiagramLayoutMode.VerticalTree,
+                horizontalGap = 40f,
+                verticalGap = 60f,
+            )
 
         assertEquals(result.getValue(left.id).position.y, result.getValue(right.id).position.y)
         assertTrue(result.getValue(root.id).position.y < result.getValue(left.id).position.y)
@@ -67,13 +70,14 @@ class DiagramAutoLayoutTest {
         val second = node("second", 200f, 200f, 1)
         val backward = relation("first", "second").copy(direction = RelationDirection.Backward)
 
-        val result = autoLayoutNodeTransforms(
-            nodes = listOf(first, second),
-            relations = listOf(backward),
-            mode = DiagramLayoutMode.VerticalTree,
-            horizontalGap = 40f,
-            verticalGap = 60f,
-        )
+        val result =
+            autoLayoutNodeTransforms(
+                nodes = listOf(first, second),
+                relations = listOf(backward),
+                mode = DiagramLayoutMode.VerticalTree,
+                horizontalGap = 40f,
+                verticalGap = 60f,
+            )
 
         assertTrue(result.getValue(second.id).position.y < result.getValue(first.id).position.y)
     }
@@ -84,25 +88,28 @@ class DiagramAutoLayoutTest {
         val first = node("first", 0f, 0f, 0)
         val second = node("second", 200f, 300f, 1)
         val third = node("third", 500f, 100f, 2)
-        val result = autoLayoutNodeTransforms(
-            nodes = listOf(first, second, third, core),
-            relations = listOf(
-                relation("core", "first"),
-                relation("core", "second"),
-                relation("core", "third"),
-            ),
-            mode = DiagramLayoutMode.RadialRelationship,
-            horizontalGap = 40f,
-            verticalGap = 60f,
-        )
+        val result =
+            autoLayoutNodeTransforms(
+                nodes = listOf(first, second, third, core),
+                relations =
+                    listOf(
+                        relation("core", "first"),
+                        relation("core", "second"),
+                        relation("core", "third"),
+                    ),
+                mode = DiagramLayoutMode.RadialRelationship,
+                horizontalGap = 40f,
+                verticalGap = 60f,
+            )
 
         val coreCenter = result.getValue(core.id).center()
-        val radii = listOf(first, second, third).map { node ->
-            val neighborCenter = result.getValue(node.id).center()
-            val dx = neighborCenter.x - coreCenter.x
-            val dy = neighborCenter.y - coreCenter.y
-            sqrt(dx * dx + dy * dy)
-        }
+        val radii =
+            listOf(first, second, third).map { node ->
+                val neighborCenter = result.getValue(node.id).center()
+                val dx = neighborCenter.x - coreCenter.x
+                val dy = neighborCenter.y - coreCenter.y
+                sqrt(dx * dx + dy * dy)
+            }
 
         assertTrue(radii.all { radius -> abs(radius - radii.first()) < 0.01f })
         assertEquals(core.transform.size, result.getValue(core.id).size)
@@ -116,13 +123,14 @@ class DiagramAutoLayoutTest {
         val fourth = node("fourth", 200f, 800f, 3).withSize(80f, 160f)
         val fifth = node("fifth", 900f, 100f, 4).withSize(160f, 90f)
 
-        val result = autoLayoutNodeTransforms(
-            nodes = listOf(first, second, third, fourth, fifth),
-            relations = emptyList(),
-            mode = DiagramLayoutMode.Grid,
-            horizontalGap = 40f,
-            verticalGap = 60f,
-        )
+        val result =
+            autoLayoutNodeTransforms(
+                nodes = listOf(first, second, third, fourth, fifth),
+                relations = emptyList(),
+                mode = DiagramLayoutMode.Grid,
+                horizontalGap = 40f,
+                verticalGap = 60f,
+            )
 
         val firstResult = result.getValue(first.id)
         val secondResult = result.getValue(second.id)
@@ -132,26 +140,38 @@ class DiagramAutoLayoutTest {
         assertEquals(fourth.transform.size, fourthResult.size)
     }
 
-    private fun node(id: String, x: Float, y: Float, z: Long) = TextNode(
+    private fun node(
+        id: String,
+        x: Float,
+        y: Float,
+        z: Long,
+    ) = TextNode(
         id = CanvasObjectId(id),
         zIndex = z,
         transform = CanvasTransform(Vec2(x, y), CanvasSize(100f, 80f)),
         text = id,
     )
 
-    private fun relation(source: String, target: String) = Relation(
+    private fun relation(
+        source: String,
+        target: String,
+    ) = Relation(
         id = RelationId("$source-$target"),
         sourceObjectId = CanvasObjectId(source),
         targetObjectId = CanvasObjectId(target),
         direction = RelationDirection.Forward,
     )
 
-    private fun CanvasTransform.center() = Vec2(
-        position.x + size.width / 2f,
-        position.y + size.height / 2f,
-    )
+    private fun CanvasTransform.center() =
+        Vec2(
+            position.x + size.width / 2f,
+            position.y + size.height / 2f,
+        )
 
-    private fun TextNode.withSize(width: Float, height: Float) = copy(
+    private fun TextNode.withSize(
+        width: Float,
+        height: Float,
+    ) = copy(
         transform = transform.copy(size = CanvasSize(width, height)),
     )
 }

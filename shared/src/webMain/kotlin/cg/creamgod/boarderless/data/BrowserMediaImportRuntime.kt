@@ -1,13 +1,13 @@
 package cg.creamgod.boarderless.data
 
-import cg.creamgod.boarderless.data.remote.randomUuid
 import cg.creamgod.boarderless.data.remote.BackendAssetTransferGateway
+import cg.creamgod.boarderless.data.remote.randomUuid
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
-import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.yield
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.kotlincrypto.hash.sha2.SHA256
@@ -20,46 +20,66 @@ import kotlin.io.encoding.Base64
 fun browserMediaImportRuntime(activity: StateFlow<MediaPlaybackActivity>? = null): MediaImportRuntime {
     val previewPermits = Semaphore(2)
     val previewCache = bitmapPreviewCache()
-    return MediaImportRuntime(clearPreviewCache = previewCache::clear, playbackActivity = activity,
-    loadGiphyAnimation = { url ->
-        cg.creamgod.boarderless.data.remote.loadGiphyAnimation(url) {
-            awaitBrowserImageDecoder()
-            BrowserGifAnimation.decode(it)
-        }
-    },
-    loadGiphyStill = { url ->
-        cg.creamgod.boarderless.data.remote.loadGiphyStill(url) {
-            awaitBrowserImageDecoder()
-            decodeBrowserPreview(it)
-        }
-    }, selectSource = {
-    val selection = pickBrowserFile()
-    selection?.let { metadata ->
-        val source = BrowserAssetTransferSource(metadata)
-        try {
-            source.prepare()
-            source
-        } catch (error: Throwable) {
-            source.release()
-            throw error
-        }
-    }
-    }, loadPreview = { session, assetId ->
-        previewPermits.withPermit {
-            val gateway = BackendAssetTransferGateway()
-            try { BrowserAssetPreviewLoader(gateway, previewCache).load(session, assetId) } finally { gateway.close() }
-        }
-    }, loadGif = { session, assetId ->
-        previewPermits.withPermit {
-            val gateway = BackendAssetTransferGateway()
-            try { loadBrowserGif(gateway, session, assetId) } finally { gateway.close() }
-        }
-    }, loadVideo = { session, assetId ->
-        previewPermits.withPermit {
-            val gateway = BackendAssetTransferGateway()
-            try { loadBrowserVideo(gateway, session, assetId) } finally { gateway.close() }
-        }
-    }, videoSurface = { playback, modifier -> BrowserVideoSurface(playback, modifier) })
+    return MediaImportRuntime(
+        clearPreviewCache = previewCache::clear,
+        playbackActivity = activity,
+        loadGiphyAnimation = { url ->
+            cg.creamgod.boarderless.data.remote.loadGiphyAnimation(url) {
+                awaitBrowserImageDecoder()
+                BrowserGifAnimation.decode(it)
+            }
+        },
+        loadGiphyStill = { url ->
+            cg.creamgod.boarderless.data.remote.loadGiphyStill(url) {
+                awaitBrowserImageDecoder()
+                decodeBrowserPreview(it)
+            }
+        },
+        selectSource = {
+            val selection = pickBrowserFile()
+            selection?.let { metadata ->
+                val source = BrowserAssetTransferSource(metadata)
+                try {
+                    source.prepare()
+                    source
+                } catch (error: Throwable) {
+                    source.release()
+                    throw error
+                }
+            }
+        },
+        loadPreview = { session, assetId ->
+            previewPermits.withPermit {
+                val gateway = BackendAssetTransferGateway()
+                try {
+                    BrowserAssetPreviewLoader(gateway, previewCache).load(session, assetId)
+                } finally {
+                    gateway.close()
+                }
+            }
+        },
+        loadGif = { session, assetId ->
+            previewPermits.withPermit {
+                val gateway = BackendAssetTransferGateway()
+                try {
+                    loadBrowserGif(gateway, session, assetId)
+                } finally {
+                    gateway.close()
+                }
+            }
+        },
+        loadVideo = { session, assetId ->
+            previewPermits.withPermit {
+                val gateway = BackendAssetTransferGateway()
+                try {
+                    loadBrowserVideo(gateway, session, assetId)
+                } finally {
+                    gateway.close()
+                }
+            }
+        },
+        videoSurface = { playback, modifier -> BrowserVideoSurface(playback, modifier) },
+    )
 }
 
 @Serializable
@@ -70,31 +90,34 @@ private data class BrowserSelection(
     val byteSize: Long,
 )
 
-private suspend fun pickBrowserFile(): BrowserSelection? = suspendCancellableCoroutine { pending ->
-    val requestId = randomUuid()
-    var selectedId: String? = null
-    pending.invokeOnCancellation {
-        browserMediaCancel(requestId)
-        selectedId?.let(::browserMediaRelease)
-    }
-    browserMediaPick(requestId) { result, error ->
-        if (error != null) {
-            if (pending.isActive) pending.resumeWithException(IllegalStateException(error))
-        } else if (result == null) {
-            if (pending.isActive) pending.resume(null)
-        } else {
-            try {
-                val selection = Json.decodeFromString<BrowserSelection>(result)
-                selectedId = selection.fileId
-                if (pending.isActive) pending.resume(selection) else browserMediaRelease(selection.fileId)
-            } catch (failure: Exception) {
-                if (pending.isActive) pending.resumeWithException(failure)
+private suspend fun pickBrowserFile(): BrowserSelection? =
+    suspendCancellableCoroutine { pending ->
+        val requestId = randomUuid()
+        var selectedId: String? = null
+        pending.invokeOnCancellation {
+            browserMediaCancel(requestId)
+            selectedId?.let(::browserMediaRelease)
+        }
+        browserMediaPick(requestId) { result, error ->
+            if (error != null) {
+                if (pending.isActive) pending.resumeWithException(IllegalStateException(error))
+            } else if (result == null) {
+                if (pending.isActive) pending.resume(null)
+            } else {
+                try {
+                    val selection = Json.decodeFromString<BrowserSelection>(result)
+                    selectedId = selection.fileId
+                    if (pending.isActive) pending.resume(selection) else browserMediaRelease(selection.fileId)
+                } catch (failure: Exception) {
+                    if (pending.isActive) pending.resumeWithException(failure)
+                }
             }
         }
     }
-}
 
-private class BrowserAssetTransferSource(private val selection: BrowserSelection) : DirectAssetUploadSource {
+private class BrowserAssetTransferSource(
+    private val selection: BrowserSelection,
+) : DirectAssetUploadSource {
     private var released = false
     override val displayName = selection.name
     override val mediaType = selection.mediaType
@@ -120,7 +143,10 @@ private class BrowserAssetTransferSource(private val selection: BrowserSelection
         checksum = "sha256:" + digest.digest().joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
     }
 
-    override suspend fun readChunk(offset: Long, maximumBytes: Int): ByteArray {
+    override suspend fun readChunk(
+        offset: Long,
+        maximumBytes: Int,
+    ): ByteArray {
         require(offset >= 0)
         require(maximumBytes in 1..DefaultAssetUploadChunkBytes)
         check(!released) { "Selected browser file has been released" }
@@ -148,30 +174,57 @@ private class BrowserAssetTransferSource(private val selection: BrowserSelection
         }
     }
 
-    override suspend fun uploadDirect(ticket: AssetUploadTicket, onProgress: (Long) -> Unit) {
+    override suspend fun uploadDirect(
+        ticket: AssetUploadTicket,
+        onProgress: (Long) -> Unit,
+    ) {
         check(!released) { "Selected browser file has been released" }
         coroutineContext.ensureActive()
         suspendCancellableCoroutine<Unit> { pending ->
             pending.invokeOnCancellation { browserMediaAbortUpload(selection.fileId) }
-            if (pending.isActive) browserMediaUpload(
-                selection.fileId,
-                ticket.uploadUrl,
-                Json.encodeToString(ticket.requiredHeaders),
-                { loaded -> if (pending.isActive) onProgress(loaded.toLong()) },
-                { error ->
-                    if (pending.isActive) {
-                        if (error == null) pending.resume(Unit)
-                        else pending.resumeWithException(IllegalStateException(error))
-                    }
-                },
-            )
+            if (pending.isActive) {
+                browserMediaUpload(
+                    selection.fileId,
+                    ticket.uploadUrl,
+                    Json.encodeToString(ticket.requiredHeaders),
+                    { loaded -> if (pending.isActive) onProgress(loaded.toLong()) },
+                    { error ->
+                        if (pending.isActive) {
+                            if (error == null) {
+                                pending.resume(Unit)
+                            } else {
+                                pending.resumeWithException(IllegalStateException(error))
+                            }
+                        }
+                    },
+                )
+            }
         }
     }
 }
 
-internal expect fun browserMediaPick(requestId: String, done: (String?, String?) -> Unit)
-internal expect fun browserMediaRead(fileId: String, offset: Double, maximum: Int, done: (String?, String?) -> Unit)
+internal expect fun browserMediaPick(
+    requestId: String,
+    done: (String?, String?) -> Unit,
+)
+
+internal expect fun browserMediaRead(
+    fileId: String,
+    offset: Double,
+    maximum: Int,
+    done: (String?, String?) -> Unit,
+)
+
 internal expect fun browserMediaRelease(fileId: String)
+
 internal expect fun browserMediaCancel(requestId: String)
-internal expect fun browserMediaUpload(fileId: String, url: String, headers: String, progress: (Double) -> Unit, done: (String?) -> Unit)
+
+internal expect fun browserMediaUpload(
+    fileId: String,
+    url: String,
+    headers: String,
+    progress: (Double) -> Unit,
+    done: (String?) -> Unit,
+)
+
 internal expect fun browserMediaAbortUpload(fileId: String)

@@ -8,8 +8,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import platform.AVFoundation.*
 import platform.AVFAudio.AVAudioSessionMediaServicesWereResetNotification
+import platform.AVFoundation.*
 import platform.CoreMedia.*
 import platform.Foundation.*
 import platform.UIKit.UIApplicationDidEnterBackgroundNotification
@@ -35,8 +35,14 @@ class IosVideoPlayback private constructor(
     private fun fail() {
         wantsPlay = false
         mutableState.value = state.value.copy(playing = false, failed = true)
-        try { player.muted = true; player.pause() } finally {
-            try { audioSession.release(this) } catch (_: Exception) { }
+        try {
+            player.muted = true
+            player.pause()
+        } finally {
+            try {
+                audioSession.release(this)
+            } catch (_: Exception) {
+            }
         }
     }
 
@@ -50,12 +56,24 @@ class IosVideoPlayback private constructor(
 
     private fun refresh() {
         if (state.value.released || state.value.failed) return
-        if (item.status == AVPlayerItemStatusFailed || player.status == AVPlayerStatusFailed) { fail(); return }
+        if (item.status == AVPlayerItemStatusFailed || player.status == AVPlayerStatusFailed) {
+            fail()
+            return
+        }
         val seconds = CMTimeGetSeconds(player.currentTime())
-        mutableState.value = state.value.copy(
-            positionMs = if (seconds.isFinite()) (seconds * 1000).toLong().coerceIn(0, state.value.durationMs) else state.value.positionMs,
-            playing = player.rate > 0f,
-        )
+        mutableState.value =
+            state.value.copy(
+                positionMs =
+                    if (seconds.isFinite()) {
+                        (seconds * 1000).toLong().coerceIn(
+                            0,
+                            state.value.durationMs,
+                        )
+                    } else {
+                        state.value.positionMs
+                    },
+                playing = player.rate > 0f,
+            )
     }
 
     private fun updatePlaying() {
@@ -75,10 +93,16 @@ class IosVideoPlayback private constructor(
             if (play) player.play() else player.pause()
             mutableState.value = state.value.copy(audioFocusBlocked = false)
             refresh()
-        } catch (error: Exception) { fail(); throw error }
+        } catch (error: Exception) {
+            fail()
+            throw error
+        }
     }
 
-    internal fun attach(layer: AVPlayerLayer, owner: Any) {
+    internal fun attach(
+        layer: AVPlayerLayer,
+        owner: Any,
+    ) {
         if (state.value.released || state.value.failed) return
         layers.add(layer)
         surfaceOwner = owner
@@ -86,67 +110,91 @@ class IosVideoPlayback private constructor(
         updatePlaying()
     }
 
-    internal fun detach(layer: AVPlayerLayer, owner: Any) {
+    internal fun detach(
+        layer: AVPlayerLayer,
+        owner: Any,
+    ) {
         layer.player = null
         layers.remove(layer)
-        if (surfaceOwner === owner) { surfaceOwner = null; updatePlaying() }
-    }
-
-    override suspend fun setPlaying(playing: Boolean) = withContext(Dispatchers.Main) {
-        check(!state.value.released && !state.value.failed)
-        if (playing && state.value.ended) seekTo(0)
-        wantsPlay = playing
-        updatePlaying()
-    }
-
-    override suspend fun setMuted(muted: Boolean) = withContext(Dispatchers.Main) {
-        check(!state.value.released && !state.value.failed)
-        if (muted) player.muted = true
-        mutableState.value = state.value.copy(muted = muted)
-        updatePlaying()
-    }
-
-    override suspend fun seekTo(positionMs: Long) = withContext(Dispatchers.Main) {
-        check(!state.value.released && !state.value.failed)
-        val target = positionMs.coerceIn(0, state.value.durationMs)
-        player.seekToTime(CMTimeMake(target, 1000))
-        mutableState.value = state.value.copy(positionMs = target, ended = false)
-    }
-
-    override suspend fun release() = withContext(NonCancellable) {
-        releaseGuard.withLock {
-            try { withContext(Dispatchers.Main) {
-                if (!state.value.released) {
-                    scope.cancel()
-                    wantsPlay = false
-                    surfaceOwner = null
-                    mutableState.value = state.value.copy(playing = false, released = true)
-                    var failure: Exception? = null
-                    fun cleanup(action: () -> Unit) {
-                        try { action() } catch (error: Exception) {
-                            val previous = failure
-                            if (previous == null) failure = error else if (previous !== error) previous.addSuppressed(error)
-                        }
-                    }
-                    cleanup { player.muted = true }
-                    cleanup { player.pause() }
-                    cleanup { audioSession.release(this) }
-                    cleanup { item.cancelPendingSeeks() }
-                    cleanup { item.asset.cancelLoading() }
-                    layers.forEach { cleanup { it.player = null } }
-                    layers.clear()
-                    observers.forEach { observer -> cleanup { NSNotificationCenter.defaultCenter.removeObserver(observer) } }
-                    observers.clear()
-                    cleanup { player.replaceCurrentItemWithPlayerItem(null) }
-                    failure?.let { throw it }
-                }
-            } } finally { sink.release() }
+        if (surfaceOwner === owner) {
+            surfaceOwner = null
+            updatePlaying()
         }
     }
 
+    override suspend fun setPlaying(playing: Boolean) =
+        withContext(Dispatchers.Main) {
+            check(!state.value.released && !state.value.failed)
+            if (playing && state.value.ended) seekTo(0)
+            wantsPlay = playing
+            updatePlaying()
+        }
+
+    override suspend fun setMuted(muted: Boolean) =
+        withContext(Dispatchers.Main) {
+            check(!state.value.released && !state.value.failed)
+            if (muted) player.muted = true
+            mutableState.value = state.value.copy(muted = muted)
+            updatePlaying()
+        }
+
+    override suspend fun seekTo(positionMs: Long) =
+        withContext(Dispatchers.Main) {
+            check(!state.value.released && !state.value.failed)
+            val target = positionMs.coerceIn(0, state.value.durationMs)
+            player.seekToTime(CMTimeMake(target, 1000))
+            mutableState.value = state.value.copy(positionMs = target, ended = false)
+        }
+
+    override suspend fun release() =
+        withContext(NonCancellable) {
+            releaseGuard.withLock {
+                try {
+                    withContext(Dispatchers.Main) {
+                        if (!state.value.released) {
+                            scope.cancel()
+                            wantsPlay = false
+                            surfaceOwner = null
+                            mutableState.value = state.value.copy(playing = false, released = true)
+                            var failure: Exception? = null
+
+                            fun cleanup(action: () -> Unit) {
+                                try {
+                                    action()
+                                } catch (error: Exception) {
+                                    val previous = failure
+                                    if (previous == null) {
+                                        failure = error
+                                    } else if (previous !== error) {
+                                        previous.addSuppressed(error)
+                                    }
+                                }
+                            }
+                            cleanup { player.muted = true }
+                            cleanup { player.pause() }
+                            cleanup { audioSession.release(this) }
+                            cleanup { item.cancelPendingSeeks() }
+                            cleanup { item.asset.cancelLoading() }
+                            layers.forEach { cleanup { it.player = null } }
+                            layers.clear()
+                            observers.forEach { observer -> cleanup { NSNotificationCenter.defaultCenter.removeObserver(observer) } }
+                            observers.clear()
+                            cleanup { player.replaceCurrentItemWithPlayerItem(null) }
+                            failure?.let { throw it }
+                        }
+                    }
+                } finally {
+                    sink.release()
+                }
+            }
+        }
+
     companion object {
-        internal suspend fun open(local: LocalAssetReference, sink: IosFileAssetDownloadSink,
-            audioSession: IosVideoAudioSession = systemIosVideoAudioSession): IosVideoPlayback {
+        internal suspend fun open(
+            local: LocalAssetReference,
+            sink: IosFileAssetDownloadSink,
+            audioSession: IosVideoAudioSession = systemIosVideoAudioSession,
+        ): IosVideoPlayback {
             var opened: IosVideoPlayback? = null
             try {
                 return withContext(Dispatchers.Main) {
@@ -157,29 +205,49 @@ class IosVideoPlayback private constructor(
                     player.muted = true
                     player.actionAtItemEnd = AVPlayerActionAtItemEndPause
                     val center = NSNotificationCenter.defaultCenter
-                    playback.observers += center.addObserverForName(
-                        AVPlayerItemDidPlayToEndTimeNotification, item, NSOperationQueue.mainQueue,
-                    ) {
-                        if (!playback.state.value.released) {
-                            playback.wantsPlay = false
-                            playback.mutableState.value = playback.state.value.copy(playing = false, ended = true, positionMs = playback.state.value.durationMs)
-                            try { playback.audioSession.release(playback) } catch (_: Exception) { playback.fail() }
+                    playback.observers +=
+                        center.addObserverForName(
+                            AVPlayerItemDidPlayToEndTimeNotification,
+                            item,
+                            NSOperationQueue.mainQueue,
+                        ) {
+                            if (!playback.state.value.released) {
+                                playback.wantsPlay = false
+                                playback.mutableState.value =
+                                    playback.state.value.copy(playing = false, ended = true, positionMs = playback.state.value.durationMs)
+                                try {
+                                    playback.audioSession.release(playback)
+                                } catch (_: Exception) {
+                                    playback.fail()
+                                }
+                            }
                         }
-                    }
-                    playback.observers += center.addObserverForName(
-                        UIApplicationDidEnterBackgroundNotification, null, NSOperationQueue.mainQueue,
-                    ) { playback.scope.launch { playback.release() } }
-                    playback.observers += center.addObserverForName(
-                        AVPlayerItemFailedToPlayToEndTimeNotification, item, NSOperationQueue.mainQueue,
-                    ) { if (!playback.state.value.released) playback.fail() }
-                    playback.observers += center.addObserverForName(
-                        AVAudioSessionMediaServicesWereResetNotification, null, NSOperationQueue.mainQueue,
-                    ) {
-                        // Every AVPlayer (including muted ones) must be reconstructed after a media-server reset.
-                        if (!playback.state.value.released && !playback.state.value.failed) {
-                            try { playback.fail() } catch (_: Exception) { }
+                    playback.observers +=
+                        center.addObserverForName(
+                            UIApplicationDidEnterBackgroundNotification,
+                            null,
+                            NSOperationQueue.mainQueue,
+                        ) { playback.scope.launch { playback.release() } }
+                    playback.observers +=
+                        center.addObserverForName(
+                            AVPlayerItemFailedToPlayToEndTimeNotification,
+                            item,
+                            NSOperationQueue.mainQueue,
+                        ) { if (!playback.state.value.released) playback.fail() }
+                    playback.observers +=
+                        center.addObserverForName(
+                            AVAudioSessionMediaServicesWereResetNotification,
+                            null,
+                            NSOperationQueue.mainQueue,
+                        ) {
+                            // Every AVPlayer (including muted ones) must be reconstructed after a media-server reset.
+                            if (!playback.state.value.released && !playback.state.value.failed) {
+                                try {
+                                    playback.fail()
+                                } catch (_: Exception) {
+                                }
+                            }
                         }
-                    }
                     withTimeout(30_000) {
                         while (true) {
                             check(!playback.state.value.released) { "Video preparation was stopped" }
@@ -194,7 +262,8 @@ class IosVideoPlayback private constructor(
                                     AssetPreviewPolicy.validateDimensions(dimensions.first, dimensions.second)
                                     check(seconds <= Long.MAX_VALUE / 1000.0)
                                     playback.hasAudio = item.asset.tracksWithMediaType(AVMediaTypeAudio).isNotEmpty()
-                                    playback.mutableState.value = VideoPlaybackState((seconds * 1000).toLong(), width = dimensions.first, height = dimensions.second)
+                                    playback.mutableState.value =
+                                        VideoPlaybackState((seconds * 1000).toLong(), width = dimensions.first, height = dimensions.second)
                                     break
                                 }
                             }
@@ -203,7 +272,10 @@ class IosVideoPlayback private constructor(
                     }
                     currentCoroutineContext().ensureActive()
                     playback.scope.launch {
-                        while (isActive) { delay(250); playback.refresh() }
+                        while (isActive) {
+                            delay(250)
+                            playback.refresh()
+                        }
                     }
                     playback
                 }
@@ -215,17 +287,29 @@ class IosVideoPlayback private constructor(
     }
 }
 
-suspend fun loadIosVideo(gateway: AssetDownloadGateway, session: WorkspaceSession, assetId: String): VideoPlayback {
+suspend fun loadIosVideo(
+    gateway: AssetDownloadGateway,
+    session: WorkspaceSession,
+    assetId: String,
+): VideoPlayback {
     val ticket = gateway.authorize(session, assetId)
     VideoAssetPolicy.validate(ticket, session, assetId)
     var sink: IosFileAssetDownloadSink? = null
     var opened: IosVideoPlayback? = null
     try {
         val destination = IosFileAssetDownloadSink.create(ticket.asset.mediaType).also { sink = it }
-        val authorized = object : AssetDownloadGateway {
-            override suspend fun authorize(session: WorkspaceSession, assetId: String) = ticket
-            override suspend fun download(ticket: AssetDownloadTicket, onChunk: suspend (ByteArray) -> Unit) = gateway.download(ticket, onChunk)
-        }
+        val authorized =
+            object : AssetDownloadGateway {
+                override suspend fun authorize(
+                    session: WorkspaceSession,
+                    assetId: String,
+                ) = ticket
+
+                override suspend fun download(
+                    ticket: AssetDownloadTicket,
+                    onChunk: suspend (ByteArray) -> Unit,
+                ) = gateway.download(ticket, onChunk)
+            }
         val local = AssetDownloadCoordinator(authorized).download(session, assetId, destination)
         val playback = IosVideoPlayback.open(local, destination).also { opened = it }
         currentCoroutineContext().ensureActive()

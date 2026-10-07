@@ -17,7 +17,12 @@ import kotlin.math.roundToInt
  * viewport (zoomed in, partly off-screen) its far edges were drawn at the viewport size instead of
  * where they belong. Measuring unbounded and anchoring top-start keeps the true size and origin.
  */
-internal fun Modifier.canvasObjectBounds(screenPosition: Vec2, width: Dp, height: Dp): Modifier = this
-    .offset { IntOffset(screenPosition.x.roundToInt(), screenPosition.y.roundToInt()) }
-    .wrapContentSize(align = Alignment.TopStart, unbounded = true)
-    .size(width, height)
+internal fun Modifier.canvasObjectBounds(
+    screenPosition: Vec2,
+    width: Dp,
+    height: Dp,
+): Modifier =
+    this
+        .offset { IntOffset(screenPosition.x.roundToInt(), screenPosition.y.roundToInt()) }
+        .wrapContentSize(align = Alignment.TopStart, unbounded = true)
+        .size(width, height)

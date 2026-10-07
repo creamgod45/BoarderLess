@@ -8,13 +8,35 @@ import kotlin.test.*
 class WorkspaceDraftMergeOperationsTest {
     private val node = TextNode(CanvasObjectId("node"), transform = CanvasTransform(Vec2.Zero, CanvasSize(100f, 80f)), text = "Before")
     private val base = Workspace(WorkspaceId("workspace"), "Board", objects = mapOf(node.id to node))
-    private fun compile(before: Workspace, after: Workspace): TransactionOperation? {
-        val plan = WorkspaceDraftMergePlan(WorkspaceDraftReview("draft", 0, 0, 0, 0, before, after, before,
-            listOf(CreateObjectsOperation("old-id", listOf(node))), false, false))
+
+    private fun compile(
+        before: Workspace,
+        after: Workspace,
+    ): TransactionOperation? {
+        val plan =
+            WorkspaceDraftMergePlan(
+                WorkspaceDraftReview(
+                    "draft",
+                    0,
+                    0,
+                    0,
+                    0,
+                    before,
+                    after,
+                    before,
+                    listOf(CreateObjectsOperation("old-id", listOf(node))),
+                    false,
+                    false,
+                ),
+            )
         var serial = 0
         return buildDraftMergeOperation(plan, plan.fields.associate { it.id to DraftMergeChoice.UseDraft }, before) { "new-${++serial}" }
     }
-    private fun apply(before: Workspace, after: Workspace): Workspace {
+
+    private fun apply(
+        before: Workspace,
+        after: Workspace,
+    ): Workspace {
         val operation = checkNotNull(compile(before, after))
         assertTrue(operation.operations.all { it.operationId.startsWith("new-") })
         val applied = (operation.applyTo(before) as OperationResult.Applied).workspace
@@ -32,13 +54,30 @@ class WorkspaceDraftMergeOperationsTest {
     }
 
     @Test fun editsTransformTextShapeAndLockUsingCurrentVersionsAndNewIds() {
-        val after = base.copy(objects = mapOf(node.id to node.copy(text = "After", shape = NodeShape.Diamond,
-            transform = node.transform.copy(rotationDegrees = 45f), locked = true)))
+        val after =
+            base.copy(
+                objects =
+                    mapOf(
+                        node.id to
+                            node.copy(
+                                text = "After",
+                                shape = NodeShape.Diamond,
+                                transform = node.transform.copy(rotationDegrees = 45f),
+                                locked = true,
+                            ),
+                    ),
+            )
         val applied = apply(base, after)
         assertEquals(5, applied.objects.getValue(node.id).version)
         val commands = checkNotNull(compile(base, after)).operations
         val lock = commands.last() as UpdateTextNodeAttributesOperation
-        assertEquals(lock.changes.single().before.copy(locked = true), lock.changes.single().after)
+        assertEquals(
+            lock.changes
+                .single()
+                .before
+                .copy(locked = true),
+            lock.changes.single().after,
+        )
         assertTrue(draftMergeContractGaps(base, checkNotNull(compile(base, after))).isEmpty())
         val plan = WorkspaceDraftMergePlan(WorkspaceDraftReview("draft", 0, 0, 0, 0, base, after, base, emptyList(), false, false))
         val choices = plan.fields.associate { it.id to DraftMergeChoice.UseDraft }
@@ -59,8 +98,11 @@ class WorkspaceDraftMergeOperationsTest {
         val media = MediaNode(CanvasObjectId("media"), transform = node.transform, assetId = "old", mediaKind = MediaKind.Image)
         val edge = Relation(RelationId("edge"), sourceObjectId = node.id, targetObjectId = media.id)
         val before = base.copy(objects = base.objects + (media.id to media), relations = mapOf(edge.id to edge))
-        val after = before.copy(objects = before.objects + (media.id to media.copy(assetId = "new", altText = "After")),
-            relations = mapOf(edge.id to edge.copy(label = "Updated")))
+        val after =
+            before.copy(
+                objects = before.objects + (media.id to media.copy(assetId = "new", altText = "After")),
+                relations = mapOf(edge.id to edge.copy(label = "Updated")),
+            )
         val applied = apply(before, after)
         assertEquals(3, applied.objects.getValue(media.id).version)
         assertEquals(2, applied.relations.getValue(edge.id).version)
@@ -78,8 +120,16 @@ class WorkspaceDraftMergeOperationsTest {
     }
 
     @Test fun mediaReferenceUpdatesUnlockBeforeEditAndLockAfterward() {
-        val media = MediaNode(CanvasObjectId("media"), transform = node.transform, assetId = "old", mediaKind = MediaKind.Video,
-            thumbnailAssetId = "poster", locked = true, version = 7)
+        val media =
+            MediaNode(
+                CanvasObjectId("media"),
+                transform = node.transform,
+                assetId = "old",
+                mediaKind = MediaKind.Video,
+                thumbnailAssetId = "poster",
+                locked = true,
+                version = 7,
+            )
         val before = base.copy(objects = mapOf(media.id to media))
         val after = before.copy(objects = mapOf(media.id to media.copy(locked = false, assetId = "new", thumbnailAssetId = null)))
         val commands = checkNotNull(compile(before, after)).operations
@@ -99,20 +149,42 @@ class WorkspaceDraftMergeOperationsTest {
         val third = node.copy(id = CanvasObjectId("third"))
         val edge = Relation(RelationId("edge"), sourceObjectId = node.id, targetObjectId = group.id)
         val before = base.copy(objects = base.objects + mapOf(group.id to group, third.id to third), relations = mapOf(edge.id to edge))
-        val after = before.copy(objects = before.objects + (group.id to group.copy(title = "After", colorToken = "purple")),
-            relations = mapOf(edge.id to edge.copy(targetObjectId = third.id, intent = "Supports")))
+        val after =
+            before.copy(
+                objects = before.objects + (group.id to group.copy(title = "After", colorToken = "purple")),
+                relations = mapOf(edge.id to edge.copy(targetObjectId = third.id, intent = "Supports")),
+            )
         apply(before, after)
     }
 
     @Test fun rejectsAtomicWireExpansionOverLimitAndNeverReusesImportedIds() {
-        val many = base.copy(objects = base.objects + (1..201).associate { number ->
-            val created = node.copy(id = CanvasObjectId("new-$number"))
-            created.id to created
-        })
+        val many =
+            base.copy(
+                objects =
+                    base.objects +
+                        (1..201).associate { number ->
+                            val created = node.copy(id = CanvasObjectId("new-$number"))
+                            created.id to created
+                        },
+            )
         assertFails { compile(base, many) }
         val target = base.copy(objects = mapOf(node.id to node.copy(text = "After")))
-        val plan = WorkspaceDraftMergePlan(WorkspaceDraftReview("draft", 0, 0, 0, 0, base, target, base,
-            listOf(EditTextOperation("old-id", listOf(TextChange(node.id, 1, node.text, "After")))), false, false))
+        val plan =
+            WorkspaceDraftMergePlan(
+                WorkspaceDraftReview(
+                    "draft",
+                    0,
+                    0,
+                    0,
+                    0,
+                    base,
+                    target,
+                    base,
+                    listOf(EditTextOperation("old-id", listOf(TextChange(node.id, 1, node.text, "After")))),
+                    false,
+                    false,
+                ),
+            )
         assertFails { buildDraftMergeOperation(plan, plan.fields.associate { it.id to DraftMergeChoice.UseDraft }, base) { "old-id" } }
     }
 
@@ -121,12 +193,18 @@ class WorkspaceDraftMergeOperationsTest {
         val edge = Relation(RelationId("edge"), sourceObjectId = node.id, targetObjectId = media.id)
         val before = base.copy(objects = base.objects + (media.id to media), relations = mapOf(edge.id to edge))
         val after = before.copy(objects = before.objects + (media.id to node.copy(id = media.id)))
-        assertEquals(DraftMergeContractGap.entries.toSet(),
-            draftMergeContractGaps(before, checkNotNull(compile(before, after))))
+        assertEquals(
+            setOf(DraftMergeContractGap.ObjectIdReuse, DraftMergeContractGap.RelationIdReuse, DraftMergeContractGap.RestoreForUndoRedo),
+            draftMergeContractGaps(before, checkNotNull(compile(before, after))),
+        )
         val inserted = base.copy(objects = base.objects + (media.id to media))
-        assertEquals(setOf(DraftMergeContractGap.RestoreForUndoRedo),
-            draftMergeContractGaps(base, checkNotNull(compile(base, inserted))))
-        assertEquals(setOf(DraftMergeContractGap.RestoreForUndoRedo),
-            draftMergeContractGaps(inserted, checkNotNull(compile(inserted, base))))
+        assertEquals(
+            setOf(DraftMergeContractGap.RestoreForUndoRedo),
+            draftMergeContractGaps(base, checkNotNull(compile(base, inserted))),
+        )
+        assertEquals(
+            setOf(DraftMergeContractGap.RestoreForUndoRedo),
+            draftMergeContractGaps(inserted, checkNotNull(compile(inserted, base))),
+        )
     }
 }

@@ -8,6 +8,8 @@ import cg.creamgod.boarderless.feature.qa.QaRuntime
 import cg.creamgod.boarderless.feature.qa.QaScreenshot
 import cg.creamgod.boarderless.feature.qa.overallAnswer
 import cg.creamgod.boarderless.feature.qa.toPlainText
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.awt.Color
 import java.awt.Desktop
 import java.awt.Font
@@ -27,12 +29,11 @@ import java.util.Base64
 import javax.imageio.ImageIO
 import javax.swing.JFileChooser
 import javax.swing.filechooser.FileNameExtensionFilter
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 internal fun desktopQaRuntime(window: Window): QaRuntime {
-    val enabled = qaFlagEnabled(System.getenv("BOARDERLESS_QA_MODE")) ||
-        qaFlagEnabled(System.getProperty("boarderless.qaMode"))
+    val enabled =
+        qaFlagEnabled(System.getenv("BOARDERLESS_QA_MODE")) ||
+            qaFlagEnabled(System.getProperty("boarderless.qaMode"))
     if (!enabled) return QaRuntime.Disabled
 
     return QaRuntime(
@@ -52,11 +53,12 @@ internal fun desktopQaRuntime(window: Window): QaRuntime {
             }
         },
         chooseScreenshot = {
-            val chooser = JFileChooser().apply {
-                dialogTitle = "Attach QA screenshot"
-                fileFilter = FileNameExtensionFilter("PNG or JPEG screenshots", "png", "jpg", "jpeg")
-                isAcceptAllFileFilterUsed = false
-            }
+            val chooser =
+                JFileChooser().apply {
+                    dialogTitle = "Attach QA screenshot"
+                    fileFilter = FileNameExtensionFilter("PNG or JPEG screenshots", "png", "jpg", "jpeg")
+                    isAcceptAllFileFilterUsed = false
+                }
             if (chooser.showOpenDialog(window) != JFileChooser.APPROVE_OPTION) {
                 QaActionResult(message = "Screenshot selection cancelled")
             } else {
@@ -100,47 +102,62 @@ internal fun desktopQaRuntime(window: Window): QaRuntime {
     )
 }
 
-private fun qaFlagEnabled(value: String?): Boolean = value
-    ?.trim()
-    ?.lowercase()
-    .let { it == "1" || it == "true" || it == "yes" || it == "on" }
+private fun qaFlagEnabled(value: String?): Boolean =
+    value
+        ?.trim()
+        ?.lowercase()
+        .let { it == "1" || it == "true" || it == "yes" || it == "on" }
 
-private inline fun <T> runQaAction(block: () -> T): QaActionResult<T> = try {
-    QaActionResult(value = block())
-} catch (error: Throwable) {
-    QaActionResult(message = error.message ?: error::class.simpleName ?: "QA action failed")
-}
+private inline fun <T> runQaAction(block: () -> T): QaActionResult<T> =
+    try {
+        QaActionResult(value = block())
+    } catch (error: Throwable) {
+        QaActionResult(message = error.message ?: error::class.simpleName ?: "QA action failed")
+    }
 
-private fun qaOutputFile(fileName: String, extension: String): Path {
-    val outputDirectory = Paths.get(
-        System.getProperty("user.home"),
-        "Documents",
-        "BoarderLess QA",
-    ).toAbsolutePath().normalize()
+private fun qaOutputFile(
+    fileName: String,
+    extension: String,
+): Path {
+    val outputDirectory =
+        Paths
+            .get(
+                System.getProperty("user.home"),
+                "Documents",
+                "BoarderLess QA",
+            ).toAbsolutePath()
+            .normalize()
     Files.createDirectories(outputDirectory)
-    val safeName = fileName
-        .map { character -> if (character.isLetterOrDigit() || character == '-' || character == '_') character else '-' }
-        .joinToString("")
-        .trim('-')
-        .take(72)
-        .ifBlank { "boarderless-qa" }
+    val safeName =
+        fileName
+            .map { character -> if (character.isLetterOrDigit() || character == '-' || character == '_') character else '-' }
+            .joinToString("")
+            .trim('-')
+            .take(72)
+            .ifBlank { "boarderless-qa" }
     val target = outputDirectory.resolve("$safeName.$extension").normalize()
     require(target.parent == outputDirectory) { "Invalid QA document name" }
     return target
 }
 
 private fun BufferedImage.toQaScreenshot(fileName: String): QaScreenshot {
-    val rgb = if (type == BufferedImage.TYPE_INT_RGB) this else BufferedImage(width, height, BufferedImage.TYPE_INT_RGB).also {
-        val graphics = it.createGraphics()
-        graphics.color = Color.WHITE
-        graphics.fillRect(0, 0, width, height)
-        graphics.drawImage(this, 0, 0, null)
-        graphics.dispose()
-    }
-    val bytes = ByteArrayOutputStream().use { output ->
-        check(ImageIO.write(rgb, "jpg", output)) { "JPEG encoder unavailable" }
-        output.toByteArray()
-    }
+    val rgb =
+        if (type == BufferedImage.TYPE_INT_RGB) {
+            this
+        } else {
+            BufferedImage(width, height, BufferedImage.TYPE_INT_RGB).also {
+                val graphics = it.createGraphics()
+                graphics.color = Color.WHITE
+                graphics.fillRect(0, 0, width, height)
+                graphics.drawImage(this, 0, 0, null)
+                graphics.dispose()
+            }
+        }
+    val bytes =
+        ByteArrayOutputStream().use { output ->
+            check(ImageIO.write(rgb, "jpg", output)) { "JPEG encoder unavailable" }
+            output.toByteArray()
+        }
     return QaScreenshot(
         id = "screenshot-${System.currentTimeMillis()}-${fileName.hashCode()}",
         fileName = fileName.substringBeforeLast('.') + ".jpg",
@@ -151,20 +168,24 @@ private fun BufferedImage.toQaScreenshot(fileName: String): QaScreenshot {
 
 internal fun createQaPdf(report: QaReportDraft): ByteArray {
     val pages = renderReportPages(report)
-    val jpegPages = pages.map { page ->
-        ByteArrayOutputStream().use { output ->
-            check(ImageIO.write(page, "jpg", output)) { "JPEG encoder unavailable" }
-            output.toByteArray()
+    val jpegPages =
+        pages.map { page ->
+            ByteArrayOutputStream().use { output ->
+                check(ImageIO.write(page, "jpg", output)) { "JPEG encoder unavailable" }
+                output.toByteArray()
+            }
         }
-    }
     val objectCount = 2 + jpegPages.size * 3
     val output = ByteArrayOutputStream()
     val offsets = IntArray(objectCount + 1)
+
     fun ascii(value: String) = output.write(value.toByteArray(StandardCharsets.ISO_8859_1))
+
     fun beginObject(number: Int) {
         offsets[number] = output.size()
         ascii("$number 0 obj\n")
     }
+
     fun endObject() = ascii("endobj\n")
 
     ascii("%PDF-1.4\n%\u00e2\u00e3\u00cf\u00d3\n")
@@ -181,7 +202,9 @@ internal fun createQaPdf(report: QaReportDraft): ByteArray {
         val contentObject = pageObject + 1
         val imageObject = pageObject + 2
         beginObject(pageObject)
-        ascii("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /XObject << /PageImage $imageObject 0 R >> >> /Contents $contentObject 0 R >>\n")
+        ascii(
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /XObject << /PageImage $imageObject 0 R >> >> /Contents $contentObject 0 R >>\n",
+        )
         endObject()
         val content = "q\n595 0 0 842 0 0 cm\n/PageImage Do\nQ\n".toByteArray(StandardCharsets.US_ASCII)
         beginObject(contentObject)
@@ -190,7 +213,9 @@ internal fun createQaPdf(report: QaReportDraft): ByteArray {
         ascii("endstream\n")
         endObject()
         beginObject(imageObject)
-        ascii("<< /Type /XObject /Subtype /Image /Width 1240 /Height 1754 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.size} >>\nstream\n")
+        ascii(
+            "<< /Type /XObject /Subtype /Image /Width 1240 /Height 1754 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.size} >>\nstream\n",
+        )
         output.write(jpeg)
         ascii("\nendstream\n")
         endObject()
@@ -222,7 +247,12 @@ private fun renderReportPages(report: QaReportDraft): List<BufferedImage> {
         y = margin
     }
 
-    fun drawParagraph(text: String, font: Font, color: Color = Color(0x24, 0x24, 0x21), spacing: Int = 12) {
+    fun drawParagraph(
+        text: String,
+        font: Font,
+        color: Color = Color(0x24, 0x24, 0x21),
+        spacing: Int = 12,
+    ) {
         graphics.font = font
         graphics.color = color
         val metrics = graphics.fontMetrics
@@ -256,19 +286,27 @@ private fun renderReportPages(report: QaReportDraft): List<BufferedImage> {
     return pages
 }
 
-private fun newPdfPage(width: Int, height: Int) = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB).also { image ->
+private fun newPdfPage(
+    width: Int,
+    height: Int,
+) = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB).also { image ->
     val graphics = image.createGraphics()
     graphics.color = Color.WHITE
     graphics.fillRect(0, 0, width, height)
     graphics.dispose()
 }
 
-private fun Graphics2D.configured(): Graphics2D = apply {
-    setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-    setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
-}
+private fun Graphics2D.configured(): Graphics2D =
+    apply {
+        setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+        setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
+    }
 
-private fun wrapText(text: String, metrics: java.awt.FontMetrics, maxWidth: Int): List<String> {
+private fun wrapText(
+    text: String,
+    metrics: java.awt.FontMetrics,
+    maxWidth: Int,
+): List<String> {
     if (text.isBlank()) return listOf(" ")
     val lines = mutableListOf<String>()
     var current = StringBuilder()

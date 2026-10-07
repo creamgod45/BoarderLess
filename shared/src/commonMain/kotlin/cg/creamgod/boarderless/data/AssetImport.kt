@@ -3,23 +3,24 @@ package cg.creamgod.boarderless.data
 import cg.creamgod.boarderless.domain.model.MediaKind
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 const val MaxWorkspaceAssetBytes: Long = 200L * 1024L * 1024L
 const val DefaultAssetUploadChunkBytes: Int = 1024 * 1024
 internal const val AssetImportCleanupTimeoutMillis: Long = 5_000
 
-private val SupportedAssetMediaTypes = mapOf(
-    "image/png" to MediaKind.Image,
-    "image/jpeg" to MediaKind.Image,
-    "image/webp" to MediaKind.Image,
-    "image/gif" to MediaKind.Gif,
-    "video/mp4" to MediaKind.Video,
-    "video/webm" to MediaKind.Video,
-)
+private val SupportedAssetMediaTypes =
+    mapOf(
+        "image/png" to MediaKind.Image,
+        "image/jpeg" to MediaKind.Image,
+        "image/webp" to MediaKind.Image,
+        "image/gif" to MediaKind.Gif,
+        "video/mp4" to MediaKind.Video,
+        "video/webm" to MediaKind.Video,
+    )
 
 fun mediaKindForAssetMediaType(mediaType: String): MediaKind? = SupportedAssetMediaTypes[mediaType.trim().lowercase()]
 
@@ -34,7 +35,10 @@ interface AssetTransferSource {
     val durationMs: Long?
 
     /** Returns at most [maximumBytes] beginning at [offset], or an empty array at EOF. */
-    suspend fun readChunk(offset: Long, maximumBytes: Int = DefaultAssetUploadChunkBytes): ByteArray
+    suspend fun readChunk(
+        offset: Long,
+        maximumBytes: Int = DefaultAssetUploadChunkBytes,
+    ): ByteArray
 
     /** Releases device-local picker snapshots after success, failure, or cancellation. */
     suspend fun release() {}
@@ -42,7 +46,10 @@ interface AssetTransferSource {
 
 /** Allows a browser to send its native File directly without a full Kotlin ByteArray copy. */
 interface DirectAssetUploadSource : AssetTransferSource {
-    suspend fun uploadDirect(ticket: AssetUploadTicket, onProgress: (Long) -> Unit)
+    suspend fun uploadDirect(
+        ticket: AssetUploadTicket,
+        onProgress: (Long) -> Unit,
+    )
 }
 
 data class AssetUploadTicket(
@@ -63,13 +70,28 @@ data class ImportedMedia(
 
 sealed interface AssetImportStage {
     data object Validating : AssetImportStage
+
     data object Preparing : AssetImportStage
-    data class Uploading(val uploadedBytes: Long, val totalBytes: Long) : AssetImportStage
+
+    data class Uploading(
+        val uploadedBytes: Long,
+        val totalBytes: Long,
+    ) : AssetImportStage
+
     data object Confirming : AssetImportStage
-    data class Processing(val status: AssetStatus) : AssetImportStage
-    data class Ready(val imported: ImportedMedia) : AssetImportStage
+
+    data class Processing(
+        val status: AssetStatus,
+    ) : AssetImportStage
+
+    data class Ready(
+        val imported: ImportedMedia,
+    ) : AssetImportStage
+
     /** Completion may have been accepted; reconcile metadata instead of deleting or re-uploading. */
-    data class RecoveryRequired(val assetId: String) : AssetImportStage
+    data class RecoveryRequired(
+        val assetId: String,
+    ) : AssetImportStage
 }
 
 enum class AssetImportIssue {
@@ -96,7 +118,12 @@ class AssetImportException(
  * Workspace operations or MediaNode properties.
  */
 interface AssetTransferGateway {
-    suspend fun prepare(session: WorkspaceSession, source: AssetTransferSource): AssetUploadTicket
+    fun close() {}
+
+    suspend fun prepare(
+        session: WorkspaceSession,
+        source: AssetTransferSource,
+    ): AssetUploadTicket
 
     suspend fun upload(
         ticket: AssetUploadTicket,
@@ -104,7 +131,10 @@ interface AssetTransferGateway {
         onProgress: (uploadedBytes: Long) -> Unit,
     )
 
-    suspend fun confirm(session: WorkspaceSession, ticket: AssetUploadTicket): WorkspaceAsset
+    suspend fun confirm(
+        session: WorkspaceSession,
+        ticket: AssetUploadTicket,
+    ): WorkspaceAsset
 
     suspend fun awaitReady(
         session: WorkspaceSession,
@@ -112,12 +142,18 @@ interface AssetTransferGateway {
         onStatus: (AssetStatus) -> Unit,
     ): WorkspaceAsset
 
-    suspend fun thumbnailAssetId(session: WorkspaceSession, assetId: String): String?
+    suspend fun thumbnailAssetId(
+        session: WorkspaceSession,
+        assetId: String,
+    ): String?
 
     /** Best-effort cleanup only before completion is requested, for a validated pending upload.
      * Callers must not use an unconditional DELETE to undo an uncertain completion request.
      */
-    suspend fun abandon(session: WorkspaceSession, assetId: String)
+    suspend fun abandon(
+        session: WorkspaceSession,
+        assetId: String,
+    )
 }
 
 class AssetImportCoordinator(
@@ -166,42 +202,48 @@ class AssetImportCoordinator(
             requireSameAssetId(asset, ticket.asset.id)
             if (asset.status == AssetStatus.Pending) {
                 onStage(AssetImportStage.Processing(asset.status))
-                asset = gateway.awaitReady(session, asset.id) { status ->
-                    onStage(AssetImportStage.Processing(status))
-                }
+                asset =
+                    gateway.awaitReady(session, asset.id) { status ->
+                        onStage(AssetImportStage.Processing(status))
+                    }
                 currentCoroutineContext().ensureActive()
                 validateReturnedAsset(asset, session, source)
                 requireSameAssetId(asset, ticket.asset.id)
             }
             when (asset.status) {
                 AssetStatus.Ready -> Unit
+
                 AssetStatus.Rejected -> throw AssetImportException(
                     AssetImportIssue.Rejected,
                     "Asset ${asset.id} was rejected by the server",
                 )
+
                 AssetStatus.Missing -> throw AssetImportException(
                     AssetImportIssue.Missing,
                     "Asset ${asset.id} is missing from object storage",
                 )
+
                 AssetStatus.Pending -> throw AssetImportException(
                     AssetImportIssue.NotReady,
                     "Asset ${asset.id} did not become ready",
                 )
             }
-            val imported = ImportedMedia(
-                asset = asset,
-                mediaKind = mediaKind,
-                // The validated ready response already contains derivative metadata on modern
-                // servers. Do not issue a second GET (or lose it to a transient lookup failure).
-                // This reference never substitutes for authorization/checksum on download.
-                thumbnailAssetId = asset.thumbnailAssetId?.takeUnless { it == asset.id } ?: try {
-                    gateway.thumbnailAssetId(session, asset.id)?.takeIf { it.isNotBlank() && it != asset.id }
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (_: Exception) {
-                    null
-                },
-            )
+            val imported =
+                ImportedMedia(
+                    asset = asset,
+                    mediaKind = mediaKind,
+                    // The validated ready response already contains derivative metadata on modern
+                    // servers. Do not issue a second GET (or lose it to a transient lookup failure).
+                    // This reference never substitutes for authorization/checksum on download.
+                    thumbnailAssetId =
+                        asset.thumbnailAssetId?.takeUnless { it == asset.id } ?: try {
+                            gateway.thumbnailAssetId(session, asset.id)?.takeIf { it.isNotBlank() && it != asset.id }
+                        } catch (error: CancellationException) {
+                            throw error
+                        } catch (_: Exception) {
+                            null
+                        },
+                )
             currentCoroutineContext().ensureActive()
             onStage(AssetImportStage.Ready(imported))
             return imported
@@ -210,10 +252,12 @@ class AssetImportCoordinator(
                 // Notification is best-effort; neither UI failure nor cancellation may mask the
                 // original error. The server's processing / expiry policy owns retained uploads.
                 runCatching { onStage(AssetImportStage.RecoveryRequired(checkNotNull(ticket).asset.id)) }
-            } else if (preparedValidated) ticket?.let { prepared ->
-                withContext(NonCancellable) {
-                    withTimeoutOrNull(AssetImportCleanupTimeoutMillis) {
-                        runCatching { gateway.abandon(session, prepared.asset.id) }
+            } else if (preparedValidated) {
+                ticket?.let { prepared ->
+                    withContext(NonCancellable) {
+                        withTimeoutOrNull(AssetImportCleanupTimeoutMillis) {
+                            runCatching { gateway.abandon(session, prepared.asset.id) }
+                        }
                     }
                 }
             }
@@ -223,7 +267,10 @@ class AssetImportCoordinator(
     }
 }
 
-private fun requireSameAssetId(asset: WorkspaceAsset, expectedId: String) {
+private fun requireSameAssetId(
+    asset: WorkspaceAsset,
+    expectedId: String,
+) {
     if (asset.id != expectedId) {
         throw AssetImportException(
             AssetImportIssue.NotReady,
@@ -237,11 +284,12 @@ fun validateAssetTransferSource(source: AssetTransferSource): MediaKind {
         throw AssetImportException(AssetImportIssue.BlankName, "Asset display name must not be blank")
     }
     val normalizedMediaType = source.mediaType.trim().lowercase()
-    val kind = mediaKindForAssetMediaType(normalizedMediaType)
-        ?: throw AssetImportException(
-            AssetImportIssue.UnsupportedMediaType,
-            "Media type '$normalizedMediaType' is not supported",
-        )
+    val kind =
+        mediaKindForAssetMediaType(normalizedMediaType)
+            ?: throw AssetImportException(
+                AssetImportIssue.UnsupportedMediaType,
+                "Media type '$normalizedMediaType' is not supported",
+            )
     if (source.byteSize <= 0) {
         throw AssetImportException(AssetImportIssue.InvalidByteSize, "Asset byte size must be positive")
     }

@@ -57,6 +57,8 @@ class RecentWorkspacesTest {
         assertNull(WorkspaceLaunchRequests.pending.value)
     }
 
-    private fun summary(id: String, title: String) =
-        WorkspaceSummary(WorkspaceId(id), title, role = "owner", workspaceVersion = 1, lastServerSeq = 1)
+    private fun summary(
+        id: String,
+        title: String,
+    ) = WorkspaceSummary(WorkspaceId(id), title, role = "owner", workspaceVersion = 1, lastServerSeq = 1)
 }

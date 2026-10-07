@@ -1,7 +1,6 @@
 package cg.creamgod.boarderless.domain.model
 
 import kotlinx.serialization.Serializable
-
 import kotlin.math.max
 
 @Serializable
@@ -36,10 +35,11 @@ data class CanvasSize(
         require(height.isFinite() && height >= 0f) { "height must be finite and not negative" }
     }
 
-    fun atLeast(minimum: CanvasSize): CanvasSize = CanvasSize(
-        width = max(width, minimum.width),
-        height = max(height, minimum.height),
-    )
+    fun atLeast(minimum: CanvasSize): CanvasSize =
+        CanvasSize(
+            width = max(width, minimum.width),
+            height = max(height, minimum.height),
+        )
 }
 
 @Serializable

@@ -1,11 +1,11 @@
 package cg.creamgod.boarderless.feature.canvas
 
-import cg.creamgod.boarderless.i18n.Strings
 import cg.creamgod.boarderless.domain.model.CanvasObject
 import cg.creamgod.boarderless.domain.model.CanvasObjectId
 import cg.creamgod.boarderless.domain.model.GroupFrame
-import cg.creamgod.boarderless.domain.model.TextNode
 import cg.creamgod.boarderless.domain.model.MediaNode
+import cg.creamgod.boarderless.domain.model.TextNode
+import cg.creamgod.boarderless.i18n.Strings
 
 internal enum class LayerObjectKind { Group, Thought, Media }
 
@@ -20,16 +20,21 @@ internal data class LayerTreeEntry(
 
 internal fun buildLayerTree(objects: Collection<CanvasObject>): List<LayerTreeEntry> {
     val objectsById = objects.associateBy(CanvasObject::id)
-    val childrenByParent = objects
-        .filter { it.parentId?.let(objectsById::containsKey) == true }
-        .groupBy(CanvasObject::parentId)
-    val roots = objects
-        .filter { it.parentId?.let(objectsById::containsKey) != true }
-        .sortedWith(layerObjectComparator())
+    val childrenByParent =
+        objects
+            .filter { it.parentId?.let(objectsById::containsKey) == true }
+            .groupBy(CanvasObject::parentId)
+    val roots =
+        objects
+            .filter { it.parentId?.let(objectsById::containsKey) != true }
+            .sortedWith(layerObjectComparator())
     val visited = mutableSetOf<CanvasObjectId>()
     val entries = mutableListOf<LayerTreeEntry>()
 
-    fun append(canvasObject: CanvasObject, depth: Int) {
+    fun append(
+        canvasObject: CanvasObject,
+        depth: Int,
+    ) {
         if (!visited.add(canvasObject.id)) return
         entries += canvasObject.toLayerTreeEntry(depth)
         childrenByParent[canvasObject.id]
@@ -43,34 +48,46 @@ internal fun buildLayerTree(objects: Collection<CanvasObject>): List<LayerTreeEn
     return entries
 }
 
-private fun layerObjectComparator(): Comparator<CanvasObject> =
-    compareByDescending<CanvasObject> { it.zIndex }.thenBy { it.id.value }
+private fun layerObjectComparator(): Comparator<CanvasObject> = compareByDescending<CanvasObject> { it.zIndex }.thenBy { it.id.value }
 
-private fun CanvasObject.toLayerTreeEntry(depth: Int): LayerTreeEntry = when (this) {
-    is GroupFrame -> LayerTreeEntry(
-        objectId = id,
-        depth = depth,
-        title = title.ifBlank { Strings.content.untitledGroup() }.take(48),
-        kind = LayerObjectKind.Group,
-        locked = locked,
-        zIndex = zIndex,
-    )
+private fun CanvasObject.toLayerTreeEntry(depth: Int): LayerTreeEntry =
+    when (this) {
+        is GroupFrame -> {
+            LayerTreeEntry(
+                objectId = id,
+                depth = depth,
+                title = title.ifBlank { Strings.content.untitledGroup() }.take(48),
+                kind = LayerObjectKind.Group,
+                locked = locked,
+                zIndex = zIndex,
+            )
+        }
 
-    is TextNode -> LayerTreeEntry(
-        objectId = id,
-        depth = depth,
-        title = text.lineSequence().firstOrNull().orEmpty().ifBlank { Strings.content.untitledThought() }.take(48),
-        kind = LayerObjectKind.Thought,
-        locked = locked,
-        zIndex = zIndex,
-    )
+        is TextNode -> {
+            LayerTreeEntry(
+                objectId = id,
+                depth = depth,
+                title =
+                    text
+                        .lineSequence()
+                        .firstOrNull()
+                        .orEmpty()
+                        .ifBlank { Strings.content.untitledThought() }
+                        .take(48),
+                kind = LayerObjectKind.Thought,
+                locked = locked,
+                zIndex = zIndex,
+            )
+        }
 
-    is MediaNode -> LayerTreeEntry(
-        objectId = id,
-        depth = depth,
-        title = altText.ifBlank { mediaKind.name }.take(48),
-        kind = LayerObjectKind.Media,
-        locked = locked,
-        zIndex = zIndex,
-    )
-}
+        is MediaNode -> {
+            LayerTreeEntry(
+                objectId = id,
+                depth = depth,
+                title = altText.ifBlank { mediaKind.name }.take(48),
+                kind = LayerObjectKind.Media,
+                locked = locked,
+                zIndex = zIndex,
+            )
+        }
+    }

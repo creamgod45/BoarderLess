@@ -13,10 +13,13 @@ class AssetContractTest {
         cg.creamgod.boarderless.data.AssetRejectionReason.entries.forEach { reason ->
             assertEquals(reason, dto("rejected").copy(rejectionReason = reason.token).toDomain().rejectionReason)
         }
-        assertEquals(cg.creamgod.boarderless.data.AssetRejectionReason.Unknown,
-            dto("rejected").copy(rejectionReason = "https://private.invalid/?token=secret").toDomain().rejectionReason)
+        assertEquals(
+            cg.creamgod.boarderless.data.AssetRejectionReason.Unknown,
+            dto("rejected").copy(rejectionReason = "https://private.invalid/?token=secret").toDomain().rejectionReason,
+        )
         assertEquals(null, dto("rejected").toDomain().rejectionReason)
     }
+
     @Test fun derivativeReferenceSurvivesMetadataMappingWithoutStorageUrl() {
         assertEquals("poster", dto(status = "ready").copy(thumbnailAssetId = "poster").toDomain().thumbnailAssetId)
     }

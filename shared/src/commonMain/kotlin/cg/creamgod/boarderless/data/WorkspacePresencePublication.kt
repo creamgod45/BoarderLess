@@ -21,10 +21,14 @@ data class WorkspacePresenceUpdate(
  */
 interface WorkspacePresencePublisher {
     suspend fun publish(update: WorkspacePresenceUpdate)
+
     fun close()
 }
 
-internal data class WorkspacePresenceIntent(val cursor: Vec2?, val selectedIds: Set<CanvasObjectId>)
+internal data class WorkspacePresenceIntent(
+    val cursor: Vec2?,
+    val selectedIds: Set<CanvasObjectId>,
+)
 
 /** Re-evaluate on every read, not only when Compose cancels the previous owner's effect. */
 internal fun presencePublicationIsLive(
@@ -35,9 +39,10 @@ internal fun presencePublicationIsLive(
     roomEpoch: String,
     presence: WorkspacePresenceState,
     nowMs: Long,
-): Boolean = subscriptionId.isNotBlank() && roomEpoch.isNotBlank() &&
-    subscriptionId == currentSubscriptionId && presence.belongsTo(opened, subscriptionId) &&
-    presence.visibleFor(current, currentSubscriptionId, nowMs).let { it.connected && it.roomEpoch == roomEpoch }
+): Boolean =
+    subscriptionId.isNotBlank() && roomEpoch.isNotBlank() &&
+        subscriptionId == currentSubscriptionId && presence.belongsTo(opened, subscriptionId) &&
+        presence.visibleFor(current, currentSubscriptionId, nowMs).let { it.connected && it.roomEpoch == roomEpoch }
 
 /** Uses authoritative IDs only; optimistic-only creations must wait for their committed state.
  * Screen samples remain local, so panning under a stationary pointer recomputes world position.
@@ -52,15 +57,23 @@ internal fun workspacePresenceIntent(
 ): WorkspacePresenceIntent {
     if (!sharingEnabled) return WorkspacePresenceIntent(null, emptySet())
     // Double arithmetic avoids Float overflow before Vec2 can validate the result.
-    val cursor = screenCursor?.let {
-        val x = (it.x.toDouble() - viewport.pan.x.toDouble()) / viewport.zoom.toDouble()
-        val y = (it.y.toDouble() - viewport.pan.y.toDouble()) / viewport.zoom.toDouble()
-        if (x.isFinite() && y.isFinite() && x in -10_000_000.0..10_000_000.0 && y in -10_000_000.0..10_000_000.0)
-            Vec2(x.toFloat(), y.toFloat()) else null
-    }
-    val ids = selectedIds.asSequence()
-        .filter { it in session.workspace.objects && it.value.length <= 128 && it.value.none { ch -> ch.code < 32 } }
-        .sortedBy { it.value }.take(128).toSet()
+    val cursor =
+        screenCursor?.let {
+            val x = (it.x.toDouble() - viewport.pan.x.toDouble()) / viewport.zoom.toDouble()
+            val y = (it.y.toDouble() - viewport.pan.y.toDouble()) / viewport.zoom.toDouble()
+            if (x.isFinite() && y.isFinite() && x in -10_000_000.0..10_000_000.0 && y in -10_000_000.0..10_000_000.0) {
+                Vec2(x.toFloat(), y.toFloat())
+            } else {
+                null
+            }
+        }
+    val ids =
+        selectedIds
+            .asSequence()
+            .filter { it in session.workspace.objects && it.value.length <= 128 && it.value.none { ch -> ch.code < 32 } }
+            .sortedBy { it.value }
+            .take(128)
+            .toSet()
     return WorkspacePresenceIntent(cursor, ids)
 }
 
@@ -113,7 +126,9 @@ internal suspend fun publishWorkspacePresence(
         failure = error
         throw error
     } finally {
-        try { publisher.close() } catch (closeError: Throwable) {
+        try {
+            publisher.close()
+        } catch (closeError: Throwable) {
             if (failure == null) throw closeError
             // Do not replace the original publication failure or cancellation with cleanup failure.
         }

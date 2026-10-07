@@ -1,5 +1,12 @@
 # 快速方案簿跨裝置 APP／Backend 合約草案
 
+2026-10-06 快速方案簿檔案保存與方案檔交付接線：新增QuickSchemeRepository邊界；Desktop FileRepo選擇DesktopFileQuickSchemeStore，~/.boarderless-storage/local/schemes的一份private atomic record同時保存nextId與完整items，force／atomic move／directory force之後才回成功。ID不重用，改名／刪除原子保存、重開直接讀回；list可在文件尚未open前安全初始化，沒有搬移舊Settings或測試server資料。512items／payload1MiB／整簿4MiB，嚴格schema／UTF-8／unique排序IDs／nextId／provenance；checksum／unknown／incomplete內容拒絕且不reset原件。Settings方案簿留在server與既有平台路徑。APP保存／改名／刪除例外不當成功，嘗試fresh list呈現已發布內容並標尚未確認；初始讀取失敗有明確訊息與重試。
+
+方案簿新增匯出方案檔、匯入方案檔→預覽→新checkbox確認存入方案簿；讀檔和審核不自動存入，也不自動插入畫布。四端沿既有JSON picker／delivery runtime：Desktop／Android新文件、iOS新folder file、Web只標download requested；iOS／Web改採呼叫者的安全suggested filename並加UUID，draft／scheme用途不混名。transferBusy與incoming review納入canvas／keyboard／presence阻擋，user/client/workspace／reconnect epoch失效取消publication與write guard；檔案選完後重新核定同一定義，取消／stale／read failure釋放destination，無HTTP。格式boarderless.quick-scheme v1包含name／完整versioned selection／sourceWorkspaceId，不帶本機scheme ID／auth／cache／picker路徑；目的library配置新ID。root／selection版本必填、unknown字段／duplicate escaped keys／dangling Unicode／depth／empty／oversize拒絕，1000objects／2000relations／64 hierarchy depth；既有AI strict parser抽出共用parseStrictJsonObject，沒有放寬AI協議。素材只保留source binding與reference，仍要verified目的assets才能插入，沒有複製原始素材或把引用當grant。這是明確方案檔搬移；不是user-scoped CRUD／outbox／自動跨裝置同步的替代驗收，BAI-006仍Blocking。
+
+54700隔離build最終成功73s：JVM898（6既有skip）、JS811、Wasm811、Desktop46均0failure/error；iOS arm64與Android main compile、新Desktop包通過並更新desktopApp/build/verified/BoarderLess.app，核含native store／transfer codec／strict JSON classes。新增Native5cases：初次list／多文件共用／reopen／rename/delete與IDs、save/rename/delete×三file fault的完整old/new、corrupt／schema／missing／duplicate拒絕不reset、invalid/oversized零published write、兩獨立device dirs方案檔definition搬移＋canvas零改動。Common6cases：selection v1..4／fresh local IDs、strict不可信JSON／UTF8、object／hierarchy bounds、media provenance不授權foreign canvas、choose→fresh→write順序／browser request、cancel／stale／scope失效且dispose。最初媒體fixture錯用Image而非image已修正，production allowlist未放寬。尚未四端GUI／真檔案provider驗收，沒有新的AI user-dir安全log，實際Router401仍未排除。完整六主線goal active；不重新引入未發布測試資料遷移前置。
+
+
 日期：2026-10-02。對應 Priority 3／BAI-006。
 
 狀態：**Proposal／待後端 agent 確認與實作**。本文所有新增路由、envelope、同步與素材 materialization 能力均尚未存在。APP 不得猜測 endpoint 或把本機方案標示為已同步。Priority 1 素材與 Priority 2 即時協作仍先於本項；效能驗收維持最後。本輪未修改或啟動後端。

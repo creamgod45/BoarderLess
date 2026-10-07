@@ -57,24 +57,27 @@ class SelectionMovementTest {
     ): Fixture {
         val outer = GroupFrame(id("outer"), transform = transform(0f))
         val inner = GroupFrame(id("inner"), parentId = outer.id, transform = transform(20f))
-        val child = TextNode(
-            id = id("child"),
-            parentId = inner.id,
-            locked = childLocked,
-            transform = transform(40f),
-            text = "Child",
-        )
-        val standalone = TextNode(
-            id = id("standalone"),
-            locked = standaloneLocked,
-            transform = transform(500f),
-            text = "Standalone",
-        )
-        val workspace = Workspace(
-            id = WorkspaceId("workspace"),
-            title = "Movement",
-            objects = listOf(outer, inner, child, standalone).associateBy { it.id },
-        )
+        val child =
+            TextNode(
+                id = id("child"),
+                parentId = inner.id,
+                locked = childLocked,
+                transform = transform(40f),
+                text = "Child",
+            )
+        val standalone =
+            TextNode(
+                id = id("standalone"),
+                locked = standaloneLocked,
+                transform = transform(500f),
+                text = "Standalone",
+            )
+        val workspace =
+            Workspace(
+                id = WorkspaceId("workspace"),
+                title = "Movement",
+                objects = listOf(outer, inner, child, standalone).associateBy { it.id },
+            )
         return Fixture(workspace, outer, inner, child, standalone)
     }
 

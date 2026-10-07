@@ -22,27 +22,31 @@ import kotlin.test.assertTrue
 class MediaNodeOperationTest {
     @Test
     fun mediaMetadataChangeIsUndoableAndRedoable() {
-        val node = MediaNode(
-            id = CanvasObjectId("media-1"),
-            transform = CanvasTransform(Vec2.Zero, CanvasSize(320f, 180f)),
-            assetId = "asset-1",
-            mediaKind = MediaKind.Image,
-        )
+        val node =
+            MediaNode(
+                id = CanvasObjectId("media-1"),
+                transform = CanvasTransform(Vec2.Zero, CanvasSize(320f, 180f)),
+                assetId = "asset-1",
+                mediaKind = MediaKind.Image,
+            )
         var history = WorkspaceHistory(Workspace(WorkspaceId("workspace-1"), "Media"))
         history = history.execute(CreateObjectsOperation("create", listOf(node))).history
-        history = history.execute(
-            UpdateMediaNodeAttributesOperation(
-                operationId = "describe",
-                changes = listOf(
-                    MediaNodeAttributesChange(
-                        objectId = node.id,
-                        expectedVersion = 1,
-                        before = MediaNodeAttributes(0, false, ""),
-                        after = MediaNodeAttributes(0, true, "Roadmap image"),
+        history =
+            history
+                .execute(
+                    UpdateMediaNodeAttributesOperation(
+                        operationId = "describe",
+                        changes =
+                            listOf(
+                                MediaNodeAttributesChange(
+                                    objectId = node.id,
+                                    expectedVersion = 1,
+                                    before = MediaNodeAttributes(0, false, ""),
+                                    after = MediaNodeAttributes(0, true, "Roadmap image"),
+                                ),
+                            ),
                     ),
-                ),
-            ),
-        ).history
+                ).history
 
         val changed = assertIs<MediaNode>(history.workspace.objectById(node.id))
         assertTrue(changed.locked)

@@ -15,7 +15,11 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /** Gamma-encoded sRGB with channels in 0..1. Values may fall outside 0..1 before [clamped]. */
-data class RgbColor(val r: Float, val g: Float, val b: Float) {
+data class RgbColor(
+    val r: Float,
+    val g: Float,
+    val b: Float,
+) {
     val inGamut: Boolean
         get() = listOf(r, g, b).all { it in -GamutTolerance..1f + GamutTolerance }
 
@@ -24,9 +28,11 @@ data class RgbColor(val r: Float, val g: Float, val b: Float) {
     /** `#RRGGBB`, uppercase. */
     fun toHex(): String {
         val c = clamped()
-        return "#" + listOf(c.r, c.g, c.b).joinToString("") { channel ->
-            (channel * 255f).roundToInt().toString(16).padStart(2, '0')
-        }.uppercase()
+        return "#" +
+            listOf(c.r, c.g, c.b)
+                .joinToString("") { channel ->
+                    (channel * 255f).roundToInt().toString(16).padStart(2, '0')
+                }.uppercase()
     }
 
     fun toArgb(): Long {
@@ -49,11 +55,12 @@ data class RgbColor(val r: Float, val g: Float, val b: Float) {
         /** Accepts `#RGB`, `#RRGGBB`, with or without `#`, surrounding spaces and any case. */
         fun parseHex(input: String): RgbColor? {
             val raw = input.trim().removePrefix("#")
-            val expanded = when (raw.length) {
-                3 -> raw.map { "$it$it" }.joinToString("")
-                6 -> raw
-                else -> return null
-            }
+            val expanded =
+                when (raw.length) {
+                    3 -> raw.map { "$it$it" }.joinToString("")
+                    6 -> raw
+                    else -> return null
+                }
             if (!expanded.all { it.isDigit() || it.lowercaseChar() in 'a'..'f' }) return null
             val value = expanded.toInt(16)
             return RgbColor(
@@ -63,15 +70,19 @@ data class RgbColor(val r: Float, val g: Float, val b: Float) {
             )
         }
 
-        fun fromArgb(argb: Long): RgbColor = RgbColor(
-            r = ((argb shr 16) and 0xFF) / 255f,
-            g = ((argb shr 8) and 0xFF) / 255f,
-            b = (argb and 0xFF) / 255f,
-        )
+        fun fromArgb(argb: Long): RgbColor =
+            RgbColor(
+                r = ((argb shr 16) and 0xFF) / 255f,
+                g = ((argb shr 8) and 0xFF) / 255f,
+                b = (argb and 0xFF) / 255f,
+            )
     }
 }
 
-fun contrastRatio(first: RgbColor, second: RgbColor): Float {
+fun contrastRatio(
+    first: RgbColor,
+    second: RgbColor,
+): Float {
     val a = first.relativeLuminance()
     val b = second.relativeLuminance()
     return (max(a, b) + 0.05f) / (min(a, b) + 0.05f)
@@ -99,7 +110,10 @@ data class ColorChannel(
     }
 }
 
-enum class ColorModel(val label: String, val channels: List<ColorChannel>) {
+enum class ColorModel(
+    val label: String,
+    val channels: List<ColorChannel>,
+) {
     Hsb(
         "HSB",
         listOf(
@@ -139,15 +153,17 @@ enum class ColorModel(val label: String, val channels: List<ColorChannel>) {
             ColorChannel("C", Strings.colorPicker.chroma, 0f, 0.37f, decimals = 3),
             ColorChannel("H", Strings.colorPicker.hue, 0f, 360f, unit = "°"),
         ),
-    );
+    ),
+    ;
 
-    fun fromRgb(rgb: RgbColor): List<Float> = when (this) {
-        Hsb -> rgbToHsb(rgb).let { listOf(it[0], it[1] * 100f, it[2] * 100f) }
-        Hsl -> rgbToHsl(rgb).let { listOf(it[0], it[1] * 100f, it[2] * 100f) }
-        Rgb -> listOf(rgb.r * 255f, rgb.g * 255f, rgb.b * 255f)
-        Oklab -> rgbToOklab(rgb).let { listOf(it[0] * 100f, it[1], it[2]) }
-        Oklch -> rgbToOklch(rgb).let { listOf(it[0] * 100f, it[1], it[2]) }
-    }
+    fun fromRgb(rgb: RgbColor): List<Float> =
+        when (this) {
+            Hsb -> rgbToHsb(rgb).let { listOf(it[0], it[1] * 100f, it[2] * 100f) }
+            Hsl -> rgbToHsl(rgb).let { listOf(it[0], it[1] * 100f, it[2] * 100f) }
+            Rgb -> listOf(rgb.r * 255f, rgb.g * 255f, rgb.b * 255f)
+            Oklab -> rgbToOklab(rgb).let { listOf(it[0] * 100f, it[1], it[2]) }
+            Oklch -> rgbToOklch(rgb).let { listOf(it[0] * 100f, it[1], it[2]) }
+        }
 
     /** Unclamped: Oklab/Oklch values can land outside sRGB; check [RgbColor.inGamut]. */
     fun toRgb(values: List<Float>): RgbColor {
@@ -173,7 +189,11 @@ fun rgbToHsb(rgb: RgbColor): FloatArray {
     return floatArrayOf(hueOf(c, max, delta), saturation, max)
 }
 
-fun hsbToRgb(hue: Float, saturation: Float, brightness: Float): RgbColor {
+fun hsbToRgb(
+    hue: Float,
+    saturation: Float,
+    brightness: Float,
+): RgbColor {
     val s = saturation.coerceIn(0f, 1f)
     val v = brightness.coerceIn(0f, 1f)
     val chroma = v * s
@@ -190,34 +210,48 @@ fun rgbToHsl(rgb: RgbColor): FloatArray {
     return floatArrayOf(hueOf(c, max, delta), saturation.coerceIn(0f, 1f), lightness)
 }
 
-fun hslToRgb(hue: Float, saturation: Float, lightness: Float): RgbColor {
+fun hslToRgb(
+    hue: Float,
+    saturation: Float,
+    lightness: Float,
+): RgbColor {
     val s = saturation.coerceIn(0f, 1f)
     val l = lightness.coerceIn(0f, 1f)
     val chroma = (1f - abs(2f * l - 1f)) * s
     return fromHueChroma(hue, chroma, l - chroma / 2f)
 }
 
-private fun hueOf(c: RgbColor, max: Float, delta: Float): Float {
+private fun hueOf(
+    c: RgbColor,
+    max: Float,
+    delta: Float,
+): Float {
     if (delta == 0f) return 0f
-    val hue = when (max) {
-        c.r -> 60f * (((c.g - c.b) / delta) % 6f)
-        c.g -> 60f * ((c.b - c.r) / delta + 2f)
-        else -> 60f * ((c.r - c.g) / delta + 4f)
-    }
+    val hue =
+        when (max) {
+            c.r -> 60f * (((c.g - c.b) / delta) % 6f)
+            c.g -> 60f * ((c.b - c.r) / delta + 2f)
+            else -> 60f * ((c.r - c.g) / delta + 4f)
+        }
     return normalizeHue(hue)
 }
 
-private fun fromHueChroma(hue: Float, chroma: Float, offset: Float): RgbColor {
+private fun fromHueChroma(
+    hue: Float,
+    chroma: Float,
+    offset: Float,
+): RgbColor {
     val h = normalizeHue(hue) / 60f
     val x = chroma * (1f - abs(h % 2f - 1f))
-    val (r, g, b) = when {
-        h < 1f -> Triple(chroma, x, 0f)
-        h < 2f -> Triple(x, chroma, 0f)
-        h < 3f -> Triple(0f, chroma, x)
-        h < 4f -> Triple(0f, x, chroma)
-        h < 5f -> Triple(x, 0f, chroma)
-        else -> Triple(chroma, 0f, x)
-    }
+    val (r, g, b) =
+        when {
+            h < 1f -> Triple(chroma, x, 0f)
+            h < 2f -> Triple(x, chroma, 0f)
+            h < 3f -> Triple(0f, chroma, x)
+            h < 4f -> Triple(0f, x, chroma)
+            h < 5f -> Triple(x, 0f, chroma)
+            else -> Triple(chroma, 0f, x)
+        }
     return RgbColor(r + offset, g + offset, b + offset)
 }
 
@@ -230,12 +264,14 @@ fun normalizeHue(hue: Float): Float {
 
 // region Oklab / Oklch (Björn Ottosson, https://bottosson.github.io/posts/oklab/) — L in 0..1
 
-fun srgbToLinear(channel: Float): Float =
-    if (channel <= 0.04045f) channel / 12.92f else ((channel + 0.055f) / 1.055f).pow(2.4f)
+fun srgbToLinear(channel: Float): Float = if (channel <= 0.04045f) channel / 12.92f else ((channel + 0.055f) / 1.055f).pow(2.4f)
 
 fun linearToSrgb(channel: Float): Float =
-    if (abs(channel) <= 0.0031308f) channel * 12.92f
-    else (if (channel < 0f) -1f else 1f) * (1.055f * abs(channel).pow(1f / 2.4f) - 0.055f)
+    if (abs(channel) <= 0.0031308f) {
+        channel * 12.92f
+    } else {
+        (if (channel < 0f) -1f else 1f) * (1.055f * abs(channel).pow(1f / 2.4f) - 0.055f)
+    }
 
 fun rgbToOklab(rgb: RgbColor): FloatArray {
     val r = srgbToLinear(rgb.r)
@@ -251,7 +287,11 @@ fun rgbToOklab(rgb: RgbColor): FloatArray {
     )
 }
 
-fun oklabToRgb(lightness: Float, a: Float, b: Float): RgbColor {
+fun oklabToRgb(
+    lightness: Float,
+    a: Float,
+    b: Float,
+): RgbColor {
     val l = (lightness + 0.3963377774f * a + 0.2158037573f * b).let { it * it * it }
     val m = (lightness - 0.1055613458f * a - 0.0638541728f * b).let { it * it * it }
     val s = (lightness - 0.0894841775f * a - 1.2914855480f * b).let { it * it * it }
@@ -269,7 +309,11 @@ fun rgbToOklch(rgb: RgbColor): FloatArray {
     return floatArrayOf(l, chroma, hue)
 }
 
-fun oklchToRgb(lightness: Float, chroma: Float, hue: Float): RgbColor {
+fun oklchToRgb(
+    lightness: Float,
+    chroma: Float,
+    hue: Float,
+): RgbColor {
     val radians = hue * PI.toFloat() / 180f
     return oklabToRgb(lightness, chroma * cos(radians), chroma * sin(radians))
 }

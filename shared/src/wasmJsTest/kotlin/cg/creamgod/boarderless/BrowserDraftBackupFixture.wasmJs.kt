@@ -1,4 +1,5 @@
 @file:OptIn(kotlin.js.ExperimentalWasmJsInterop::class)
+
 package cg.creamgod.boarderless
 
 @JsFun("""() => globalThis.boarderlessDraftDownloadFixture.install()""")

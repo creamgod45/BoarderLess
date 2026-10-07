@@ -1,6 +1,45 @@
 # APP 素材真實服務驗收紀錄
 
-## 最新 iPhone 建置 API 設定修正（2026-10-05）
+2026-10-07 素材隨方案交付核心：新增 QuickSchemeBundleCodec 的 BLQS0001 串流容器（12-byte magic/manifest-length header＋strict UTF-8 manifest＋declared originals＋whole-container SHA256 footer）。Manifest帶既有 QuickScheme transfer definition與唯一 referenced asset descriptors，不帶signed URL／credential／ownerId／device path；source asset IDs限制plain identifier。引用集合須與media original及thumbnail IDs exact相同、thumbnail必須Image、每mediaKind與mediaType一致；最多64個原檔、每檔沿既有200MiB、容器1GiB、manifest4MiB、read/write chunk≤1MiB。不用Base64或把全部影片讀進memory；同一asset多個MediaNode只交付一份。圖片／GIF／影片都是workspace stored originals，GIPHY provider display資料不當作可快取原檔或暗中下載。
+
+Export核明確來源workspace／fresh scheme與scope，逐asset authorize Ready metadata並核source ID/workspace，每原檔驗exact bytes／SHA256再全container checksum，最後fresh scheme和scope仍相同才commit；失敗abort只清owned partial。Review先strict JSON／Unicode／format/version／refs／metadata／limits，再stream驗全部asset SHA及wholefooter、完整EOF／no trailing，零upload/library/canvas mutation；failure releasesnapshot。Materialize要求caller綁exact review至明確confirmation，先重驗同一immutable bundle，逐次fresh editor/user/client/workspace/version/seq/full snapshot authority，沿原AssetImportCoordinator prepare/upload/confirm/Ready／uncertain recovery。beforeComplete要求hash＆完整讀取並先記目的ID，readImported／recordReady是必備receipt邊界；Ready全部驗原metadata及目的ownership、distinct目的IDs才回完整remapped scheme，original與thumbnail引用都重配，sourceWorkspaceId改目的workspace。尚不自行save library／insert canvas，caller必須再核scope後保存。
+
+JVM新增DesktopSchemeBundleSource選取檔→private immutable snapshot（copy≤1MiB、sourcefileKey/size/mtime及EOF核對），刪／改picker原檔不影響snapshot；release只清owned files。DesktopSchemeBundleDestination force完整partial後以createLink atomically發布NEW檔名，不overwrite／replace舊檔或symlink；publish後directory-force uncertainty時abort也不刪finalfile。當前Posix/macOS adapter，未宣稱Windows／Android／iOS／browser picker已完成。
+
+DesktopSchemeBundleImportReceipts沿既有DesktopAtomicDraftStore，scope=user/client/workspace＋bundleDigest，source descriptor→destinationId pending-before-complete／Ready，private exact-CAS／idempotentconfirm；重開先getAsset核同ID／Ready／full metadata，不將pending/missing/failed lookup當成可重新上傳。expected descriptor或destinationID改變拒絕，不reset損檔。首compile abort推導Unit?不符合interface已加Unit；native測試抓到key不該带prefix及新檔CAS應null而非0，改正並把測試核exact intentional interruption訊息，避免其他失敗冒充Ready後中斷。
+
+新增common7cases＋JVM2cases：2MiB以上原檔stream（1MiB上限、short reads）、shared GIF media dedup/remap／receipt重試不prepare、corrupt original/footer/truncated/trailing拒絕、wrongworkspace/changedscheme/checksum export零publish、scope取消release/abort、撤權/改snapshot/改檔後零prepare、Ready後receipt失敗保留pendingID及原方案；native真正PNG來源import→原檔bundle→刪picker來源→另一native repository/materialize→Ready後故障→receipt/repository重開復用同ID→scheme保存／canvas插入／repo重開→verified download及ImageIO／exact original bytes一致、只一目的asset；file writer新檔visibility、no overwrite／snapshot獨立／abort無partial漏檔。
+
+這是完整串流codec／原生檔案與receipt核心，尚未接GUI bundle picker／匯出匯入確認入口，其他三端binary adapters及physical跨裝置交付也未完成；不能用headless原生驗證宣稱使用者現在已可從APP跨裝置交付媒體方案。六主線goal維持active；不替代自動cloud scheme sync／正式協作／shared背景同步／GIPHY canvas provider交付。未動backend／.env／migration；actual user-dir AI log仍不存在，最後401未排除。
+
+最終隔離 build 8701 成功1m23s：JVM982（6既有skip）、JS877、Wasm877、Desktop48全部0failures/errors；iOS arm64／Android main compile／Desktop distributable通過。ready bundle已更新核 codec/review/JVM source/destination/receipt classes，shared SHA256 3115d54cb51a519d2b68edba8a5a27b7aef2a41c3d68782447e0e6535ed2926d；无QA prefs fixture。這次沒有GUI新入口或GUI驗收，不把包中class存在當作APP媒體bundle交付已可用。git diff --check通過。
+
+2026-10-06 本機素材交付更新（覆蓋下方歷史的「local media gateway停用」）：新增DesktopFileAssetGateway並接到Desktop預設本機repository、WorkspaceScreen匯入與Desktop圖片／GIF／影片讀取。素材位於~/.boarderless-storage/local/assets，獨立private原始檔與atomic metadata；每次chunk≤1MiB、上限200MiB，不把原始檔或picker/cache路徑塞入workspace JSON。先完整驗size/checksum、force原始檔、atomic move與directory force，才發布Ready metadata。workspace只保存asset ID；重開素材庫可查詢／重用，刪掉picker原始檔仍能讀回。查詢檢查本機session user/client/workspace；下載經既有AssetDownloadCoordinator與sink checksum驗證，損壞／跨畫布／截斷不能出預覽。原始檔已落盤但Ready尚未發布的中斷，可在明確metadata refresh時驗證並settle同一ID，不重上傳；沒有完整原始檔的Pending不假稱Ready。本機進度使用保存／驗證本機檔案文字，server mode仍用Backend gateway。
+
+DesktopFileAssetGatewayTest4cases：真正PNG來源→import coordinator→media node→retainDraft→新repo重開→刪來源→verified download sink→ImageIO讀回；跨workspace／foreignclient／path ID／checksum corruption拒絕；changed/truncated source取消pending且不留original/part；upload完成而confirm未執行的restart→明確getAsset恢復同一ID。最終34087隔離build成功74s：JVM880（6既有skip）、JS799、Wasm799、Desktop46均0failure/error；iOS arm64與Android main僅compile通過、Desktop新包成功並複製desktopApp/build/verified/BoarderLess.app，直接核含local repository／media gateway classes。尚未GUI操作驗收、未宣稱四端本機素材或跨裝置交付完成；GIPHY沿現有provider display路徑，不當作本機上傳素材。沒有新user-dir AI probe log，最後真Router證據仍HTTP401；完整六主線goal active，不重新引入測試資料遷移前置。
+
+
+## 最新 iOS 照片／影片來源入口（2026-10-05）
+
+使用者確認iOS只有Files選項，原IosMediaPicker確實只接UIDocumentPicker。現在匯入先顯示中央來源選擇「照片與影片／檔案／取消」，Photos走PHPickerViewController、single selection、image/video filter與Compatible representation；Files保留原picker與格式。UIKit呈現固定Main，來源menu dismiss完成才開下一個picker；scope取消／dispose關閉owned panel，不resume晚到結果。
+
+Photos不查PHAsset／整本照片圖庫、不請求廣泛Photos權限。選取後NSItemProvider file representation在completion內先核對1..200MiB並複製到UUID私有暫存，避免系統在callback返回時刪URL；再交既有IosFileAssetTransferSource immutable snapshot／SHA256／upload，finally刪中介副本，cancel取消NSProgress，resume取消清owned檔，120s export timeout安全失敗。正式支援provider明確提供GIF／PNG／JPEG／WebP／MP4／WebM，GIF優先不變成靜態JPEG。Compatible請求不是所有HEIC／MOV轉碼保證：未提供支援representation時明確unsupported，不偽裝副檔名／mediaType，也沒有新增APP自行轉碼或Live Photo動態支援。
+
+依 [Apple Photos Picker](https://developer.apple.com/documentation/PhotoKit/selecting-photos-and-videos-in-ios) 與 [NSItemProvider暫存生命週期](https://developer.apple.com/documentation/foundation/nsitemprovider/loadfilerepresentation%28fortypeidentifier%3Acompletionhandler%3A%29) 接線。31981 simulator main首次compile15s成功；15679最後iOS Simulator測試与iosArm64 main compile成功55s，IosPhotoSelectionTest4cases／0fail／0error／0skip：single compatible config、GIF優先／unknown格式不重新標記、provider副本在原檔刪除後可hash/read並清兩份自有副本、empty/missing拒絕無leak。不是PHPicker GUI／iCloud／真實callback取消／硬體upload驗收，亦非Xcode完整APP build；新增boot simulator已恢復shutdown。
+
+產品需重新build/install後驗兩來源／取消再開、PNG/JPEG／動畫GIF／MP4、HEIC/MOV Compatible實際representation及unsupported提示、iCloud離線／export等待取消、背景／換workspace取消、Node保存重開；不得刪user Photos原件。視覺／VoiceOver／safearea遮擋由使用者簽核，效能最後。未修改backend／env／keys，原六主線保持。
+
+## Web 選檔誤判取消修正（2026-10-05）
+
+使用者回報Web選完檔案顯示已取消。production media-import.js 原先在window focus後250ms檢查空files並finish(null)，會早於本機／雲端provider的change，移除input並丟掉後續選擇。新增 deterministic delayed-change case在原程式下確實失敗（9cases中1fail，8pass）；這證明競態存在，不宣稱已重現使用者瀏覽器的完整網路上傳。
+
+移除focus推斷取消，改以input change／cancel或APP explicit cancel完成；清除input listeners／value與deadline，late events不重入。無cancel事件的舊瀏覽器保持待選，使用者可按APP取消；120秒deadline回明確選擇錯誤，不冒充使用者取消。append/click錯誤用安全常數。未改上傳協定、storage／backend、Kotlin來源hash與release。
+
+84426 JS／Wasm Karma與兩種Web development webpack最後成功1m38s，BrowserMediaImportRuntimeTest兩目標各3cases／0fail／0error／0skip。兩種processedResources的media-import.js與修正source SHA-256一致，確認資源已進建置。Karma使用fixture選檔，不當使用者原生picker／實際signed PUT已通過；新focus競態由上述Node case驗證。未改其他平台，未啟動或修改backend、未讀env／keys；完整六項仍未完成。
+
+`node --test webApp/tests/*.test.mjs`20cases／0fail／0skip通過，包含focus先到／延遲change、多次focus、native及explicit取消、deadline／late event、原有binary chunks／File upload／headers／abort／其他Web fixtures；git diff --check通過。JS／Wasm Karma與entry建置結果後補。需重啟／重建Web dev服務並重新載入新media-import.js，再以原瀏覽器重验選檔→prepare→upload→ready；視覺與完整實際storage上傳不由Node fixture代簽。
+
+## iPhone 建置 API 設定修正（2026-10-05）
 
 83922 唯讀 `xcodebuild -showBuildSettings` 證實原 iOS 配置為 `http://127.0.0.1:3000`；Info.plist 的 BoarderLessBackendURL 經 Xcode 展開後優先於 Kotlin fallback，因此實機會連手機自身，而不是目前LAN服務。這是可證實的實機預設配置缺口，但使用者截圖的安裝版本／實機或模擬器／檔案來源尚未確認，不能宣稱已找到該截圖唯一根因。
 

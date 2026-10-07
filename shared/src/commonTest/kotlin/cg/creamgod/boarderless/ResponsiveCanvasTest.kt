@@ -1,18 +1,18 @@
 package cg.creamgod.boarderless
 
-import cg.creamgod.boarderless.feature.canvas.usesCompactCanvasLayout
 import cg.creamgod.boarderless.feature.canvas.compactBottomSheetWidthDp
-import cg.creamgod.boarderless.feature.canvas.compactSheetExpandedAfterDrag
 import cg.creamgod.boarderless.feature.canvas.compactInspectorWidthDp
-import cg.creamgod.boarderless.feature.canvas.emptyCanvasCardWidthDp
+import cg.creamgod.boarderless.feature.canvas.compactSheetExpandedAfterDrag
 import cg.creamgod.boarderless.feature.canvas.compactStatusMaxWidthDp
-import cg.creamgod.boarderless.feature.canvas.shouldShowStatusOverlay
+import cg.creamgod.boarderless.feature.canvas.emptyCanvasCardWidthDp
 import cg.creamgod.boarderless.feature.canvas.shouldShowCompactMenuEntry
 import cg.creamgod.boarderless.feature.canvas.shouldShowDesktopCanvasToolbar
+import cg.creamgod.boarderless.feature.canvas.shouldShowStatusOverlay
 import cg.creamgod.boarderless.feature.canvas.transformHandleTouchTargetDp
 import cg.creamgod.boarderless.feature.canvas.transformHandleVisualSizeDp
-import kotlin.test.assertEquals
+import cg.creamgod.boarderless.feature.canvas.usesCompactCanvasLayout
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
