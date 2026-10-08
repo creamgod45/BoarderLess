@@ -37,10 +37,17 @@ fun desktopMediaImportRuntime(
             desktopPreviewPermits.withPermit {
                 val gateway = downloadGateway()
                 try {
-                    imageLoader.load(gateway, session, assetId, request, emit)
+                    imageLoader.load(gateway, session, assetId, request, emit = emit)
                 } finally {
                     (gateway as? cg.creamgod.boarderless.data.AssetTransferGateway)?.close()
                 }
+            }
+        },
+        loadExportImage = { session, assetId, width, height ->
+            desktopPreviewPermits.withPermit {
+                val gateway = downloadGateway()
+                try { imageLoader.loadExportImage(gateway, session, assetId, width, height) }
+                finally { (gateway as? cg.creamgod.boarderless.data.AssetTransferGateway)?.close() }
             }
         },
         loadVideo = { session, assetId ->

@@ -1,5 +1,25 @@
 # APP 素材真實服務驗收紀錄
 
+## 2026-10-08：iOS 素材方案包串流匯出
+
+- 新增 IosSchemeBundleDestination；iOS MainViewController 透過現有 IosCanvasExportPicker 的 schemeBundleRuntime 將 .blscheme 匯出入口注入 APP。Files 選取資料夾時尚不寫入素材；取消／生命週期 close 沿用同一個 native picker 管理，避免 PNG/PDF 與 bundle 同時開兩個系統視窗。
+- 素材以最多 1 MiB chunk 直接串流到自有 0600 暫存檔，採 BLQS0001 協定的 1 GiB bundle 上限；沒有沿用 canvas 的 32 MiB／記憶體 chunks 限制，沒有解碼重編碼或縮小原始素材。完成後 force 私有檔案，在 security-scoped folder 內透過 NSFileCoordinator、同目錄 stage、fsync、RENAME_EXCL、目錄 fsync 交付唯一檔名。
+- 每個寫入／複製及發佈前邊界檢查取消和工作區範圍；owned-only 暫存清理，發佈後若 durability 回報失敗保留 final 檔案；abort 不刪除 final 或既有使用者檔案。
+- 驗證：iOS arm64 與 Simulator arm64 編譯通過；指定 boot 的 iPhone 18 Pro simulator 上 IosSchemeBundleDestinationTest 4 項和既有 IosCanvasExportTest 4 項全數通過、無跳過。33 MiB opaque original fixture 由完整 codec 匯出後逐 chunk review，確認 scheme/asset checksum 和原始 byte size；另驗證實際 coroutine 取消、scope change、exclusive collision 和 private mode。這是原生檔案／Foundation coordinator 證據，不是圖片解碼／Files picker 或 iCloud provider GUI 驗收。測試後已關閉本次啟動的 simulator；未 erase 使用者裝置。
+- 尚未完成 iOS 反向匯入、安全 scope-bound durable 收據、正式 APP Files GUI 路徑、實體 iPhone／外部 provider QA；這輪没有產出可安裝真機 IPA。完整素材跨端主線與六主線 goal 都仍未完成。
+- AI 本機 log 最新仍是台灣時間 11:15 的 reasoning/tools 400，沒有修正後 none 請求的真實成功結果；未自行讀取 Key 或送出付費請求。
+
+
+2026-10-07 提交後完整隔離驗證90288成功1m44s：shared/jvmTest: tests=985, failures=0, errors=0, skips=6；shared/jsBrowserTest: tests=880, failures=0, errors=0, skips=0；shared/wasmJsBrowserTest: tests=880, failures=0, errors=0, skips=0；desktopApp/test: tests=48, failures=0, errors=0, skips=0。iOS arm64／Android main compile／Desktop distributable通過，ready bundle已更新且含ShellHint classes、無QA prefs fixture；shared SHA256 c8bb6a86882fb2686cabf8437024246ad29cfb6af4b8bfab3fca6c078726ad03。此輪包含目前未提交的鋼筆提示，不宣稱觸控長按 GUI 通過。git diff --check通過。
+
+
+2026-10-07 Desktop 含原檔方案 GUI 已接線與隔離驗收：快速方案新增含原檔 bundle 匯入／匯出入口；native file picker、strict review、每次明確確認、fresh user/client/workspace/full snapshot fence、durable original receipts 與方案保存已串接。匯入只保存 verified originals＋方案，插入畫布仍是另一個明確動作；export 新檔不覆蓋既有檔。Dialog scope 固定於開啟時，關閉取消 owned job／snapshot；uncertain library save 以 exact normalized name/payload/schema/source workspace 沿用同一方案，避免重建 ID。新增 common review/library-save 2 個 cases。
+
+隔離 Desktop GUI 使用自有 QA home／memory prefs，未讀正式帳號或 API key：原 fixture 匯入前與 review 階段零原檔、未確認不保存；確認保存後 1 份 Ready 原檔／2 個方案，畫布與 baseline 完全相同。匯出容器 footer／原檔 SHA256 通過，81-byte PNG 與原 fixture 完全一致。另行插入後畫布增加 1 個 MediaNode（共15個物件，3份既有時序圖保留）；App 重開仍可見圖片與兩個方案。重複匯入同一 fixture 沿用 receipt，仍只1份 original／2個方案，canvas record 與插入後備份 byte-exact 相同。QA 已正常退出。這是 Desktop 小型 PNG 的實際入口驗收，未代替大檔／GIF／影片、四端實體裝置／自動 cloud sync／正式協作驗收；其他端 bundle runtime 尚未接線。取消在 beforeComplete receipt 後與 complete 之間的 missing-pending 處理仍需明確恢復入口。
+
+另 agent 的27個鋼筆按鈕提示已存在4個未提交檔案；核對 hover／long-press 的來源實作，但當前 GUI 驗收使用先前已建置 bundle，未宣稱新增提示懸停／手機長按已親測。5個分組 commit 已在本機 history，另有4428380設定提交，未 push。iOS log 接線也已存在：bash -n 通過；抽取實際 Xcode Run Script 以 mocked Gradle 驗普通 stdout/stderr、附加中文／emoji log、failure exit23保留、IDE override跳過皆通過；package 採用的 tail -n +1 -F 實際能在producer結束前輸出追加 task 行。不是 Actions／完整 xcodebuild／簽章驗收。安全 AI log 仍不存在，最後真實 probe 仍 HTTP401；六條主線 goal 保持 active。
+
+
 2026-10-07 素材隨方案交付核心：新增 QuickSchemeBundleCodec 的 BLQS0001 串流容器（12-byte magic/manifest-length header＋strict UTF-8 manifest＋declared originals＋whole-container SHA256 footer）。Manifest帶既有 QuickScheme transfer definition與唯一 referenced asset descriptors，不帶signed URL／credential／ownerId／device path；source asset IDs限制plain identifier。引用集合須與media original及thumbnail IDs exact相同、thumbnail必須Image、每mediaKind與mediaType一致；最多64個原檔、每檔沿既有200MiB、容器1GiB、manifest4MiB、read/write chunk≤1MiB。不用Base64或把全部影片讀進memory；同一asset多個MediaNode只交付一份。圖片／GIF／影片都是workspace stored originals，GIPHY provider display資料不當作可快取原檔或暗中下載。
 
 Export核明確來源workspace／fresh scheme與scope，逐asset authorize Ready metadata並核source ID/workspace，每原檔驗exact bytes／SHA256再全container checksum，最後fresh scheme和scope仍相同才commit；失敗abort只清owned partial。Review先strict JSON／Unicode／format/version／refs／metadata／limits，再stream驗全部asset SHA及wholefooter、完整EOF／no trailing，零upload/library/canvas mutation；failure releasesnapshot。Materialize要求caller綁exact review至明確confirmation，先重驗同一immutable bundle，逐次fresh editor/user/client/workspace/version/seq/full snapshot authority，沿原AssetImportCoordinator prepare/upload/confirm/Ready／uncertain recovery。beforeComplete要求hash＆完整讀取並先記目的ID，readImported／recordReady是必備receipt邊界；Ready全部驗原metadata及目的ownership、distinct目的IDs才回完整remapped scheme，original與thumbnail引用都重配，sourceWorkspaceId改目的workspace。尚不自行save library／insert canvas，caller必須再核scope後保存。

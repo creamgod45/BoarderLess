@@ -4,6 +4,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.window.ComposeViewport
 import cg.creamgod.boarderless.data.browserDraftBackupRuntime
+import cg.creamgod.boarderless.data.browserCanvasExportRuntime
 import cg.creamgod.boarderless.data.browserDraftImportRuntime
 import cg.creamgod.boarderless.data.rememberBrowserMediaImportRuntime
 
@@ -14,7 +15,9 @@ fun main() {
             val mediaImportRuntime = rememberBrowserMediaImportRuntime()
             val draftBackupRuntime = remember { browserDraftBackupRuntime() }
             val draftImportRuntime = remember { browserDraftImportRuntime() }
+            val canvasExportRuntime = remember { browserCanvasExportRuntime() }
             App(
+                canvasExportRuntime = canvasExportRuntime,
                 mediaImportRuntime = mediaImportRuntime,
                 draftBackupRuntime = draftBackupRuntime,
                 draftImportRuntime = draftImportRuntime,

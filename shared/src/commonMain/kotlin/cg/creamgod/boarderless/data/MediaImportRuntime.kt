@@ -23,6 +23,8 @@ class MediaImportRuntime(
     val playbackActivity: StateFlow<MediaPlaybackActivity>? = null,
     /** Progressive static-image tiles. Platforms without it retain their existing preview path. */
     val loadImageTiles: (suspend (WorkspaceSession, String, ViewportImageRequest, suspend (ImagePreviewTile) -> Unit) -> Unit)? = null,
+    /** Frozen full-image export at the requested pixel size, not viewport-only progressive tiles. */
+    val loadExportImage: (suspend (WorkspaceSession, String, Int, Int) -> ImageBitmap)? = null,
     val giphyApiKey: String? = null,
     /** Immediate display only; no file/cache reuse for GIPHY media. */
     val loadGiphyStill: (suspend (String) -> ImageBitmap)? = null,

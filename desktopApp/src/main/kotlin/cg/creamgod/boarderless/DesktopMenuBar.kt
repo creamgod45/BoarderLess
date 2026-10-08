@@ -35,7 +35,9 @@ internal fun FrameWindowScope.WorkspaceMenuBar(
             } else if (bridge.has("import-media")) {
                 Command(bridge, "import-media", Strings.media.importMedia())
             }
+            Command(bridge, "export-canvas", Strings.canvasExport.title())
             Separator()
+            Command(bridge, WorkspaceMenuCommands.Search, Strings.toolbar.search(), KeyShortcut(Key.F, meta = true))
             Command(bridge, WorkspaceMenuCommands.CommandPalette, Strings.palette.commandPalette(), KeyShortcut(Key.K, meta = true))
             Separator()
             Item(Strings.menu.closeWindow(), shortcut = KeyShortcut(Key.W, meta = true), onClick = onCloseWindow)

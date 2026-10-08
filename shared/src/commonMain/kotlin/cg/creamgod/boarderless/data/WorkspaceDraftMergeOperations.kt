@@ -70,8 +70,8 @@ internal fun buildDraftMergeOperation(
     ) {
         when {
             before is TextNode && after is TextNode -> {
-                val a = TextNodeAttributes(before.zIndex, before.locked, before.colorToken, before.shape, before.vectorPath)
-                val b = TextNodeAttributes(after.zIndex, after.locked, after.colorToken, after.shape, after.vectorPath)
+                val a = TextNodeAttributes(before.zIndex, before.locked, before.colorToken, before.shape, before.vectorPath, before.textPlacement)
+                val b = TextNodeAttributes(after.zIndex, after.locked, after.colorToken, after.shape, after.vectorPath, after.textPlacement)
                 if (a != b) emit(UpdateTextNodeAttributesOperation(id(), listOf(TextNodeAttributesChange(before.id, before.version, a, b))))
             }
 
@@ -234,6 +234,7 @@ internal enum class DraftMergeContractGap {
     CanvasStyle,
     RelationGeometry,
     VectorPath,
+    TextPlacement,
     SequenceDiagrams,
 }
 
@@ -253,6 +254,7 @@ internal fun draftMergeContractGaps(
 
             is CreateObjectsOperation -> {
                 if (op.objects.any { (it as? TextNode)?.vectorPath != null }) gaps.add(DraftMergeContractGap.VectorPath)
+                if (op.objects.any { (it as? TextNode)?.textPlacement != null }) gaps.add(DraftMergeContractGap.TextPlacement)
                 op.objects.forEach { if (!objectIds.add(it.id)) gaps.add(DraftMergeContractGap.ObjectIdReuse) }
                 gaps.add(DraftMergeContractGap.RestoreForUndoRedo)
             }
@@ -280,6 +282,7 @@ internal fun draftMergeContractGaps(
             }
 
             is UpdateTextNodeAttributesOperation -> {
+                if (op.changes.any { it.before.textPlacement != null || it.after.textPlacement != null }) gaps.add(DraftMergeContractGap.TextPlacement)
                 if (op.changes.any { it.before.vectorPath != null || it.after.vectorPath != null }) {
                     gaps.add(
                         DraftMergeContractGap.VectorPath,

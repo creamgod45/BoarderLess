@@ -27,6 +27,7 @@ class DesktopPenCanvasEditingPersistenceTest {
             transform = CanvasTransform(Vec2(300f, 50f), CanvasSize(200f, 100f), 90f),
             text = "標籤🙂",
             vectorPath = draft.toVectorPath(),
+            textPlacement = TextPlacement(TextAnchor.Above, 12f, -7f, TextAppearance(28f, 700, "#1976d2", TextFont.Monospace, true, true, true)),
         )
     private val loop =
         Relation(
@@ -83,6 +84,7 @@ class DesktopPenCanvasEditingPersistenceTest {
                 assertEquals(mapOf(loop.id to loop), after.relations)
                 assertEquals(setOf(node.id), after.objects.keys)
                 assertEquals("標籤🙂", (after.objects.getValue(node.id) as TextNode).text)
+                assertEquals(node.textPlacement, (after.objects.getValue(node.id) as TextNode).textPlacement)
                 save(history.undo())
                 val undone =
                     DesktopFileWorkspaceRepository(root)

@@ -124,6 +124,7 @@ private fun runDesktopApplication(
             val draftBackupRuntime = remember(window) { desktopDraftBackupRuntime(window) }
             val draftImportRuntime = remember(window) { desktopDraftImportRuntime(window) }
             val schemeBundleRuntime = remember(window) { desktopSchemeBundleRuntime(window) }
+            val canvasExportRuntime = remember(window) { desktopCanvasExportRuntime(window) }
             val mediaLifecycle = remember(window) { DesktopMediaWindowLifecycle() }
             DisposableEffect(window, mediaLifecycle) {
                 val binding = mediaLifecycle.bind(window, closeHidesWindow)
@@ -155,6 +156,7 @@ private fun runDesktopApplication(
                 draftBackupRuntime = draftBackupRuntime,
                 draftImportRuntime = draftImportRuntime,
                 schemeBundleRuntime = schemeBundleRuntime,
+                canvasExportRuntime = canvasExportRuntime,
                 mediaImportRuntime = mediaImportRuntime,
                 menuBridge = menuBridge,
                 recentWorkspacesPublisher = recentWorkspacesPublisher,

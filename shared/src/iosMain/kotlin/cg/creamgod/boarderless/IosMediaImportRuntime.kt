@@ -12,6 +12,7 @@ import cg.creamgod.boarderless.data.bitmapPreviewCache
 import cg.creamgod.boarderless.data.loadIosGif
 import cg.creamgod.boarderless.data.loadIosPhotoSelection
 import cg.creamgod.boarderless.data.loadIosVideo
+import cg.creamgod.boarderless.data.loadIosExportImage
 import cg.creamgod.boarderless.data.remote.BackendAssetTransferGateway
 import cg.creamgod.boarderless.data.remote.loadGiphyStill
 import cg.creamgod.boarderless.i18n.Strings
@@ -58,6 +59,13 @@ internal class IosMediaPicker(
         MediaImportRuntime(
             clearPreviewCache = previewCache::clear,
             playbackActivity = activityTracker.activity,
+            loadExportImage = { session, assetId, width, height ->
+                previewPermits.withPermit {
+                    val gateway = BackendAssetTransferGateway()
+                    try { loadIosExportImage(gateway, session, assetId, width, height) }
+                    finally { gateway.close() }
+                }
+            },
             loadGiphyAnimation = { url ->
                 cg.creamgod.boarderless.data.remote
                     .loadGiphyAnimation(url) { IosGifAnimation.decode(it) }

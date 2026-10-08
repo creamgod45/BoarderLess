@@ -28,7 +28,7 @@ internal fun workspaceClipboardPayload(
             it.sourceObjectId in nodeIds && it.targetObjectId in nodeIds
         }
     return ClipboardPayload(
-        version = if (diagrams.isEmpty()) 6 else 7,
+        version = if (objects.filterIsInstance<TextNode>().any { it.textPlacement != null }) 8 else if (diagrams.isEmpty()) 6 else 7,
         sequenceDiagrams = diagrams.map { it.validatedSnapshot() },
         nodes =
             nodes.map { node ->
@@ -43,6 +43,7 @@ internal fun workspaceClipboardPayload(
                     colorToken = node.colorToken,
                     shapeToken = node.shape.token,
                     vectorPath = node.vectorPath,
+                    textPlacement = node.textPlacement,
                     parentOriginalId = node.parentId?.takeIf { it in includedIdSet }?.value,
                     locked = node.locked,
                     zOffset = node.zIndex - minimumZ,

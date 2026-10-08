@@ -37,6 +37,8 @@ fun App(
     draftBackupRuntime: DraftBackupRuntime = DraftBackupRuntime.Unavailable,
     draftImportRuntime: DraftImportRuntime = DraftImportRuntime.Unavailable,
     schemeBundleRuntime: cg.creamgod.boarderless.feature.canvas.SchemeBundleRuntime = cg.creamgod.boarderless.feature.canvas.SchemeBundleRuntime.Unavailable,
+    canvasExportRuntime: cg.creamgod.boarderless.feature.canvas.CanvasExportRuntime = cg.creamgod.boarderless.feature.canvas.CanvasExportRuntime.Unavailable,
+    quickSchemeRepository: cg.creamgod.boarderless.data.persistence.QuickSchemeRepository? = null,
 ) {
     val uiPreferences = remember { UiPreferences() }
     var reduceTransparency by remember { mutableStateOf(uiPreferences.reduceTransparency) }
@@ -59,6 +61,8 @@ fun App(
                 draftBackupRuntime = draftBackupRuntime,
                 draftImportRuntime = draftImportRuntime,
                 schemeBundleRuntime = schemeBundleRuntime,
+                canvasExportRuntime = canvasExportRuntime,
+                quickSchemeRepository = quickSchemeRepository,
                 menuBridge = menuBridge,
                 recentWorkspacesPublisher = recentWorkspacesPublisher,
                 reduceTransparency = reduceTransparency,

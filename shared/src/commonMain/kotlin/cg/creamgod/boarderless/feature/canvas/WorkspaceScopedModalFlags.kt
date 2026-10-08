@@ -13,6 +13,8 @@ internal class WorkspaceScopedModalFlags {
     val showDraftImport = mutableStateOf(false)
     val pendingClipboardPaste = mutableStateOf<ClipboardPasteDraft?>(null)
     val showSequenceCreation = mutableStateOf(false)
+    val showCanvasExport = mutableStateOf(false)
+    val brushMode = mutableStateOf(false)
     val showPenDraft = mutableStateOf(false)
     val showAiUnderstanding = mutableStateOf(false)
     val showAiDiagram = mutableStateOf(false)

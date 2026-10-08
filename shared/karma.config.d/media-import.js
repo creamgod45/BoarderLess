@@ -15,6 +15,8 @@
     config.files.unshift(
         { pattern: path.join(root, "webApp/src/webMain/resources/video-playback.js"), included: true, served: true, watched: false },
         { pattern: path.join(root, "webApp/src/webMain/resources/media-import.js"), included: true, served: true, watched: false },
+        { pattern: path.join(root, "webApp/src/webMain/resources/image-export.js"), included: true, served: true, watched: false },
+        { pattern: path.join(root, "shared/src/webTest/resources/image-export-fixture.js"), included: true, served: true, watched: false },
         { pattern: path.join(root, "webApp/src/webMain/resources/draft-import.js"), included: true, served: true, watched: false },
         { pattern: path.join(root, "shared/src/webTest/resources/draft-import-fixture.js"), included: true, served: true, watched: false },
         { pattern: path.join(root, "shared/src/webTest/resources/media-import-fixture.js"), included: true, served: true, watched: false },

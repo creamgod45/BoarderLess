@@ -33,6 +33,9 @@ internal data class ClipboardNode(
     val locked: Boolean = false,
     val zOffset: Long = 0,
     val vectorPath: VectorPath? = null,
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+    @kotlinx.serialization.EncodeDefault(kotlinx.serialization.EncodeDefault.Mode.NEVER)
+    val textPlacement: TextPlacement? = null,
 )
 
 @Serializable
@@ -105,7 +108,7 @@ internal enum class ClipboardPayloadIssue {
 
 internal fun validateClipboardPayload(payload: ClipboardPayload): ClipboardPayloadIssue? {
     if (payload.format != "boarderless/selection") return ClipboardPayloadIssue.UnsupportedFormat
-    if (payload.version !in 1..7) return ClipboardPayloadIssue.UnsupportedVersion
+    if (payload.version !in 1..8) return ClipboardPayloadIssue.UnsupportedVersion
     if (payload.nodes.isEmpty() && payload.groups.isEmpty() && payload.media.isEmpty()) {
         return ClipboardPayloadIssue.Empty
     }
@@ -120,6 +123,7 @@ internal fun validateClipboardPayload(payload: ClipboardPayload): ClipboardPaylo
     ) {
         return ClipboardPayloadIssue.UnsupportedVersion
     }
+    if (payload.version < 8 && payload.nodes.any { it.textPlacement != null }) return ClipboardPayloadIssue.UnsupportedVersion
     val objectIds =
         payload.groups.map(ClipboardGroup::originalId) +
             payload.nodes.map(ClipboardNode::originalId) +

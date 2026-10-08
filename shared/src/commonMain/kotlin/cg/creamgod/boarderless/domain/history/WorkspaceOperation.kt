@@ -9,6 +9,7 @@ import cg.creamgod.boarderless.domain.model.NodeShape
 import cg.creamgod.boarderless.domain.model.Relation
 import cg.creamgod.boarderless.domain.model.RelationId
 import cg.creamgod.boarderless.domain.model.TextNode
+import cg.creamgod.boarderless.domain.model.TextPlacement
 import cg.creamgod.boarderless.domain.model.VectorPath
 import cg.creamgod.boarderless.domain.model.Workspace
 import cg.creamgod.boarderless.domain.model.withParentId
@@ -679,6 +680,9 @@ data class TextNodeAttributes(
     @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
     @kotlinx.serialization.EncodeDefault(kotlinx.serialization.EncodeDefault.Mode.NEVER)
     val vectorPath: VectorPath? = null,
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+    @kotlinx.serialization.EncodeDefault(kotlinx.serialization.EncodeDefault.Mode.NEVER)
+    val textPlacement: TextPlacement? = null,
 )
 
 @Serializable
@@ -729,6 +733,7 @@ data class UpdateTextNodeAttributesOperation(
                     colorToken = current.colorToken,
                     shape = current.shape,
                     vectorPath = current.vectorPath,
+                    textPlacement = current.textPlacement,
                 )
             if (currentAttributes != change.before) {
                 return OperationResult.Rejected(OperationError.StateConflict(change.objectId))
@@ -744,6 +749,7 @@ data class UpdateTextNodeAttributesOperation(
                     colorToken = change.after.colorToken,
                     shape = change.after.shape,
                     vectorPath = change.after.vectorPath,
+                    textPlacement = change.after.textPlacement,
                 )
         }
 

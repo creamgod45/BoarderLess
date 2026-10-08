@@ -33,7 +33,7 @@ class DesktopPenCanvasPersistenceTest {
                         .workspace.objects
                         .isEmpty(),
                 )
-                val operation = capture.operation(preview, "pen", "insert")
+                val operation = capture.operation(preview, "pen", "insert", "標籤🙂", TextPlacement(TextAnchor.Right, 12f, -7f, TextAppearance(28f, 700, "#1976d2", TextFont.Monospace, true, true, true)))
 
                 fun save(result: HistoryResult) {
                     assertTrue(result.succeeded)
@@ -57,6 +57,7 @@ class DesktopPenCanvasPersistenceTest {
                 )
                 val payload =
                     ClipboardPayload(
+                        version = 8,
                         nodes =
                             listOf(
                                 ClipboardNode(
@@ -69,6 +70,7 @@ class DesktopPenCanvasPersistenceTest {
                                     "",
                                     "paper",
                                     vectorPath = node.vectorPath,
+                                    textPlacement = node.textPlacement,
                                 ),
                             ),
                     )
@@ -82,6 +84,7 @@ class DesktopPenCanvasPersistenceTest {
                         },
                     )!!.nodes.single().vectorPath,
                 )
+                assertEquals(node.textPlacement, decodeQuickSchemePayload(assertNotNull(DesktopFileWorkspaceRepository(root).quickSchemeRepository).list().single { it.id == scheme.id })!!.nodes.single().textPlacement)
                 save(history.undo())
                 assertTrue(
                     DesktopFileWorkspaceRepository(root)

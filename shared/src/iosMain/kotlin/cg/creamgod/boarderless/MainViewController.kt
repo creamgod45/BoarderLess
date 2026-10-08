@@ -15,6 +15,8 @@ fun MainViewController(): UIViewController {
             val mediaPicker = remember(lifecycle) { IosMediaPicker { controller } }
             val backupPicker = remember(lifecycle) { IosDraftBackupPicker { controller } }
             val importPicker = remember(lifecycle) { IosDraftImportPicker { controller } }
+            val exportPicker = remember(lifecycle) { IosCanvasExportPicker { controller } }
+            DisposableEffect(exportPicker) { onDispose { exportPicker.close() } }
             DisposableEffect(importPicker) { onDispose { importPicker.close() } }
             DisposableEffect(backupPicker) { onDispose { backupPicker.close() } }
             DisposableEffect(mediaPicker, lifecycle) {
@@ -24,7 +26,22 @@ fun MainViewController(): UIViewController {
                     dispose()
                 }
             }
+            val schemeBundleRuntime = remember(exportPicker, importPicker) {
+                cg.creamgod.boarderless.feature.canvas.SchemeBundleRuntime(
+                    chooseDestination = exportPicker.schemeBundleRuntime.chooseDestination,
+                    chooseSource = importPicker.chooseSchemeBundleSource,
+                    receipts = { owner, digest, assets ->
+                        cg.creamgod.boarderless.data.persistence.PersistentSchemeBundleImportReceipts(
+                            cg.creamgod.boarderless.data.persistence.IosAtomicLocalRecordStore(
+                                cg.creamgod.boarderless.data.persistence.iosPrivateRecordRoot("scheme-bundle-receipts")), owner, digest, assets)
+                    },
+                )
+            }
+            val quickSchemeRepository = remember { cg.creamgod.boarderless.data.persistence.iosFileQuickSchemeStore() }
             App(
+                quickSchemeRepository = quickSchemeRepository,
+                canvasExportRuntime = exportPicker.runtime,
+                schemeBundleRuntime = schemeBundleRuntime,
                 mediaImportRuntime = mediaPicker.runtime,
                 recentWorkspacesPublisher = HomeScreenQuickActions,
                 draftBackupRuntime = backupPicker.runtime,

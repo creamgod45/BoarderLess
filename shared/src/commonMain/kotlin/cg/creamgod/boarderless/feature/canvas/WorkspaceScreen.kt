@@ -68,6 +68,7 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.isShiftPressed
@@ -77,6 +78,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
+import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.isAltPressed
 import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.input.pointer.pointerInput
@@ -223,6 +225,7 @@ import cg.creamgod.boarderless.domain.model.Relation
 import cg.creamgod.boarderless.domain.model.RelationDirection
 import cg.creamgod.boarderless.domain.model.RelationId
 import cg.creamgod.boarderless.domain.model.TextNode
+import cg.creamgod.boarderless.domain.model.TextAnchor
 import cg.creamgod.boarderless.domain.model.Vec2
 import cg.creamgod.boarderless.domain.model.VectorPath
 import cg.creamgod.boarderless.domain.model.Viewport
@@ -1067,6 +1070,8 @@ fun WorkspaceScreen(
     draftBackupRuntime: DraftBackupRuntime = DraftBackupRuntime.Unavailable,
     draftImportRuntime: DraftImportRuntime = DraftImportRuntime.Unavailable,
     schemeBundleRuntime: SchemeBundleRuntime = SchemeBundleRuntime.Unavailable,
+    canvasExportRuntime: CanvasExportRuntime = CanvasExportRuntime.Unavailable,
+    quickSchemeRepository: cg.creamgod.boarderless.data.persistence.QuickSchemeRepository? = null,
 ) {
     val colors = BoarderLessTheme.colors
     val density = LocalDensity.current.density
@@ -1096,7 +1101,7 @@ fun WorkspaceScreen(
     var mediaImportJob by remember { mutableStateOf<Job?>(null) }
     var mediaImportLabel by remember { mutableStateOf("") }
     val canvasPreferences = remember { CanvasPreferences() }
-    val quickSchemeStore = remember(repository) { repository.quickSchemeRepository ?: QuickSchemeStore() }
+    val quickSchemeStore = remember(repository, quickSchemeRepository) { quickSchemeRepository ?: repository.quickSchemeRepository ?: QuickSchemeStore() }
     val libraryPreferences =
         remember {
             cg.creamgod.boarderless.data.persistence
@@ -1216,15 +1221,19 @@ fun WorkspaceScreen(
     var showDraftImport by scopedModalFlags.showDraftImport
     var pendingClipboardPaste by scopedModalFlags.pendingClipboardPaste
     var showSequenceCreation by scopedModalFlags.showSequenceCreation
+    var brushMode by scopedModalFlags.brushMode
+    val brushUi = rememberCanvasBrushState(draftReviewScopeId)
+    var showCanvasExport by scopedModalFlags.showCanvasExport
     var showPenDraft by scopedModalFlags.showPenDraft
     var showAiUnderstanding by scopedModalFlags.showAiUnderstanding
     var showAiDiagram by scopedModalFlags.showAiDiagram
     var relationInsertion by remember(draftReviewScopeId) { mutableStateOf<RelationInsertionDraft?>(null) }
     var relationInsertionOwner by remember(draftReviewScopeId) { mutableStateOf<WorkspaceSession?>(null) }
-    LaunchedEffect(showPenDraft, showSequenceCreation, session?.canEditContent) {
+    LaunchedEffect(showPenDraft, showSequenceCreation, brushMode, session?.canEditContent) {
         if (session?.canEditContent != true) {
             showPenDraft = false
             showSequenceCreation = false
+            brushMode = false
         }
     }
     var pendingRecoveryChecking by remember { mutableStateOf(false) }
@@ -1309,7 +1318,7 @@ fun WorkspaceScreen(
         schemeTransferBusy || incomingScheme != null || showStoppedRecovery || showAiUnderstanding || showAiDiagram ||
             relationInsertion != null || pendingClipboardPaste != null ||
             showSequenceCreation || showSchemeBundleImport || exportSchemeBundle != null ||
-            showPenDraft ||
+            showPenDraft || showCanvasExport ||
             showDraftImport ||
             (
                 draftReview != null && !connectionFailed && draftReviewOwner != null &&
@@ -1326,7 +1335,7 @@ fun WorkspaceScreen(
     val sequenceMembership = SequenceCanvasMembership(history.workspace)
     val sequenceInternalIds = sequenceMembership.internalIds
     val inputBlocked =
-        relationMutationBarrier || relationGeometryDrag != null || sequenceMembership.blocksMutation(selectedIds, selectedRelationId)
+        relationMutationBarrier || brushMode || relationGeometryDrag != null || sequenceMembership.blocksMutation(selectedIds, selectedRelationId)
     val renderingRelations =
         sequenceMembership.visibleRelations(history.workspace).map { relation ->
             val gesture = relationGeometryDrag?.takeIf { it.relation.id == relation.id && it.displacement != Vec2.Zero }
@@ -2801,7 +2810,7 @@ fun WorkspaceScreen(
                 .sortedBy { it.zIndex }
         val changes =
             nodes.mapIndexedNotNull { index, node ->
-                val before = TextNodeAttributes(node.zIndex, node.locked, node.colorToken, node.shape, node.vectorPath)
+                val before = TextNodeAttributes(node.zIndex, node.locked, node.colorToken, node.shape, node.vectorPath, node.textPlacement)
                 val after = update(node, index)
                 if (before == after) null else TextNodeAttributesChange(node.id, node.version, before, after)
             }
@@ -2878,8 +2887,8 @@ fun WorkspaceScreen(
                 TextNodeAttributesChange(
                     objectId = node.id,
                     expectedVersion = node.version,
-                    before = TextNodeAttributes(node.zIndex, node.locked, node.colorToken, node.shape, node.vectorPath),
-                    after = TextNodeAttributes(nextZIndex, node.locked, node.colorToken, node.shape, node.vectorPath),
+                    before = TextNodeAttributes(node.zIndex, node.locked, node.colorToken, node.shape, node.vectorPath, node.textPlacement),
+                    after = TextNodeAttributes(nextZIndex, node.locked, node.colorToken, node.shape, node.vectorPath, node.textPlacement),
                 )
             }
         if (changes.isNotEmpty()) {
@@ -3110,7 +3119,8 @@ fun WorkspaceScreen(
             statusMessage = Strings.sequence.unavailable()
             return
         }
-        if (!repository.supportsVectorPaths && payload.nodes.any { it.vectorPath != null }) {
+        if ((!repository.supportsVectorPaths && payload.nodes.any { it.vectorPath != null }) ||
+            (!repository.isLocalOnly && payload.nodes.any { it.textPlacement != null })) {
             statusMessage = Strings.penDraft.unavailable()
             return
         }
@@ -3680,12 +3690,17 @@ fun WorkspaceScreen(
                 reduceMotion,
                 languagePreference,
             ),
-        )
+        ) + if (canvasExportRuntime.chooseDestination != null) listOf(
+            PaletteEntry(id = "export-canvas", title = Strings.canvasExport.title(), subtitle = Strings.canvasExport.hint(),
+                keywords = "export png pdf image 匯出 圖片", enabled = !canvasInteractionBlocked && !brushMode && editingId == null &&
+                    !mediaImportBusy && !syncInProgress && submissionQueue.isEmpty && history.workspace.objects.isNotEmpty())
+        ) else emptyList()
 
     fun invokePaletteEntry(entry: PaletteEntry) {
         showCommandPalette = false
         commandPaletteQuery = ""
         when (entry.id) {
+            "export-canvas" -> { if (entry.enabled) showCanvasExport = true }
             "inspect-draft-backup" -> {
                 showDraftImport = true
             }
@@ -4059,15 +4074,20 @@ fun WorkspaceScreen(
         selectedRelationId = null
     }
 
+    fun openCanvasSearch() {
+        if (!showCommandPalette) toggleCommandPalette()
+    }
+
     if (menuBridge != null) {
         val textEditing =
-            draftReviewVisible || editingId != null || inspectorTextEditing || workspaceFormEditing ||
+            draftReviewVisible || brushMode || editingId != null || inspectorTextEditing || workspaceFormEditing ||
                 (showComponentLibrary && (componentLibraryFocused || giphyTextEditing))
         val hasSelection = selectedIds.isNotEmpty()
         val paletteById = commandPaletteEntries.associateBy(PaletteEntry::id)
         val menuCommands =
             buildMap {
                 commandPaletteEntries.forEach { put(it.id, it.enabled && !textEditing) }
+                put(WorkspaceMenuCommands.Search, !textEditing)
                 put(WorkspaceMenuCommands.CommandPalette, !textEditing)
                 put(WorkspaceMenuCommands.Cut, hasSelection && !inputBlocked && !textEditing)
                 put(WorkspaceMenuCommands.Copy, hasSelection && !textEditing)
@@ -4080,6 +4100,7 @@ fun WorkspaceScreen(
             menuBridge.handler = { id ->
                 if (menuCommands[id] == true) {
                     when (id) {
+                        WorkspaceMenuCommands.Search -> openCanvasSearch()
                         WorkspaceMenuCommands.CommandPalette -> toggleCommandPalette()
                         WorkspaceMenuCommands.Cut -> cutSelection()
                         WorkspaceMenuCommands.Copy -> copySelection()
@@ -4103,7 +4124,24 @@ fun WorkspaceScreen(
         canvasFocusRequester.requestFocus()
     }
 
-    Box(
+    fun commitCanvasMarquee(start: Vec2, end: Vec2, additive: Boolean) {
+        marquee = null
+        val worldStart = viewport.screenToWorld(start)
+        val worldEnd = viewport.screenToWorld(end)
+        val hits =
+            history.workspace.objects.values
+                .filterIsInstance<TextNode>()
+                .filterNot { it.id in sequenceInternalIds }
+                .filter { node ->
+                    marqueeIntersectsTransform(node.transform, worldStart, worldEnd)
+                }.mapTo(mutableSetOf()) { it.id }
+        selectedIds = applyMarqueeSelection(selectedIds, hits, additive)
+        selectedRelationId = null
+        editingId = null
+        canvasFocusRequester.requestFocus()
+    }
+
+    WorkspaceCanvasSurface(
         modifier =
             Modifier
                 .fillMaxSize()
@@ -4117,6 +4155,13 @@ fun WorkspaceScreen(
                         (showComponentLibrary && (componentLibraryFocused || giphyTextEditing))
                     ) {
                         return@onKeyEvent false
+                    }
+                    if (brushMode) {
+                        if (event.type == KeyEventType.KeyDown && event.key == Key.Escape) {
+                            brushMode = false
+                            selectedIds = brushUi.lastObjectId?.takeIf { history.workspace.objectById(it) != null }?.let(::setOf).orEmpty()
+                        }
+                        return@onKeyEvent true
                     }
                     if (event.type == KeyEventType.KeyDown && command && event.key == Key.K) {
                         toggleCommandPalette()
@@ -4132,6 +4177,11 @@ fun WorkspaceScreen(
                     when {
                         !command && event.key == Key.N -> {
                             addTextNodeAtCenter()
+                            true
+                        }
+
+                        command && !event.isShiftPressed && !event.isAltPressed && event.key == Key.F -> {
+                            openCanvasSearch()
                             true
                         }
 
@@ -4297,7 +4347,9 @@ fun WorkspaceScreen(
                                     .connectableNodes()
                                     .associateBy { it.id },
                             viewport = viewport,
-                            tolerance = 10f * density,
+                            dragPreviews = dragPreviews,
+                            transformPreviews = transformPreviews,
+                            tolerance = 14f * density,
                         )
                     if (compactLayout && multiSelectionMode) {
                         selectedRelationId = null
@@ -4312,22 +4364,7 @@ fun WorkspaceScreen(
                 onDoubleTap = { addTextNode(it) },
                 onMarqueeChange = { start, end -> marquee = Marquee(start, end) },
                 onMarqueeCancel = { marquee = null },
-                onMarqueeCommit = { start, end, additive ->
-                    marquee = null
-                    val worldStart = viewport.screenToWorld(start)
-                    val worldEnd = viewport.screenToWorld(end)
-                    val hits =
-                        history.workspace.objects.values
-                            .filterIsInstance<TextNode>()
-                            .filterNot { it.id in sequenceInternalIds }
-                            .filter { node ->
-                                marqueeIntersectsTransform(node.transform, worldStart, worldEnd)
-                            }.mapTo(mutableSetOf()) { it.id }
-                    selectedIds = applyMarqueeSelection(selectedIds, hits, additive)
-                    selectedRelationId = null
-                    editingId = null
-                    canvasFocusRequester.requestFocus()
-                },
+                onMarqueeCommit = ::commitCanvasMarquee,
             )
 
             if (session != null && history.workspace.objects.isEmpty() && pendingNewNode == null && !connectionFailed) {
@@ -4456,7 +4493,9 @@ fun WorkspaceScreen(
                                             .connectableNodes()
                                             .associateBy { it.id },
                                     viewport = viewport,
-                                    tolerance = 10f * density,
+                                    dragPreviews = dragPreviews,
+                                    transformPreviews = transformPreviews,
+                                    tolerance = 14f * density,
                                 )
                             if (relationHit != null && !(compactLayout && multiSelectionMode)) {
                                 selectedIds = emptySet()
@@ -4541,6 +4580,11 @@ fun WorkspaceScreen(
                 transformPreviews,
                 selectedRelationId,
                 onLabelTarget = { selectedRelationLabelTarget = it },
+                enabled = !canvasInteractionBlocked && !brushMode && !areaSelectionMode,
+                onSelect = { id ->
+                    selectedIds = emptySet(); selectedRelationId = id; editingId = null
+                    focusManager.clearFocus(); canvasFocusRequester.requestFocus()
+                },
             )
 
             WorkspaceSequenceScenes(history.workspace, viewport, dragPreviews, transformPreviews)
@@ -5086,10 +5130,37 @@ fun WorkspaceScreen(
                     )
                 }
             }
+            if (areaSelectionMode && !canvasInteractionBlocked && !brushMode) {
+                AreaSelectionLayer(viewport, { viewport = it },
+                    onChange = { start, end -> marquee = Marquee(start, end) },
+                    onCancel = { marquee = null }, onCommit = ::commitCanvasMarquee)
+            }
+            CanvasBrushControls(
+                supported = repository.supportsVectorPaths, active = brushMode,
+                enabled = !inputBlocked && submissionQueue.isEmpty && !syncInProgress,
+                viewport = viewport,
+                readLive = { PenCanvasLive(session, history.workspace,
+                    !canvasInteractionBlocked && session?.canEditContent == true && !mediaImportBusy && !syncInProgress && submissionQueue.isEmpty) },
+                commit = { operation, target ->
+                    if (execute(operation)) {
+                        brushUi.lastObjectId = target; selectedIds = emptySet(); selectedRelationId = null; true
+                    } else false
+                },
+                onClose = {
+                    brushMode = false
+                    selectedIds = brushUi.lastObjectId?.takeIf { history.workspace.objectById(it) != null }?.let(::setOf).orEmpty()
+                },
+                onToolbarHeight = { brushUi.toolbarHeightPx = it },
+                onStart = {
+                    editingId = null; focusManager.clearFocus(); selectedIds = emptySet(); selectedRelationId = null
+                    areaSelectionMode = false; marquee = null
+                    brushUi.lastObjectId = null; compactInspectorExpanded = false; brushMode = true
+                },
+            )
         } // Canvas-only observer excludes all sibling panels and input fields below.
 
         val compactInspectorAvailable =
-            compactLayout && editingId == null &&
+            compactLayout && !brushMode && editingId == null &&
                 (selectedRelationId != null || selectedIds.isNotEmpty())
         val compactModalVisible =
             compactLayout && !showCommandPalette && (
@@ -5178,6 +5249,7 @@ fun WorkspaceScreen(
                     }
                     ShellButton(
                         label = Strings.toolbar.search(),
+                        hint = Strings.toolbar.searchShortcut(),
                         icon = ShellIcon.Search,
                         accent = showCommandPalette,
                         onClick = {
@@ -5541,6 +5613,11 @@ fun WorkspaceScreen(
                                     )
                                 }
                             }
+                        }
+                        if (canvasExportRuntime.chooseDestination != null) {
+                            ShellButton(Strings.canvasExport.title(), enabled = commandPaletteEntries.firstOrNull { it.id == "export-canvas" }?.enabled == true,
+                                onClick = { showCompactMenu = false; showCanvasExport = true },
+                                modifier = Modifier.width(inspectorWidth - 16.dp))
                         }
                         listOf(
                             CompactMenuItem(Strings.toolbar.search(), ShellIcon.Search) {
@@ -6746,10 +6823,10 @@ fun WorkspaceScreen(
 
         (
             if (
-                !compactLayout && (
+                brushMode || (!compactLayout && (
                     showSchemeLibrary || showComponentLibrary || showWorkspaceSwitcher || showMembersPanel ||
                         showLayersPanel || showHistoryPanel || showCompactMenu
-                )
+                ))
             ) {
                 null
             } else {
@@ -6796,6 +6873,11 @@ fun WorkspaceScreen(
                                 width = compactBottomSheetWidth - 16.dp,
                                 density = density,
                                 onExpandedChange = { compactInspectorExpanded = it },
+                                onClose = {
+                                    selectedIds = emptySet(); selectedRelationId = null
+                                    compactInspectorExpanded = false; inspectorTextEditing = false
+                                    focusManager.clearFocus()
+                                },
                             )
                         } else {
                             BasicText(
@@ -6946,7 +7028,7 @@ fun WorkspaceScreen(
                     !showSchemeLibrary && !showComponentLibrary && !showWorkspaceSwitcher && !showMembersPanel &&
                         !showLayersPanel && !showHistoryPanel && !showCompactMenu
                 )
-            ) && selectedIds.isNotEmpty() &&
+            ) && !brushMode && selectedIds.isNotEmpty() &&
             selectedRelationId == null && editingId == null
         ) {
             val selectedNodes = selectedIds.mapNotNull { history.workspace.objectById(it) as? TextNode }
@@ -7098,6 +7180,11 @@ fun WorkspaceScreen(
                             width = compactBottomSheetWidth - 16.dp,
                             density = density,
                             onExpandedChange = { compactInspectorExpanded = it },
+                            onClose = {
+                                selectedIds = emptySet(); selectedRelationId = null
+                                compactInspectorExpanded = false; inspectorTextEditing = false
+                                focusManager.clearFocus()
+                            },
                         )
                     } else {
                         BasicText(
@@ -7310,7 +7397,7 @@ fun WorkspaceScreen(
                                 enabled = !inputBlocked,
                                 onClick = {
                                     updateSelectedNodes("lock") { node, _ ->
-                                        TextNodeAttributes(node.zIndex, !allLocked, node.colorToken, node.shape, node.vectorPath)
+                                        TextNodeAttributes(node.zIndex, !allLocked, node.colorToken, node.shape, node.vectorPath, node.textPlacement)
                                     }
                                 },
                             )
@@ -7470,6 +7557,7 @@ fun WorkspaceScreen(
                                                     node.locked,
                                                     node.colorToken,
                                                     shape,
+                                                    textPlacement = node.textPlacement,
                                                 )
                                             }
                                         },
@@ -7559,6 +7647,13 @@ fun WorkspaceScreen(
                                     }
                                 }
                             }
+                            if (repository.isLocalOnly && selectedNodes.isNotEmpty()) {
+                                TextPlacementSettings(selectedNodes.first().textPlacement, !inputBlocked && !anyLocked) { placement ->
+                                    updateSelectedNodes("text-placement") { node, _ ->
+                                        TextNodeAttributes(node.zIndex, node.locked, node.colorToken, node.shape, node.vectorPath, placement)
+                                    }
+                                }
+                            }
                             val sharedCustomColor =
                                 selectedNodes
                                     .map { it.colorToken }
@@ -7584,6 +7679,7 @@ fun WorkspaceScreen(
                                                     token,
                                                     node.shape,
                                                     node.vectorPath?.withPrimaryPaint(token),
+                                                    node.textPlacement,
                                                 )
                                             }
                                         },
@@ -7720,219 +7816,215 @@ fun WorkspaceScreen(
         }
 
         if (shouldShowStatusOverlay(compactModalVisible || compactInspectorAvailable, showCommandPalette)) {
-            Box(
+            CanvasStatusSurface(
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)
                         .then(if (compactLayout) Modifier.windowInsetsPadding(WindowInsets.safeDrawing) else Modifier)
                         .padding(horizontal = if (compactLayout) 16.dp else 0.dp)
-                        .padding(bottom = 18.dp),
+                        .padding(bottom = if (brushMode) (brushUi.toolbarHeightPx / density).dp + 36.dp else 18.dp),
             ) {
-                GlassSurface {
-                    Column {
+                BasicText(
+                    text = if (repository.isLocalOnly) Strings.localStorage.mode() + " · " + statusMessage else statusMessage,
+                    modifier =
+                        Modifier
+                            .then(
+                                if (compactLayout) {
+                                    Modifier.widthIn(max = compactStatusMaxWidthDp(canvasSize.width, density).dp)
+                                } else {
+                                    Modifier
+                                },
+                            ).padding(horizontal = 14.dp, vertical = 9.dp),
+                    style =
+                        TextStyle(
+                            color = colors.contentMuted,
+                            fontSize = 12.sp,
+                        ),
+                    maxLines = if (compactLayout) 1 else Int.MAX_VALUE,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (stoppedRecovery.isNotEmpty()) {
+                    ShellButton(
+                        label = Strings.status.stoppedArchiveOpen(),
+                        enabled = !pendingRecoveryBusy && !connectionFailed && submissionQueue.isEmpty,
+                        onClick = { showStoppedRecovery = true },
+                    )
+                }
+                if (stoppedRecoveryUnavailable) {
+                    BasicText(
+                        Strings.status.stoppedArchiveUnavailable(),
+                        modifier = Modifier.widthIn(max = 320.dp).padding(horizontal = 14.dp, vertical = 4.dp),
+                        style = TextStyle(color = colors.contentMuted, fontSize = 11.sp),
+                    )
+                }
+                if (pendingRecovery == null && pendingDraftRecovery != null) {
+                    if (pendingRecoveryDismissArmed) {
                         BasicText(
-                            text = if (repository.isLocalOnly) Strings.localStorage.mode() + " · " + statusMessage else statusMessage,
-                            modifier =
-                                Modifier
-                                    .then(
-                                        if (compactLayout) {
-                                            Modifier.widthIn(max = compactStatusMaxWidthDp(canvasSize.width, density).dp)
-                                        } else {
-                                            Modifier
-                                        },
-                                    ).padding(horizontal = 14.dp, vertical = 9.dp),
-                            style =
-                                TextStyle(
-                                    color = colors.contentMuted,
-                                    fontSize = 12.sp,
-                                ),
-                            maxLines = if (compactLayout) 1 else Int.MAX_VALUE,
-                            overflow = TextOverflow.Ellipsis,
+                            Strings.status.pendingDraftDismissWarning(),
+                            modifier = Modifier.widthIn(max = 320.dp).padding(horizontal = 14.dp, vertical = 4.dp),
+                            style = TextStyle(color = colors.contentMuted, fontSize = 11.sp),
                         )
-                        if (stoppedRecovery.isNotEmpty()) {
+                    }
+                    FlowRow(
+                        Modifier.widthIn(max = 360.dp).padding(horizontal = 10.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        ShellButton(
+                            label = Strings.draftReview.review(),
+                            enabled = !pendingRecoveryBusy && !connectionFailed,
+                            onClick = { reviewPendingDraft() },
+                        )
+                        ShellButton(
+                            label = Strings.status.pendingDraftRestore(),
+                            icon = ShellIcon.Retry,
+                            enabled =
+                                !pendingRecoveryBusy && pendingDraftRecovery?.requiresReview == false &&
+                                    session?.canEditContent == true,
+                            onClick = { recoverPendingDraft(false) },
+                        )
+                        ShellButton(
+                            label =
+                                if (pendingRecoveryDismissArmed) {
+                                    Strings.status.pendingDraftConfirmDismiss()
+                                } else {
+                                    Strings.status.pendingDraftDismiss()
+                                },
+                            enabled = !pendingRecoveryBusy,
+                            onClick = {
+                                if (pendingRecoveryDismissArmed) {
+                                    recoverPendingDraft(true)
+                                } else {
+                                    pendingRecoveryDismissArmed =
+                                        true
+                                }
+                            },
+                        )
+                        if (pendingRecoveryDismissArmed) {
                             ShellButton(
-                                label = Strings.status.stoppedArchiveOpen(),
-                                enabled = !pendingRecoveryBusy && !connectionFailed && submissionQueue.isEmpty,
-                                onClick = { showStoppedRecovery = true },
+                                label = Strings.common.cancel(),
+                                enabled = !pendingRecoveryBusy,
+                                onClick = { pendingRecoveryDismissArmed = false },
                             )
                         }
-                        if (stoppedRecoveryUnavailable) {
-                            BasicText(
-                                Strings.status.stoppedArchiveUnavailable(),
-                                modifier = Modifier.widthIn(max = 320.dp).padding(horizontal = 14.dp, vertical = 4.dp),
-                                style = TextStyle(color = colors.contentMuted, fontSize = 11.sp),
-                            )
-                        }
-                        if (pendingRecovery == null && pendingDraftRecovery != null) {
-                            if (pendingRecoveryDismissArmed) {
-                                BasicText(
-                                    Strings.status.pendingDraftDismissWarning(),
-                                    modifier = Modifier.widthIn(max = 320.dp).padding(horizontal = 14.dp, vertical = 4.dp),
-                                    style = TextStyle(color = colors.contentMuted, fontSize = 11.sp),
-                                )
-                            }
-                            FlowRow(
-                                Modifier.widthIn(max = 360.dp).padding(horizontal = 10.dp, vertical = 6.dp),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp),
-                            ) {
-                                ShellButton(
-                                    label = Strings.draftReview.review(),
-                                    enabled = !pendingRecoveryBusy && !connectionFailed,
-                                    onClick = { reviewPendingDraft() },
-                                )
-                                ShellButton(
-                                    label = Strings.status.pendingDraftRestore(),
-                                    icon = ShellIcon.Retry,
-                                    enabled =
-                                        !pendingRecoveryBusy && pendingDraftRecovery?.requiresReview == false &&
-                                            session?.canEditContent == true,
-                                    onClick = { recoverPendingDraft(false) },
-                                )
-                                ShellButton(
-                                    label =
-                                        if (pendingRecoveryDismissArmed) {
-                                            Strings.status.pendingDraftConfirmDismiss()
-                                        } else {
-                                            Strings.status.pendingDraftDismiss()
-                                        },
-                                    enabled = !pendingRecoveryBusy,
-                                    onClick = {
-                                        if (pendingRecoveryDismissArmed) {
-                                            recoverPendingDraft(true)
-                                        } else {
-                                            pendingRecoveryDismissArmed =
-                                                true
-                                        }
+                    }
+                    if (pendingDraftRecovery?.requiresReview == true) {
+                        BasicText(
+                            Strings.status.pendingDraftReviewRequired(),
+                            modifier = Modifier.widthIn(max = 320.dp).padding(horizontal = 14.dp, vertical = 4.dp),
+                            style = TextStyle(color = colors.contentMuted, fontSize = 11.sp),
+                        )
+                    }
+                }
+                if (pendingRecovery != null) {
+                    if (pendingFenceTransaction == pendingRecovery?.transactionId) {
+                        BasicText(
+                            Strings.status.pendingFenceWarning(),
+                            modifier = Modifier.widthIn(max = 320.dp).padding(horizontal = 14.dp, vertical = 4.dp),
+                            style = TextStyle(color = colors.contentMuted, fontSize = 11.sp),
+                        )
+                    }
+                    pendingReceiptMessage?.let {
+                        BasicText(
+                            it,
+                            modifier = Modifier.widthIn(max = 320.dp).padding(horizontal = 14.dp, vertical = 4.dp),
+                            style = TextStyle(color = colors.contentMuted, fontSize = 11.sp),
+                        )
+                    }
+                    if (pendingDraftRecovery != null) {
+                        ShellButton(
+                            label = Strings.draftReview.review(),
+                            enabled = !pendingRecoveryBusy && !connectionFailed,
+                            onClick = { reviewPendingDraft() },
+                        )
+                    }
+                    if (pendingRecoveryDismissArmed) {
+                        BasicText(
+                            Strings.status.pendingRecoveryDismissWarning(),
+                            modifier = Modifier.widthIn(max = 320.dp).padding(horizontal = 14.dp, vertical = 4.dp),
+                            style = TextStyle(color = colors.contentMuted, fontSize = 11.sp),
+                        )
+                    }
+                    FlowRow(
+                        Modifier.widthIn(max = 360.dp).padding(horizontal = 10.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        ShellButton(
+                            label = Strings.status.pendingRecoveryRetry(),
+                            icon = ShellIcon.Retry,
+                            enabled =
+                                !pendingRecoveryBusy && pendingRecovery?.resendBlocked != true &&
+                                    pendingFenceUncertain != pendingRecovery?.transactionId &&
+                                    pendingReceiptStatus != PendingReceiptStatus.Fenced &&
+                                    pendingReceiptStatus != PendingReceiptStatus.Committed &&
+                                    session?.canEditContent == true &&
+                                    submissionQueue.isEmpty,
+                            onClick = { recoverPendingChange(false) },
+                        )
+                        ShellButton(
+                            label = Strings.status.pendingReceiptCheck(),
+                            enabled = !pendingRecoveryBusy && !connectionFailed && submissionQueue.isEmpty,
+                            onClick = { inspectPendingReceipt() },
+                        )
+                        if (pendingReceiptStatus == PendingReceiptStatus.Unknown) {
+                            ShellButton(
+                                label =
+                                    if (pendingFenceTransaction == pendingRecovery?.transactionId) {
+                                        Strings.status.pendingFenceConfirm()
+                                    } else {
+                                        Strings.status.pendingFenceStart()
                                     },
-                                )
-                                if (pendingRecoveryDismissArmed) {
-                                    ShellButton(
-                                        label = Strings.common.cancel(),
-                                        enabled = !pendingRecoveryBusy,
-                                        onClick = { pendingRecoveryDismissArmed = false },
-                                    )
-                                }
-                            }
-                            if (pendingDraftRecovery?.requiresReview == true) {
-                                BasicText(
-                                    Strings.status.pendingDraftReviewRequired(),
-                                    modifier = Modifier.widthIn(max = 320.dp).padding(horizontal = 14.dp, vertical = 4.dp),
-                                    style = TextStyle(color = colors.contentMuted, fontSize = 11.sp),
-                                )
-                            }
-                        }
-                        if (pendingRecovery != null) {
-                            if (pendingFenceTransaction == pendingRecovery?.transactionId) {
-                                BasicText(
-                                    Strings.status.pendingFenceWarning(),
-                                    modifier = Modifier.widthIn(max = 320.dp).padding(horizontal = 14.dp, vertical = 4.dp),
-                                    style = TextStyle(color = colors.contentMuted, fontSize = 11.sp),
-                                )
-                            }
-                            pendingReceiptMessage?.let {
-                                BasicText(
-                                    it,
-                                    modifier = Modifier.widthIn(max = 320.dp).padding(horizontal = 14.dp, vertical = 4.dp),
-                                    style = TextStyle(color = colors.contentMuted, fontSize = 11.sp),
-                                )
-                            }
-                            if (pendingDraftRecovery != null) {
-                                ShellButton(
-                                    label = Strings.draftReview.review(),
-                                    enabled = !pendingRecoveryBusy && !connectionFailed,
-                                    onClick = { reviewPendingDraft() },
-                                )
-                            }
-                            if (pendingRecoveryDismissArmed) {
-                                BasicText(
-                                    Strings.status.pendingRecoveryDismissWarning(),
-                                    modifier = Modifier.widthIn(max = 320.dp).padding(horizontal = 14.dp, vertical = 4.dp),
-                                    style = TextStyle(color = colors.contentMuted, fontSize = 11.sp),
-                                )
-                            }
-                            FlowRow(
-                                Modifier.widthIn(max = 360.dp).padding(horizontal = 10.dp, vertical = 6.dp),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp),
-                            ) {
-                                ShellButton(
-                                    label = Strings.status.pendingRecoveryRetry(),
-                                    icon = ShellIcon.Retry,
-                                    enabled =
-                                        !pendingRecoveryBusy && pendingRecovery?.resendBlocked != true &&
-                                            pendingFenceUncertain != pendingRecovery?.transactionId &&
-                                            pendingReceiptStatus != PendingReceiptStatus.Fenced &&
-                                            pendingReceiptStatus != PendingReceiptStatus.Committed &&
-                                            session?.canEditContent == true &&
-                                            submissionQueue.isEmpty,
-                                    onClick = { recoverPendingChange(false) },
-                                )
-                                ShellButton(
-                                    label = Strings.status.pendingReceiptCheck(),
-                                    enabled = !pendingRecoveryBusy && !connectionFailed && submissionQueue.isEmpty,
-                                    onClick = { inspectPendingReceipt() },
-                                )
-                                if (pendingReceiptStatus == PendingReceiptStatus.Unknown) {
-                                    ShellButton(
-                                        label =
-                                            if (pendingFenceTransaction == pendingRecovery?.transactionId) {
-                                                Strings.status.pendingFenceConfirm()
-                                            } else {
-                                                Strings.status.pendingFenceStart()
-                                            },
-                                        enabled =
-                                            !pendingRecoveryBusy && !connectionFailed && session?.canEditContent == true &&
-                                                submissionQueue.isEmpty,
-                                        onClick = {
-                                            if (pendingFenceTransaction == pendingRecovery?.transactionId) {
-                                                inspectPendingReceipt(fence = true)
-                                            } else {
-                                                pendingFenceTransaction = pendingRecovery?.transactionId
-                                                pendingRecoveryDismissArmed = false
-                                            }
-                                        },
-                                    )
-                                    if (pendingFenceTransaction != null) {
-                                        ShellButton(
-                                            label = Strings.common.cancel(),
-                                            enabled = !pendingRecoveryBusy,
-                                            onClick = { pendingFenceTransaction = null },
-                                        )
+                                enabled =
+                                    !pendingRecoveryBusy && !connectionFailed && session?.canEditContent == true &&
+                                        submissionQueue.isEmpty,
+                                onClick = {
+                                    if (pendingFenceTransaction == pendingRecovery?.transactionId) {
+                                        inspectPendingReceipt(fence = true)
+                                    } else {
+                                        pendingFenceTransaction = pendingRecovery?.transactionId
+                                        pendingRecoveryDismissArmed = false
                                     }
-                                }
-                                if (pendingReceiptStatus == PendingReceiptStatus.Committed) {
-                                    ShellButton(
-                                        label = Strings.status.pendingReceiptConfirm(),
-                                        enabled = !pendingRecoveryBusy && !connectionFailed && submissionQueue.isEmpty,
-                                        onClick = { recoverPendingChange(false, confirmReceipt = true) },
-                                    )
-                                }
+                                },
+                            )
+                            if (pendingFenceTransaction != null) {
                                 ShellButton(
-                                    label =
-                                        if (pendingRecoveryDismissArmed) {
-                                            Strings.status.pendingRecoveryConfirmDismiss()
-                                        } else {
-                                            Strings.status.pendingRecoveryDismiss()
-                                        },
-                                    enabled = !pendingRecoveryBusy && submissionQueue.isEmpty,
-                                    onClick = {
-                                        if (pendingRecoveryDismissArmed) {
-                                            recoverPendingChange(true)
-                                        } else {
-                                            pendingRecoveryDismissArmed =
-                                                true
-                                        }
-                                    },
+                                    label = Strings.common.cancel(),
+                                    enabled = !pendingRecoveryBusy,
+                                    onClick = { pendingFenceTransaction = null },
                                 )
-                                if (pendingRecoveryDismissArmed) {
-                                    ShellButton(
-                                        label = Strings.common.cancel(),
-                                        enabled = !pendingRecoveryBusy,
-                                        onClick = { pendingRecoveryDismissArmed = false },
-                                    )
-                                }
                             }
+                        }
+                        if (pendingReceiptStatus == PendingReceiptStatus.Committed) {
+                            ShellButton(
+                                label = Strings.status.pendingReceiptConfirm(),
+                                enabled = !pendingRecoveryBusy && !connectionFailed && submissionQueue.isEmpty,
+                                onClick = { recoverPendingChange(false, confirmReceipt = true) },
+                            )
+                        }
+                        ShellButton(
+                            label =
+                                if (pendingRecoveryDismissArmed) {
+                                    Strings.status.pendingRecoveryConfirmDismiss()
+                                } else {
+                                    Strings.status.pendingRecoveryDismiss()
+                                },
+                            enabled = !pendingRecoveryBusy && submissionQueue.isEmpty,
+                            onClick = {
+                                if (pendingRecoveryDismissArmed) {
+                                    recoverPendingChange(true)
+                                } else {
+                                    pendingRecoveryDismissArmed =
+                                        true
+                                }
+                            },
+                        )
+                        if (pendingRecoveryDismissArmed) {
+                            ShellButton(
+                                label = Strings.common.cancel(),
+                                enabled = !pendingRecoveryBusy,
+                                onClick = { pendingRecoveryDismissArmed = false },
+                            )
                         }
                     }
                 }
@@ -8000,7 +8092,7 @@ fun WorkspaceScreen(
                     onPreview = { token -> colorPreviewToken = token },
                     onApply = { token ->
                         updateSelectedNodes("color") { node, _ ->
-                            TextNodeAttributes(node.zIndex, node.locked, token, node.shape, node.vectorPath?.withPrimaryPaint(token))
+                            TextNodeAttributes(node.zIndex, node.locked, token, node.shape, node.vectorPath?.withPrimaryPaint(token), node.textPlacement)
                         }
                         closePicker()
                     },
@@ -8382,6 +8474,25 @@ fun WorkspaceScreen(
                 onDismiss = { showSequenceCreation = false },
             )
         }
+        if (showCanvasExport && session != null && !connectionFailed && !workspaceSwitchInProgress) {
+            val exportOwner = remember { checkNotNull(session) }
+            val exportEpoch = remember { draftReviewScopeId }
+            val exportSelection = remember { selectedIds.toSet() }
+            val exportBackground = remember { canvasBackgroundToken }
+            val exportCapture = remember { runCatching { CanvasExportCapture(exportOwner, history.workspace, exportEpoch) }.getOrNull() }
+            if (exportCapture != null) {
+                CanvasExportDialog(exportCapture, exportSelection, exportEpoch, canvasExportRuntime, mediaImportRuntime,
+                    exportBackground, readLive = {
+                        CanvasExportLive(session, history.workspace, draftReviewScopeId,
+                            showCanvasExport && !connectionFailed && !workspaceSwitchInProgress && !mediaImportBusy &&
+                                !syncInProgress && submissionQueue.isEmpty && pendingRecovery == null && pendingDraftRecovery == null &&
+                                !pendingRecoveryBusy && !pendingRecoveryChecking)
+                    }, onDismiss = { showCanvasExport = false })
+            } else {
+                LaunchedEffect(Unit) { statusMessage = Strings.canvasExport.invalid(); showCanvasExport = false }
+            }
+        }
+
         if (showPenDraft && session?.canEditContent == true && !connectionFailed && !workspaceSwitchInProgress) {
             PenCanvasDialog(
                 checkNotNull(session),
@@ -8568,6 +8679,7 @@ private fun CompactBottomSheetHeader(
     width: Dp,
     density: Float,
     onExpandedChange: (Boolean) -> Unit,
+    onClose: () -> Unit,
 ) {
     val colors = BoarderLessTheme.colors
     Column(
@@ -8620,6 +8732,10 @@ private fun CompactBottomSheetHeader(
                 icon = if (expanded) ShellIcon.Back else ShellIcon.Forward,
                 showLabel = false,
                 onClick = { onExpandedChange(!expanded) },
+            )
+            ShellButton(
+                label = Strings.common.close(), icon = ShellIcon.Close,
+                showLabel = false, onClick = onClose,
             )
         }
     }
@@ -8748,6 +8864,8 @@ private fun RelationLabels(
     transformPreviews: Map<CanvasObjectId, CanvasTransform>,
     selectedId: RelationId?,
     onLabelTarget: (RelationLabelDragTarget?) -> Unit,
+    enabled: Boolean,
+    onSelect: (RelationId) -> Unit,
 ) {
     if (relations.none { !it.label.isNullOrBlank() }) {
         SideEffect { onLabelTarget(null) }
@@ -8756,71 +8874,22 @@ private fun RelationLabels(
     val colors = BoarderLessTheme.colors
     val style = TextStyle(color = colors.contentText, fontSize = 10.sp, fontWeight = FontWeight.Medium)
     val measurer = rememberTextMeasurer()
-    val paths =
-        relations
-            .mapNotNull { relation ->
-                relationSegment(relation, nodes, viewport, dragPreviews, transformPreviews)?.let { relation.id to it.points }
-            }.toMap()
-    val labels = relations.filter { !it.label.isNullOrBlank() && it.id in paths }
-    val inputs =
-        labels.map { relation ->
-            val measured =
-                measurer
-                    .measure(
-                        relation.label.orEmpty(),
-                        style = style,
-                        constraints = Constraints(maxWidth = (226f * density).roundToInt().coerceAtLeast(1)),
-                    ).size
-            RelationLabelInput(
-                relation.id,
-                paths.getValue(relation.id),
-                CanvasSize(measured.width + 14f * density, measured.height + 6f * density),
-            )
-        }
-    val obstacles =
-        nodes.map { (id, node) ->
-            val transform = transformPreviews[id] ?: node.transform
-            val corners =
-                rotatedTransformCorners(transform.copy(position = transform.position + (dragPreviews[id] ?: Vec2.Zero)))
-                    .map(viewport::worldToScreen)
-            LabelBounds(corners.minOf { it.x }, corners.minOf { it.y }, corners.maxOf { it.x }, corners.maxOf { it.y })
-        }
-    val manual =
-        labels
-            .mapNotNull { relation ->
-                val placement =
-                    relation.geometry?.labelPlacement as? cg.creamgod.boarderless.domain.model.RelationLabelPlacement.Manual
-                        ?: return@mapNotNull null
-                val anchor =
-                    manualRelationLabelAnchor(
-                        paths.getValue(relation.id).map(viewport::screenToWorld),
-                        placement,
-                    )?.let(viewport::worldToScreen)
-                        ?: return@mapNotNull null
-                val size = inputs.single { it.id == relation.id }.size
-                relation.id to (anchor - Vec2(size.width / 2f, size.height / 2f))
-            }.toMap()
-    val manualBounds =
-        manual.map { (id, position) ->
-            val size = inputs.single { it.id == id }.size
-            LabelBounds(position.x, position.y, position.x + size.width, position.y + size.height)
-        }
-    val placements = layoutRelationLabels(inputs.filter { it.id !in manual }, paths.values, obstacles + manualBounds, 6f * density) + manual
-    val selectedTarget =
-        selectedId?.let { id ->
-            placements[id]?.let { position ->
-                val size = inputs.single { it.id == id }.size
-                RelationLabelDragTarget(id, position + Vec2(size.width / 2f, size.height / 2f), size)
-            }
-        }
+    val measured = measureRelationLabels(relations, nodes, viewport, density, dragPreviews, transformPreviews, measurer, style)
+    val selectedTarget = selectedId?.let { id -> measured[id]?.let {
+        RelationLabelDragTarget(id, it.position + Vec2(it.size.width / 2f, it.size.height / 2f), it.size)
+    } }
     SideEffect { onLabelTarget(selectedTarget) }
-    labels.forEach { relation -> placements[relation.id]?.let { RelationLabel(relation.label.orEmpty(), it) } }
+    measured.forEach { (id, label) ->
+        RelationLabel(label.text, label.position, enabled) { onSelect(id) }
+    }
 }
 
 @Composable
-private fun RelationLabel(
+internal fun RelationLabel(
     label: String,
     topLeft: Vec2,
+    enabled: Boolean,
+    onSelect: () -> Unit,
 ) {
     val colors = BoarderLessTheme.colors
     BasicText(
@@ -8833,6 +8902,7 @@ private fun RelationLabel(
                         y = topLeft.y.roundToInt(),
                     )
                 }.widthIn(max = 240.dp)
+                .clickable(enabled = enabled, role = Role.Button, onClick = onSelect)
                 .background(colors.canvas.copy(alpha = 0.9f), RoundedCornerShape(8.dp))
                 .border(1.dp, colors.contentBorder, RoundedCornerShape(8.dp))
                 .padding(horizontal = 7.dp, vertical = 3.dp),
@@ -8846,7 +8916,7 @@ private fun RelationLabel(
 }
 
 @Composable
-private fun GroupFrameCard(
+internal fun GroupFrameCard(
     group: GroupFrame,
     titleVisible: Boolean = true,
     viewport: Viewport,
@@ -8988,7 +9058,7 @@ private fun GroupFrameCard(
 }
 
 @Composable
-private fun RelationCanvas(
+internal fun RelationCanvas(
     relations: Collection<Relation>,
     nodes: Map<CanvasObjectId, CanvasObject>,
     viewport: Viewport,
@@ -9070,43 +9140,6 @@ private fun ConnectionDragPreviewCanvas(
     }
 }
 
-private data class RelationPath(
-    val points: List<Vec2>,
-)
-
-private fun relationSegment(
-    relation: Relation,
-    nodes: Map<CanvasObjectId, CanvasObject>,
-    viewport: Viewport,
-    dragPreviews: Map<CanvasObjectId, Vec2> = emptyMap(),
-    transformPreviews: Map<CanvasObjectId, CanvasTransform> = emptyMap(),
-): RelationPath? {
-    val source = nodes[relation.sourceObjectId] ?: return null
-    val target = nodes[relation.targetObjectId] ?: return null
-    val renderedTransforms =
-        nodes.mapValues { (id, node) ->
-            val transform = transformPreviews[id] ?: node.transform
-            transform.copy(position = transform.position + (dragPreviews[id] ?: Vec2.Zero))
-        }
-    return runCatching {
-        relationWorldRoute(relation, nodes, renderedTransforms)
-    }.getOrNull()?.let { RelationPath(it.map(viewport::worldToScreen)) }
-}
-
-private fun findRelationAt(
-    screenPosition: Vec2,
-    relations: Collection<Relation>,
-    nodes: Map<CanvasObjectId, CanvasObject>,
-    viewport: Viewport,
-    tolerance: Float,
-): Relation? =
-    relations
-        .mapNotNull { relation ->
-            val segment = relationSegment(relation, nodes, viewport) ?: return@mapNotNull null
-            relation to distanceToPolyline(screenPosition, segment.points)
-        }.filter { (_, distance) -> distance <= tolerance }
-        .minByOrNull { (_, distance) -> distance }
-        ?.first
 
 internal fun calculateAlignmentSnap(
     movingTransform: CanvasTransform,
@@ -9318,6 +9351,12 @@ private fun GridCanvas(
 ) {
     val colors = BoarderLessTheme.colors
     val currentViewport by rememberUpdatedState(viewport)
+    val currentPan by rememberUpdatedState(onViewportChange)
+    val currentTap by rememberUpdatedState(onTap)
+    val currentDoubleTap by rememberUpdatedState(onDoubleTap)
+    val currentMarqueeChange by rememberUpdatedState(onMarqueeChange)
+    val currentMarqueeCancel by rememberUpdatedState(onMarqueeCancel)
+    val currentMarqueeCommit by rememberUpdatedState(onMarqueeCommit)
     Canvas(
         modifier =
             Modifier
@@ -9329,7 +9368,7 @@ private fun GridCanvas(
                             if (event.type == PointerEventType.Scroll) {
                                 val change = event.changes.firstOrNull() ?: continue
                                 val factor = if (change.scrollDelta.y > 0f) 0.9f else 1.1f
-                                onViewportChange(
+                                currentPan(
                                     currentViewport.zoomAt(
                                         screenPoint = Vec2(change.position.x, change.position.y),
                                         factor = factor,
@@ -9341,29 +9380,42 @@ private fun GridCanvas(
                     }
                 }.pointerInput(Unit) {
                     detectTapGestures(
-                        onTap = { onTap(Vec2(it.x, it.y)) },
-                        onDoubleTap = { onDoubleTap(Vec2(it.x, it.y)) },
+                        onTap = { currentTap(Vec2(it.x, it.y)) },
+                        onDoubleTap = { currentDoubleTap(Vec2(it.x, it.y)) },
                     )
                 }.pointerInput(areaSelectionMode) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         val additive = currentEvent.keyboardModifiers.isShiftPressed
+                        if (currentEvent.buttons.isSecondaryPressed) return@awaitEachGesture
                         if (!areaSelectionMode && !additive) return@awaitEachGesture
                         val start = Vec2(down.position.x, down.position.y)
                         var end = start
                         down.consume()
-                        onMarqueeChange(start, end)
+                        currentMarqueeChange(start, end)
                         val completed =
                             drag(down.id) { change ->
                                 end = Vec2(change.position.x, change.position.y)
                                 change.consume()
-                                onMarqueeChange(start, end)
+                                currentMarqueeChange(start, end)
                             }
-                        if (completed) onMarqueeCommit(start, end, additive) else onMarqueeCancel()
+                        if (completed) currentMarqueeCommit(start, end, additive) else currentMarqueeCancel()
                     }
-                }.pointerInput(Unit) {
-                    detectTransformGestures { centroid, pan, gestureZoom, _ ->
-                        onViewportChange(
+                }.pointerInput(areaSelectionMode) {
+                    awaitEachGesture {
+                        val event = awaitPointerEvent()
+                        val down = event.changes.firstOrNull { it.pressed && !it.previousPressed } ?: return@awaitEachGesture
+                        if (!event.buttons.isSecondaryPressed) return@awaitEachGesture
+                        down.consume()
+                        drag(down.id) { change ->
+                            val delta = change.positionChange()
+                            currentPan(currentViewport.panBy(Vec2(delta.x, delta.y)))
+                            change.consume()
+                        }
+                    }
+                }.pointerInput(areaSelectionMode) {
+                    if (!areaSelectionMode) detectTransformGestures { centroid, pan, gestureZoom, _ ->
+                        currentPan(
                             currentViewport
                                 .zoomAt(
                                     screenPoint = Vec2(centroid.x, centroid.y),
@@ -9783,7 +9835,7 @@ internal fun rotationDegreesForPointer(
 }
 
 @Composable
-private fun TextNodeCard(
+internal fun TextNodeCard(
     node: TextNode,
     viewport: Viewport,
     previewDelta: Vec2,
@@ -9840,9 +9892,8 @@ private fun TextNodeCard(
                     rotationZ = renderedTransform.rotationDegrees,
                     scaleX = selectionScale,
                     scaleY = selectionScale,
-                ).shadow(elevation = if (plainText) 0.dp else selectionElevation.dp, shape = shape)
-                .then(if (customPath == null) Modifier.clip(shape) else Modifier)
-                .background(if (plainText) Color.Transparent else nodeFillColor(node.colorToken, colors))
+                ).shadow(elevation = if (plainText) 0.dp else selectionElevation.dp, shape = shape, clip = false)
+                .background(if (plainText) Color.Transparent else nodeFillColor(node.colorToken, colors), shape)
                 .border(
                     width =
                         if (selected) {
@@ -9997,50 +10048,35 @@ private fun TextNodeCard(
                 )
             }
         }
-        if (editing) {
-            NodeTextEditor(
-                value = draft,
-                textColor = textColors.text,
-                onValueChange = { draft = it },
-                onCommit = { onTextCommit(draft) },
-                horizontalPadding = horizontalContentPadding,
-                verticalPadding = verticalContentPadding,
-                centered = centeredContent,
-                modifier = Modifier.fillMaxSize(),
-            )
-        } else {
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = horizontalContentPadding, vertical = verticalContentPadding),
-                verticalArrangement = if (centeredContent) Arrangement.Center else Arrangement.Top,
-            ) {
-                BasicText(
-                    text = node.text,
-                    modifier = if (centeredContent) Modifier.fillMaxWidth() else Modifier,
-                    style =
-                        TextStyle(
-                            color = textColors.text,
-                            fontSize = (16f * viewport.zoom.coerceIn(0.8f, 1.25f)).sp,
-                            fontWeight = FontWeight.Medium,
-                            textAlign = if (centeredContent) TextAlign.Center else TextAlign.Start,
-                        ),
+        val placementAnchor = node.textPlacement?.anchor
+        val textAlignment = when (placementAnchor) {
+            TextAnchor.TopLeft, TextAnchor.CenterLeft, TextAnchor.BottomLeft -> TextAlign.Start
+            TextAnchor.TopRight, TextAnchor.CenterRight, TextAnchor.BottomRight -> TextAlign.End
+            null -> if (centeredContent) TextAlign.Center else TextAlign.Start
+            else -> TextAlign.Center
+        }
+        NodeTextLayer(
+            node.textPlacement,
+            CanvasSize(renderedTransform.size.width * viewport.zoom, renderedTransform.size.height * viewport.zoom),
+            viewport.zoom,
+            if (centeredContent) TextAnchor.Center else TextAnchor.TopLeft,
+            with(density) { 8.dp.toPx() } * viewport.zoom,
+        ) {
+            if (editing) {
+                NodeTextEditor(
+                    value = draft, textColor = textColors.text, onValueChange = { draft = it },
+                    onCommit = { onTextCommit(draft) }, horizontalPadding = 0.dp, verticalPadding = 0.dp,
+                    fontScale = viewport.zoom, alignment = textAlignment,
+                    appearanceStyle = labelTextStyle(node.textPlacement?.appearance, viewport.zoom, textColors.text, textAlignment),
                 )
-                if (node.locked) {
-                    BasicText(
-                        text = Strings.common.locked(),
-                        modifier = Modifier.padding(top = 8.dp),
-                        style =
-                            TextStyle(
-                                color = textColors.muted,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.SemiBold,
-                            ),
-                    )
-                }
+            } else {
+                BasicText(
+                    node.text, modifier = Modifier.fillMaxWidth(),
+                    style = labelTextStyle(node.textPlacement?.appearance, viewport.zoom, textColors.text, textAlignment),
+                )
             }
         }
+
     }
 }
 
@@ -10261,17 +10297,7 @@ private fun MediaNodeCard(
 
     Box(
         modifier =
-            Modifier
-                .canvasObjectBounds(screenPosition, screenWidth, screenHeight)
-                .graphicsLayer(rotationZ = renderedTransform.rotationDegrees)
-                .shadow(if (selected) 12.dp else 5.dp, RoundedCornerShape(16.dp))
-                .clip(RoundedCornerShape(16.dp))
-                .background(colors.canvas.copy(alpha = 0.94f))
-                .border(
-                    width = if (selected) 2.dp else 1.dp,
-                    color = if (selected) colors.selection else colors.contentBorder,
-                    shape = RoundedCornerShape(16.dp),
-                ).semantics {
+            Modifier.mediaPaintBounds(screenPosition, screenWidth, screenHeight, renderedTransform.rotationDegrees, selected, colors).semantics {
                     contentDescription = "$kindLabel • $accessibleName"
                     this.selected = selected
                     stateDescription =
@@ -10601,6 +10627,9 @@ private fun NodeTextEditor(
     horizontalPadding: androidx.compose.ui.unit.Dp = 18.dp,
     verticalPadding: androidx.compose.ui.unit.Dp = 18.dp,
     centered: Boolean = false,
+    fontScale: Float = 1f,
+    alignment: TextAlign? = null,
+    appearanceStyle: TextStyle? = null,
     textColor: Color? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -10642,12 +10671,12 @@ private fun NodeTextEditor(
                         commitOnce()
                     }
                 },
-        textStyle =
+        textStyle = appearanceStyle ?:
             TextStyle(
                 color = textColor ?: colors.contentText,
-                fontSize = 16.sp,
+                fontSize = (16f * fontScale).sp,
                 fontWeight = FontWeight.Medium,
-                textAlign = if (centered) TextAlign.Center else TextAlign.Start,
+                textAlign = alignment ?: if (centered) TextAlign.Center else TextAlign.Start,
             ),
         cursorBrush = SolidColor(colors.accent),
     )

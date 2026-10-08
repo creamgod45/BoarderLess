@@ -72,6 +72,9 @@ data class TextNode(
     @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
     @kotlinx.serialization.EncodeDefault(kotlinx.serialization.EncodeDefault.Mode.NEVER)
     val vectorPath: VectorPath? = null,
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+    @kotlinx.serialization.EncodeDefault(kotlinx.serialization.EncodeDefault.Mode.NEVER)
+    val textPlacement: TextPlacement? = null,
 ) : CanvasObject {
     init {
         require(version >= 1) { "text node version must be positive" }

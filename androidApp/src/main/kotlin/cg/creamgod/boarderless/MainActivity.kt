@@ -12,10 +12,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.lifecycleScope
 import cg.creamgod.boarderless.data.AndroidAssetPreviewLoader
+import cg.creamgod.boarderless.data.AndroidExportImageLoader
 import cg.creamgod.boarderless.data.AndroidUriAssetTransferSource
 import cg.creamgod.boarderless.data.AndroidVideoSurface
 import cg.creamgod.boarderless.data.MediaActivityTracker
 import cg.creamgod.boarderless.data.MediaImportRuntime
+import cg.creamgod.boarderless.data.androidSchemeBundleRuntime
+import cg.creamgod.boarderless.data.androidCanvasExportRuntime
+import cg.creamgod.boarderless.domain.export.CanvasExportFormat
 import cg.creamgod.boarderless.data.androidDraftBackupRuntime
 import cg.creamgod.boarderless.data.androidDraftImportRuntime
 import cg.creamgod.boarderless.data.discardBlankDraftDocument
@@ -42,6 +46,12 @@ class MainActivity : ComponentActivity() {
     private var pendingDraftDestination: CompletableDeferred<Uri?>? = null
     private var draftImportPickerInFlight = false
     private var pendingDraftSource: CompletableDeferred<Uri?>? = null
+    private var bundleImportPickerInFlight = false
+    private var pendingBundleSource: CompletableDeferred<Uri?>? = null
+    private var bundlePickerInFlight = false
+    private var pendingBundleDestination: CompletableDeferred<Uri?>? = null
+    private var exportPickerInFlight = false
+    private var pendingExportDestination: CompletableDeferred<Uri?>? = null
     private val mediaPicker =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             pickerInFlight = false
@@ -79,8 +89,102 @@ class MainActivity : ComponentActivity() {
             // Late existing document is never read or deleted.
         }
 
+    // Append registrations so existing picker results keep their recreation keys.
+    private val pngExportPicker = registerForActivityResult(ActivityResultContracts.CreateDocument("image/png"), ::exportDestinationSelected)
+    private val pdfExportPicker = registerForActivityResult(ActivityResultContracts.CreateDocument("application/pdf"), ::exportDestinationSelected)
+
+    // Append after PNG/PDF: preserve all previous Activity result registration keys.
+    private val bundleExportPicker = registerForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+        bundlePickerInFlight = false
+        val waiting = pendingBundleDestination
+        pendingBundleDestination = null
+        if (waiting == null || !waiting.complete(uri)) {
+            if (uri != null) lifecycleScope.launch(Dispatchers.IO) {
+                runCatching { discardBlankDraftDocument(applicationContext, uri) }
+            }
+        }
+    }
+
+    // Keep the export launcher's existing result key; import is appended after it.
+    private val bundleImportPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        bundleImportPickerInFlight = false
+        pendingBundleSource?.complete(uri)
+        pendingBundleSource = null
+    }
+
+    private suspend fun selectBundleSource(): Uri? {
+        check(!pickerInFlight && !draftPickerInFlight && !draftImportPickerInFlight && !exportPickerInFlight && !bundlePickerInFlight && !bundleImportPickerInFlight)
+        val result=CompletableDeferred<Uri?>()
+        pendingBundleSource=result; bundleImportPickerInFlight=true
+        try { bundleImportPicker.launch(arrayOf("application/octet-stream", "application/x-boarderless-scheme", "*/*")) }
+        catch (failure: Exception) {
+            bundleImportPickerInFlight=false; pendingBundleSource=null; result.cancel(); throw failure
+        }
+        return try { result.await() } finally {
+            result.cancel()
+            if (pendingBundleSource === result) pendingBundleSource=null
+            // Late existing documents are never read or removed.
+        }
+    }
+
+    private suspend fun selectBundleDestination(name: String): Uri? {
+        check(!pickerInFlight && !draftPickerInFlight && !draftImportPickerInFlight && !exportPickerInFlight && !bundlePickerInFlight && !bundleImportPickerInFlight)
+        val result = CompletableDeferred<Uri?>()
+        pendingBundleDestination = result
+        bundlePickerInFlight = true
+        try { bundleExportPicker.launch(name) }
+        catch (failure: Exception) {
+            bundlePickerInFlight = false; pendingBundleDestination = null; result.cancel(); throw failure
+        }
+        return try { result.await() } finally {
+            if (!coroutineContext.isActive && result.isCompleted && !result.isCancelled) {
+                withContext(NonCancellable + Dispatchers.IO) {
+                    result.await()?.let { runCatching { discardBlankDraftDocument(applicationContext, it) } }
+                }
+            }
+            result.cancel()
+            if (pendingBundleDestination === result) pendingBundleDestination = null
+        }
+    }
+
+    private fun exportDestinationSelected(uri: Uri?) {
+        exportPickerInFlight = false
+        val waiting = pendingExportDestination
+        pendingExportDestination = null
+        if (waiting == null || !waiting.complete(uri)) {
+            if (uri != null) lifecycleScope.launch(Dispatchers.IO) {
+                runCatching { discardBlankDraftDocument(applicationContext, uri) }
+            }
+        }
+    }
+
+    private suspend fun selectExportDestination(name: String, format: CanvasExportFormat): Uri? {
+        check(!pickerInFlight && !draftPickerInFlight && !draftImportPickerInFlight && !exportPickerInFlight && !bundlePickerInFlight && !bundleImportPickerInFlight)
+        val result = CompletableDeferred<Uri?>()
+        pendingExportDestination = result
+        exportPickerInFlight = true
+        try {
+            (if (format == CanvasExportFormat.Png) pngExportPicker else pdfExportPicker).launch(name)
+        } catch (failure: Exception) {
+            exportPickerInFlight = false
+            pendingExportDestination = null
+            result.cancel()
+            throw failure
+        }
+        return try { result.await() } finally {
+            if (!coroutineContext.isActive && result.isCompleted && !result.isCancelled) {
+                withContext(NonCancellable + Dispatchers.IO) {
+                    result.await()?.let { runCatching { discardBlankDraftDocument(applicationContext, it) } }
+                }
+            }
+            result.cancel()
+            if (pendingExportDestination === result) pendingExportDestination = null
+            // Keep the native picker in flight until delivery, including rotation/cancellation.
+        }
+    }
+
     private suspend fun selectDraftSource(): Uri? {
-        check(!pickerInFlight && !draftPickerInFlight && !draftImportPickerInFlight)
+        check(!pickerInFlight && !draftPickerInFlight && !draftImportPickerInFlight && !exportPickerInFlight && !bundlePickerInFlight && !bundleImportPickerInFlight)
         val result = CompletableDeferred<Uri?>()
         pendingDraftSource = result
         draftImportPickerInFlight = true
@@ -103,7 +207,7 @@ class MainActivity : ComponentActivity() {
 
     private suspend fun selectMediaSource(): AndroidUriAssetTransferSource? {
         check(
-            !pickerInFlight && !draftPickerInFlight && !draftImportPickerInFlight,
+            !pickerInFlight && !draftPickerInFlight && !draftImportPickerInFlight && !exportPickerInFlight && !bundlePickerInFlight && !bundleImportPickerInFlight,
         ) { "Close the previous document picker before selecting again" }
         val result = CompletableDeferred<Uri?>()
         pendingSelection = result
@@ -126,7 +230,7 @@ class MainActivity : ComponentActivity() {
 
     private suspend fun selectDraftDestination(suggestedName: String): Uri? {
         check(
-            !pickerInFlight && !draftPickerInFlight && !draftImportPickerInFlight,
+            !pickerInFlight && !draftPickerInFlight && !draftImportPickerInFlight && !exportPickerInFlight && !bundlePickerInFlight && !bundleImportPickerInFlight,
         ) { "Close the previous document picker before selecting again" }
         val result = CompletableDeferred<Uri?>()
         pendingDraftDestination = result
@@ -166,6 +270,9 @@ class MainActivity : ComponentActivity() {
         pickerInFlight = savedInstanceState?.getBoolean("boarderless.mediaPickerInFlight") ?: false
         draftPickerInFlight = savedInstanceState?.getBoolean("boarderless.draftPickerInFlight") ?: false
         draftImportPickerInFlight = savedInstanceState?.getBoolean("boarderless.draftImportPickerInFlight") ?: false
+        exportPickerInFlight = savedInstanceState?.getBoolean("boarderless.exportPickerInFlight") ?: false
+        bundlePickerInFlight = savedInstanceState?.getBoolean("boarderless.bundlePickerInFlight") ?: false
+        bundleImportPickerInFlight = savedInstanceState?.getBoolean("boarderless.bundleImportPickerInFlight") ?: false
         // Not on recreation (for example rotation): the shortcut was already handled.
         if (savedInstanceState == null) intent.openRequestedWorkspace()
 
@@ -173,9 +280,15 @@ class MainActivity : ComponentActivity() {
             val mediaImportRuntime =
                 remember {
                     val previews = AndroidAssetPreviewLoader(applicationContext.cacheDir)
+                    val exportImages = AndroidExportImageLoader(applicationContext.cacheDir)
                     val gifDownloads = Semaphore(2)
                     MediaImportRuntime(
                         playbackActivity = mediaActivity.activity,
+                        loadExportImage = { session, assetId, width, height ->
+                            val gateway = BackendAssetTransferGateway()
+                            try { exportImages.load(gateway, session, assetId, width, height) }
+                            finally { gateway.close() }
+                        },
                         selectSource = ::selectMediaSource,
                         clearPreviewCache = previews::clear,
                         loadGiphyAnimation = ::loadAndroidGiphyAnimation,
@@ -218,7 +331,15 @@ class MainActivity : ComponentActivity() {
             val launcherShortcuts = remember { LauncherShortcuts(applicationContext) }
             val draftBackupRuntime = remember { androidDraftBackupRuntime(applicationContext, ::selectDraftDestination) }
             val draftImportRuntime = remember { androidDraftImportRuntime(applicationContext, ::selectDraftSource) }
+            val canvasExportRuntime = remember { androidCanvasExportRuntime(applicationContext, ::selectExportDestination) }
+            val schemeBundleRuntime = remember { androidSchemeBundleRuntime(applicationContext, ::selectBundleDestination, ::selectBundleSource) }
+            val quickSchemeRepository = remember {
+                cg.creamgod.boarderless.data.persistence.androidFileQuickSchemeStore(applicationContext)
+            }
             App(
+                quickSchemeRepository = quickSchemeRepository,
+                schemeBundleRuntime = schemeBundleRuntime,
+                canvasExportRuntime = canvasExportRuntime,
                 mediaImportRuntime = mediaImportRuntime,
                 recentWorkspacesPublisher = launcherShortcuts,
                 draftBackupRuntime = draftBackupRuntime,
@@ -237,6 +358,9 @@ class MainActivity : ComponentActivity() {
         outState.putBoolean("boarderless.mediaPickerInFlight", pickerInFlight)
         outState.putBoolean("boarderless.draftPickerInFlight", draftPickerInFlight)
         outState.putBoolean("boarderless.draftImportPickerInFlight", draftImportPickerInFlight)
+        outState.putBoolean("boarderless.exportPickerInFlight", exportPickerInFlight)
+        outState.putBoolean("boarderless.bundlePickerInFlight", bundlePickerInFlight)
+        outState.putBoolean("boarderless.bundleImportPickerInFlight", bundleImportPickerInFlight)
         super.onSaveInstanceState(outState)
     }
 
@@ -251,6 +375,12 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        pendingBundleSource?.cancel()
+        pendingBundleSource = null
+        pendingBundleDestination?.cancel()
+        pendingBundleDestination = null
+        pendingExportDestination?.cancel()
+        pendingExportDestination = null
         pendingDraftSource?.cancel()
         pendingDraftSource = null
         pendingDraftDestination?.cancel()

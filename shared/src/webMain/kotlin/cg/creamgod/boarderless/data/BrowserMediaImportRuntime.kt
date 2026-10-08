@@ -23,6 +23,13 @@ fun browserMediaImportRuntime(activity: StateFlow<MediaPlaybackActivity>? = null
     return MediaImportRuntime(
         clearPreviewCache = previewCache::clear,
         playbackActivity = activity,
+        loadExportImage = { session, assetId, width, height ->
+            previewPermits.withPermit {
+                val gateway = BackendAssetTransferGateway()
+                try { loadBrowserExportImage(gateway, session, assetId, width, height) }
+                finally { gateway.close() }
+            }
+        },
         loadGiphyAnimation = { url ->
             cg.creamgod.boarderless.data.remote.loadGiphyAnimation(url) {
                 awaitBrowserImageDecoder()

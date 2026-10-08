@@ -111,6 +111,7 @@ internal fun clipboardMaterialization(
                 colorToken = copied.colorToken,
                 shape = nodeShapes.getValue(copied.originalId),
                 vectorPath = copied.vectorPath,
+                textPlacement = copied.textPlacement,
             )
         }
     val media =

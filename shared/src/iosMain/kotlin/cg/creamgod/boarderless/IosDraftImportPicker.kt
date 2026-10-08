@@ -9,6 +9,10 @@ import platform.Foundation.NSURL
 import platform.UIKit.*
 import platform.UniformTypeIdentifiers.UTTypeJSON
 import platform.UniformTypeIdentifiers.UTTypePlainText
+import platform.UniformTypeIdentifiers.UTTypeData
+import platform.UniformTypeIdentifiers.UTType
+import cg.creamgod.boarderless.data.IosSchemeBundleSource
+import cg.creamgod.boarderless.feature.canvas.SchemeBundleSource
 import platform.darwin.*
 import kotlin.coroutines.resume
 
@@ -23,16 +27,23 @@ internal class IosDraftImportPicker(
         DraftImportRuntime { canRead ->
             currentCoroutineContext().ensureActive()
             check(canRead())
-            val url = withContext(Dispatchers.Main) { selectJson() }
+            val url = withContext(Dispatchers.Main) { selectDocument(listOf(UTTypeJSON, UTTypePlainText)) }
             currentCoroutineContext().ensureActive()
             check(canRead())
             url?.let { readIosExternalDraftJson(it, canRead) }
         }
 
-    private suspend fun selectJson(): NSURL? =
+    val chooseSchemeBundleSource: suspend (() -> Boolean) -> SchemeBundleSource? = { canRead ->
+        currentCoroutineContext().ensureActive(); check(canRead())
+        val url = withContext(Dispatchers.Main) { selectDocument(listOf(UTTypeData)) }
+        currentCoroutineContext().ensureActive(); check(canRead())
+        url?.let { IosSchemeBundleSource.snapshot(it, canRead) }
+    }
+
+    private suspend fun selectDocument(types: List<UTType>): NSURL? =
         suspendCancellableCoroutine { request ->
             check(!closed && pending == null && presenter().presentedViewController == null)
-            val opened = UIDocumentPickerViewController(forOpeningContentTypes = listOf(UTTypeJSON, UTTypePlainText), asCopy = false)
+            val opened = UIDocumentPickerViewController(forOpeningContentTypes = types, asCopy = false)
             opened.allowsMultipleSelection = false
             opened.delegate = this
             pending = request
