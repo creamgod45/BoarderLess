@@ -96,6 +96,7 @@ internal class DesktopSchemeBundleSource private constructor(
  * never replaced. After publication uncertainty, abort removes only the private partial link. */
 internal class DesktopSchemeBundleDestination(
     private val target: Path,
+    private val maximumBytes: Long = QuickSchemeBundleCodec.MaximumBundleBytes,
     private val canWrite: () -> Boolean,
 ) : SchemeBundleDestination {
     private var partial: Path? = null
@@ -108,7 +109,7 @@ internal class DesktopSchemeBundleDestination(
         currentCoroutineContext().ensureActive()
         check(!finished && !published && canWrite())
         require(bytes.isNotEmpty() && bytes.size <= QuickSchemeBundleCodec.ChunkBytes)
-        require(count + bytes.size <= QuickSchemeBundleCodec.MaximumBundleBytes)
+        require(bytes.size <= maximumBytes - count)
         if (partial == null) {
             require(target.isAbsolute && Files.isDirectory(target.parent))
             check(!Files.exists(target, LinkOption.NOFOLLOW_LINKS))
@@ -157,7 +158,7 @@ suspend fun desktopSchemeBundleSource(path: String, canRead: () -> Boolean): Sch
     DesktopSchemeBundleSource.snapshot(Path.of(path), canRead)
 
 fun desktopSchemeBundleDestination(path: String, canWrite: () -> Boolean): SchemeBundleDestination =
-    DesktopSchemeBundleDestination(Path.of(path), canWrite)
+    DesktopSchemeBundleDestination(Path.of(path), canWrite = canWrite)
 
 fun desktopSchemeBundleReceipts(owner: cg.creamgod.boarderless.data.WorkspaceSession, digest: String,
     assets: List<cg.creamgod.boarderless.feature.canvas.SchemeBundleAsset>): cg.creamgod.boarderless.feature.canvas.SchemeBundleReceipts =
