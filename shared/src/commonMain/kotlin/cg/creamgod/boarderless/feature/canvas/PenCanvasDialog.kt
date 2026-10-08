@@ -62,11 +62,13 @@ internal data class PenCanvasLive(
     }
     PenEditorDialog(
         onDismiss = onDismiss,
+        initialText = original?.text ?: "",
+        initialTextPlacement = original?.textPlacement,
         initialDraft = editing?.draft ?: PenPathDraft(CanvasSize(400f, 300f)),
         editingExisting = editing != null,
         onInsert =
             if (supported) {
-                apply@{ path ->
+                apply@{ path, text, placement ->
                     val current = latestLive()
                     if (!current.ready ||
                         !(editing?.isCurrent(current.session, current.workspace) ?: capture.isCurrent(current.session, current.workspace))
@@ -79,9 +81,9 @@ internal data class PenCanvasLive(
                                 if (editing !=
                                     null
                                 ) {
-                                    editing.operation(path, randomUuid())
+                                    editing.operation(path, randomUuid(), text, placement)
                                 } else {
-                                    capture.operation(path, randomUuid(), randomUuid())
+                                    capture.operation(path, randomUuid(), randomUuid(), text, placement)
                                 }
                             if (candidate == null) return@apply PenCanvasInsertResult.Saved
                             candidate.also { prepared = it }

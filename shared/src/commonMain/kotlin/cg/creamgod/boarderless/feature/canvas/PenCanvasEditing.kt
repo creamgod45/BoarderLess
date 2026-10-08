@@ -89,10 +89,13 @@ internal data class PenCanvasEditing(
     fun operation(
         path: VectorPath,
         operationId: String,
+        text: String = original.text,
+        textPlacement: TextPlacement? = original.textPlacement,
     ): TransactionOperation? {
-        if (path == draft.toVectorPath()) return null // Imported implicit closure does not become a fake edit.
+        if (path == draft.toVectorPath() && text == original.text && textPlacement == original.textPlacement) return null // Imported implicit closure does not become a fake edit.
         require(path.viewBox == draft.viewBox)
-        val normalized = normalizePenPath(path)
+        val unchangedPath = path == draft.toVectorPath()
+        val normalized = if (unchangedPath) NormalizedPenPath(requireNotNull(original.vectorPath), Vec2.Zero) else normalizePenPath(path)
         val oldPath = requireNotNull(original.vectorPath)
         val xScale = original.transform.size.width / oldPath.viewBox.width
         val yScale = original.transform.size.height / oldPath.viewBox.height
@@ -103,11 +106,11 @@ internal data class PenCanvasEditing(
             normalized.origin + Vec2(normalized.path.viewBox.width / 2f, normalized.path.viewBox.height / 2f) -
                 Vec2(oldPath.viewBox.width / 2f, oldPath.viewBox.height / 2f)
         val center = oldCenter + rotateVector(Vec2(localDelta.x * xScale, localDelta.y * yScale), original.transform.rotationDegrees)
-        val transform = original.transform.copy(position = center - Vec2(size.width / 2f, size.height / 2f), size = size)
+        val transform = if (unchangedPath) original.transform else original.transform.copy(position = center - Vec2(size.width / 2f, size.height / 2f), size = size)
         require(abs(transform.position.x) <= 1_000_000f && abs(transform.position.y) <= 1_000_000f)
         require(original.version in 1..9_007_199_254_740_989L && baseline.version in 0..9_007_199_254_740_990L)
-        val before = TextNodeAttributes(original.zIndex, original.locked, original.colorToken, original.shape, original.vectorPath)
-        val after = before.copy(vectorPath = normalized.path)
+        val before = TextNodeAttributes(original.zIndex, original.locked, original.colorToken, original.shape, original.vectorPath, original.textPlacement)
+        val after = before.copy(vectorPath = normalized.path, textPlacement = textPlacement)
         val operations = mutableListOf<WorkspaceOperation>()
         var version = original.version
         if (transform != original.transform) {
@@ -129,6 +132,8 @@ internal data class PenCanvasEditing(
                 ),
             )
         }
+        if (before != after) version++
+        if (text != original.text) operations.add(EditTextOperation("$operationId:text", listOf(TextChange(original.id, version, original.text, text))))
         if (operations.isEmpty()) return null
         return TransactionOperation(operationId, operations)
     }

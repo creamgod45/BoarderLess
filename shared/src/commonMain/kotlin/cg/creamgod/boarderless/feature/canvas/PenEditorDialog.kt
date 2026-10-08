@@ -20,6 +20,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -36,16 +38,24 @@ import cg.creamgod.boarderless.i18n.Strings
 @Composable
 internal fun PenEditorDialog(
     onDismiss: () -> Unit,
-    onInsert: ((VectorPath) -> PenCanvasInsertResult)? = null,
+    onInsert: ((VectorPath, String, TextPlacement?) -> PenCanvasInsertResult)? = null,
+    initialText: String = "",
+    initialTextPlacement: TextPlacement? = null,
     initialDraft: PenPathDraft = PenPathDraft(CanvasSize(400f, 300f)),
     editingExisting: Boolean = false,
 ) {
     val colors = BoarderLessTheme.colors
+    val textMeasurer = rememberTextMeasurer()
+    var labelText by remember { mutableStateOf(initialText) }
+    var textPlacement by remember { mutableStateOf(initialTextPlacement) }
     var history by remember { mutableStateOf(PenPathHistory(initialDraft)) }
     var gesture by remember { mutableStateOf<PenEditorGesture?>(null) }
     var selected by remember { mutableStateOf<Int?>(if (editingExisting) 0 else null) }
     var addMode by remember { mutableStateOf(!editingExisting) }
     var panMode by remember { mutableStateOf(false) }
+    var showAlignment by remember { mutableStateOf(true) }
+    var snapAlignment by remember { mutableStateOf(true) }
+    var alignment by remember { mutableStateOf<PenAlignment?>(null) }
     var panning by remember { mutableStateOf(false) }
     var viewport by remember {
         mutableStateOf(if (editingExisting) PenEditorViewport.fit(initialDraft) else PenEditorViewport.reset(history.draft.viewBox))
@@ -80,7 +90,7 @@ internal fun PenEditorDialog(
             null
         ) {
             colorEdit = null
-        } else if (history.draft == initialDraft || discardArmed) {
+        } else if ((history.draft == initialDraft && labelText == initialText && textPlacement == initialTextPlacement) || discardArmed) {
             onDismiss()
         } else {
             discardArmed = true
@@ -111,12 +121,13 @@ internal fun PenEditorDialog(
                     ) {
                         ShellButton(
                             if (editingExisting) Strings.penDraft.applyPath() else Strings.penDraft.insert(),
+                            hint = if (editingExisting) Strings.penDraft.hintApplyPath() else Strings.penDraft.hintInsert(),
                             enabled =
                                 (attemptedPath != null || path != null) && gesture == null && !panning && colorEdit == null,
                             onClick = {
                                 val candidate = attemptedPath ?: path
                                 if (candidate != null) {
-                                    when (onInsert(candidate)) {
+                                    when (onInsert(candidate, labelText, textPlacement)) {
                                         PenCanvasInsertResult.Saved -> {
                                             onDismiss()
                                         }
@@ -135,25 +146,33 @@ internal fun PenEditorDialog(
                             },
                         )
                     }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(ButtonGap)) {
+                        ShellButton(Strings.penDraft.alignmentGuides(), accent = showAlignment, enabled = !cameraBusy,
+                            hint = Strings.penDraft.alignmentHint(), onClick = { showAlignment = !showAlignment })
+                        ShellButton(Strings.penDraft.alignmentSnap(), accent = snapAlignment, enabled = !cameraBusy,
+                            hint = Strings.penDraft.alignmentSnapHint(), onClick = { snapAlignment = !snapAlignment })
+                    }
                     // Bound tools to half the remaining area; long/mobile controls scroll rather
                     // than consume the drawing surface. The picker overlays without closing it.
                     Column(
                         Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
+                        AiProbeField(Strings.textPosition.text(), labelText, { if (it.length <= 16_384) labelText = it }, enabled = !cameraBusy)
+                        TextPlacementSettings(textPlacement, !cameraBusy) { textPlacement = it }
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            ShellButton(Strings.penDraft.add(), icon = ShellIcon.Add, accent = addMode && !panMode, enabled = !cameraBusy, onClick = {
+                            ShellButton(Strings.penDraft.add(), hint = Strings.penDraft.hintAdd(), icon = ShellIcon.Add, accent = addMode && !panMode, enabled = !cameraBusy, onClick = {
                                 addMode =
                                     true
                                 ; panMode = false
                             })
-                            ShellButton(Strings.penDraft.edit(), icon = ShellIcon.Rename, accent = !addMode && !panMode, enabled = !cameraBusy, onClick = {
+                            ShellButton(Strings.penDraft.edit(), hint = Strings.penDraft.hintEdit(), icon = ShellIcon.Rename, accent = !addMode && !panMode, enabled = !cameraBusy, onClick = {
                                 addMode =
                                     false
                                 ; panMode = false
                             })
                             ShellButton(
-                                Strings.penDraft.undo(),
+                                Strings.penDraft.undo(), hint = Strings.penDraft.hintUndo(),
                                 icon = ShellIcon.Undo,
                                 enabled =
                                     !cameraBusy && history.undoStack.isNotEmpty(),
@@ -165,7 +184,7 @@ internal fun PenEditorDialog(
                                 },
                             )
                             ShellButton(
-                                Strings.penDraft.redo(),
+                                Strings.penDraft.redo(), hint = Strings.penDraft.hintRedo(),
                                 icon = ShellIcon.Redo,
                                 enabled =
                                     !cameraBusy && history.redoStack.isNotEmpty(),
@@ -180,12 +199,13 @@ internal fun PenEditorDialog(
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             ShellButton(
                                 if (draft.closed) Strings.penDraft.open() else Strings.penDraft.closePath(),
+                                hint = if (draft.closed) Strings.penDraft.hintOpen() else Strings.penDraft.hintClosePath(),
                                 enabled =
                                     !cameraBusy && draft.anchors.size >= 2,
                                 onClick = { edit(history.draft.copy(closed = !history.draft.closed)) },
                             )
                             ShellButton(
-                                Strings.penDraft.fill(),
+                                Strings.penDraft.fill(), hint = Strings.penDraft.hintFill(),
                                 accent = draft.style.fillColorToken != null,
                                 enabled = !cameraBusy && (draft.style.fillColorToken == null || draft.style.strokeColorToken != null),
                                 onClick = {
@@ -229,7 +249,7 @@ internal fun PenEditorDialog(
                                 },
                             )
                             ShellButton(
-                                Strings.penDraft.fillColor(),
+                                Strings.penDraft.fillColor(), hint = Strings.penDraft.hintFillColor(),
                                 compact = true,
                                 enabled = !cameraBusy,
                                 onClick = {
@@ -238,7 +258,7 @@ internal fun PenEditorDialog(
                                 },
                             )
                             ShellButton(
-                                Strings.penDraft.strokeColor(),
+                                Strings.penDraft.strokeColor(), hint = Strings.penDraft.hintStrokeColor(),
                                 compact = true,
                                 enabled = !cameraBusy,
                                 onClick = {
@@ -247,12 +267,13 @@ internal fun PenEditorDialog(
                                 },
                             )
                             listOf(
-                                2f to Strings.penDraft.strokeThin(),
-                                4f to Strings.penDraft.strokeMedium(),
-                                8f to Strings.penDraft.strokeThick(),
-                            ).forEach { (width, label) ->
+                                2f to (Strings.penDraft.strokeThin() to Strings.penDraft.hintStrokeThin()),
+                                4f to (Strings.penDraft.strokeMedium() to Strings.penDraft.hintStrokeMedium()),
+                                8f to (Strings.penDraft.strokeThick() to Strings.penDraft.hintStrokeThick()),
+                            ).forEach { (width, texts) ->
                                 ShellButton(
-                                    label,
+                                    texts.first,
+                                    hint = texts.second,
                                     compact = true,
                                     accent = draft.style.strokeWidth == width,
                                     enabled = !cameraBusy,
@@ -284,7 +305,7 @@ internal fun PenEditorDialog(
                                 },
                             )
                             ShellButton(
-                                Strings.penDraft.applyWidth(),
+                                Strings.penDraft.applyWidth(), hint = Strings.penDraft.hintApplyWidth(),
                                 compact = true,
                                 enabled =
                                     !cameraBusy && parsePenStrokeWidth(widthInput) != null,
@@ -297,11 +318,12 @@ internal fun PenEditorDialog(
                         }
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             listOf(
-                                VectorFillRule.NonZero to Strings.penDraft.nonZero(),
-                                VectorFillRule.EvenOdd to Strings.penDraft.evenOdd(),
-                            ).forEach { (rule, label) ->
+                                VectorFillRule.NonZero to (Strings.penDraft.nonZero() to Strings.penDraft.hintNonZero()),
+                                VectorFillRule.EvenOdd to (Strings.penDraft.evenOdd() to Strings.penDraft.hintEvenOdd()),
+                            ).forEach { (rule, texts) ->
                                 ShellButton(
-                                    label,
+                                    texts.first,
+                                    hint = texts.second,
                                     compact = true,
                                     accent = draft.style.fillRule == rule,
                                     enabled = !cameraBusy,
@@ -311,7 +333,7 @@ internal fun PenEditorDialog(
                         }
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             ShellButton(
-                                Strings.penDraft.delete(),
+                                Strings.penDraft.delete(), hint = Strings.penDraft.hintDelete(),
                                 icon = ShellIcon.Delete,
                                 enabled =
                                     !cameraBusy && selected?.let { it in draft.anchors.indices } == true,
@@ -321,7 +343,7 @@ internal fun PenEditorDialog(
                                 },
                             )
                             ShellButton(
-                                Strings.penDraft.corner(),
+                                Strings.penDraft.corner(), hint = Strings.penDraft.hintCorner(),
                                 enabled =
                                     !cameraBusy && selected?.let { it in draft.anchors.indices } == true,
                                 onClick = {
@@ -333,7 +355,7 @@ internal fun PenEditorDialog(
                                 },
                             )
                             ShellButton(
-                                Strings.penDraft.curve(),
+                                Strings.penDraft.curve(), hint = Strings.penDraft.hintCurve(),
                                 enabled =
                                     !cameraBusy && selected?.let {
                                         it in draft.anchors.indices
@@ -354,7 +376,7 @@ internal fun PenEditorDialog(
                         BasicText(Strings.penDraft.instructions(), style = TextStyle(color = colors.contentMuted, fontSize = 11.sp))
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             ShellButton(
-                                Strings.penDraft.addCenterAnchor(),
+                                Strings.penDraft.addCenterAnchor(), hint = Strings.penDraft.hintAddCenterAnchor(),
                                 compact = true,
                                 enabled = !cameraBusy && !draft.closed && draft.anchors.size < 1024,
                                 onClick = {
@@ -376,21 +398,21 @@ internal fun PenEditorDialog(
                                 style = TextStyle(color = colors.contentText, fontSize = 12.sp),
                             )
                             ShellButton(
-                                Strings.penDraft.previousAnchor(),
+                                Strings.penDraft.previousAnchor(), hint = Strings.penDraft.hintPreviousAnchor(),
                                 compact = true,
                                 enabled =
                                     !cameraBusy && selected?.let { it > 0 && it in draft.anchors.indices } == true,
                                 onClick = { selected = selected!! - 1 },
                             )
                             ShellButton(
-                                Strings.penDraft.nextAnchor(),
+                                Strings.penDraft.nextAnchor(), hint = Strings.penDraft.hintNextAnchor(),
                                 compact = true,
                                 enabled =
                                     !cameraBusy && draft.anchors.isNotEmpty() && (selected == null || selected!! < draft.anchors.lastIndex),
                                 onClick = { selected = selected?.plus(1) ?: 0 },
                             )
                             ShellButton(
-                                Strings.penDraft.focusAnchor(),
+                                Strings.penDraft.focusAnchor(), hint = Strings.penDraft.hintFocusAnchor(),
                                 compact = true,
                                 enabled =
                                     !cameraBusy && selected?.let { it in draft.anchors.indices } == true,
@@ -401,12 +423,12 @@ internal fun PenEditorDialog(
                             PenCoordinatePanel(history.draft, index, enabled = !cameraBusy, onApply = ::edit)
                         }
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            ShellButton(Strings.penDraft.pan(), compact = true, accent = panMode, enabled = !cameraBusy, onClick = {
+                            ShellButton(Strings.penDraft.pan(), hint = Strings.penDraft.hintPan(), compact = true, accent = panMode, enabled = !cameraBusy, onClick = {
                                 panMode =
                                     !panMode
                             })
                             ShellButton(
-                                Strings.penDraft.zoomOut(),
+                                Strings.penDraft.zoomOut(), hint = Strings.penDraft.hintZoomOut(),
                                 icon = ShellIcon.ZoomOut,
                                 compact = true,
                                 enabled =
@@ -414,19 +436,19 @@ internal fun PenEditorDialog(
                                 onClick = { viewport = viewport.zoomBy(.5f) },
                             )
                             ShellButton(
-                                Strings.penDraft.zoomIn(),
+                                Strings.penDraft.zoomIn(), hint = Strings.penDraft.hintZoomIn(),
                                 icon = ShellIcon.ZoomIn,
                                 compact = true,
                                 enabled =
                                     !cameraBusy && viewport.zoom < PenEditorViewport.MAX_ZOOM,
                                 onClick = { viewport = viewport.zoomBy(2f) },
                             )
-                            ShellButton(Strings.penDraft.fit(), compact = true, enabled = !cameraBusy, onClick = {
+                            ShellButton(Strings.penDraft.fit(), hint = Strings.penDraft.hintFit(), compact = true, enabled = !cameraBusy, onClick = {
                                 viewport =
                                     PenEditorViewport.fit(history.draft)
                             })
                             ShellButton(
-                                Strings.penDraft.resetView(),
+                                Strings.penDraft.resetView(), hint = Strings.penDraft.hintResetView(),
                                 icon = ShellIcon.ZoomReset,
                                 compact = true,
                                 enabled = !cameraBusy,
@@ -442,7 +464,7 @@ internal fun PenEditorDialog(
                             .clipToBounds()
                             .background(colors.canvas)
                             .onSizeChanged { previewSize = it }
-                            .pointerInput(previewSize, panMode, colorEdit != null, attemptedPath != null) {
+                            .pointerInput(previewSize, panMode, showAlignment, snapAlignment, colorEdit != null, attemptedPath != null) {
                                 if (colorEdit != null || attemptedPath != null) return@pointerInput
                                 val padding = 24.dp.toPx()
                                 awaitEachGesture {
@@ -481,7 +503,9 @@ internal fun PenEditorDialog(
                                         }
                                         return@awaitEachGesture
                                     }
-                                    val start = local(down.position)
+                                    val rawStart = local(down.position)
+                                    val startAlignment = alignPenPoint(latestHistory.draft, rawStart, null, 6.dp.toPx() / transform.scale, snapAlignment)
+                                    val start = if (latestAdd) startAlignment.point else rawStart
                                     val created =
                                         beginPenEditorGesture(
                                             latestHistory,
@@ -494,6 +518,7 @@ internal fun PenEditorDialog(
                                     selected = created?.index
                                     if (created != null) {
                                         gesture = created
+                                        alignment = if (showAlignment && created.handle == PenHandle.NewAnchor) startAlignment else null
                                         down.consume()
                                         try {
                                             while (true) {
@@ -506,7 +531,9 @@ internal fun PenEditorDialog(
                                                             (change.position - down.position).getDistance() >= viewConfiguration.touchSlop
                                                     )
                                                 ) {
-                                                    gesture = gesture!!.move(local(change.position))
+                                                    val (moved, guide) = created.moveAligned(local(change.position), 6.dp.toPx() / transform.scale, snapAlignment)
+                                                    gesture = moved
+                                                    alignment = if (showAlignment) guide else null
                                                 }
                                                 if (!change.pressed) {
                                                     history = gesture!!.commit()
@@ -522,6 +549,7 @@ internal fun PenEditorDialog(
                                             problem = Strings.penDraft.invalid()
                                         } finally {
                                             gesture = null
+                                            alignment = null
                                         } // Cancel/resize/multitouch drops preview without history mutation.
                                     }
                                 }
@@ -545,6 +573,19 @@ internal fun PenEditorDialog(
                                             nodeFillColor(token, colors)
                                         }
                                     }
+                                }
+                                if (labelText.isNotEmpty() && path != null) {
+                                    val bounds = normalizePenPath(path)
+                                    val label = textMeasurer.measure(labelText, labelTextStyle(textPlacement?.appearance, 1f, colors.contentText),
+                                        constraints = androidx.compose.ui.unit.Constraints(maxWidth = bounds.path.viewBox.width.toInt().coerceAtLeast(1)))
+                                    val position = textLayerPosition(textPlacement?.anchor ?: TextAnchor.TopLeft,
+                                        bounds.path.viewBox, CanvasSize(label.size.width.toFloat(), label.size.height.toFloat()), 8f, 8f) +
+                                        bounds.origin + Vec2(textPlacement?.offsetX ?: 0f, textPlacement?.offsetY ?: 0f)
+                                    drawText(label, topLeft = Offset(position.x, position.y))
+                                }
+                                alignment?.let { guide ->
+                                    guide.x?.let { x -> drawLine(colors.accent, Offset(x, 0f), Offset(x, draft.viewBox.height), strokeWidth = 1.dp.toPx() / scale) }
+                                    guide.y?.let { y -> drawLine(colors.accent, Offset(0f, y), Offset(draft.viewBox.width, y), strokeWidth = 1.dp.toPx() / scale) }
                                 }
                                 draft.anchors.forEachIndexed { index, anchor ->
                                     fun offset(point: Vec2) = Offset(point.x, point.y)

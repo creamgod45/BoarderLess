@@ -30,6 +30,8 @@ internal data class PenCanvasCreation(
         path: VectorPath,
         objectId: String,
         operationId: String,
+        text: String = "",
+        textPlacement: TextPlacement? = null,
     ): CreateObjectsOperation {
         val normalized = normalizePenPath(path).path
         val highest = baseline.objects.values.maxOfOrNull { it.zIndex } ?: 0L
@@ -41,9 +43,10 @@ internal data class PenCanvasCreation(
                     CanvasObjectId(objectId),
                     transform = CanvasTransform(position, normalized.viewBox),
                     zIndex = highest + 1,
-                    text = "",
+                    text = text,
                     shape = NodeShape.Rectangle,
                     vectorPath = normalized,
+                    textPlacement = textPlacement,
                 ),
             ),
         )
