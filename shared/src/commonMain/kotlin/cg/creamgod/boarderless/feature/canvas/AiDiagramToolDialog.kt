@@ -73,6 +73,11 @@ internal fun AiDiagramToolDialog(
     val approved = if (whole) workspace.objects.keys.toSet() else selection
     var endpoint by remember { mutableStateOf("") }
     var model by remember { mutableStateOf("") }
+    var maxTokensText by remember { mutableStateOf("") }
+    var temperatureText by remember { mutableStateOf("") }
+    val requestParameters = remember(maxTokensText, temperatureText) {
+        runCatching { parseAiRequestParameters(maxTokensText, temperatureText) }
+    }
     var token by remember { mutableStateOf("") }
     var version by remember { mutableStateOf("") }
     var dialect by remember { mutableStateOf(AiRequestDialect.OpenAiChat) }
@@ -225,6 +230,12 @@ internal fun AiDiagramToolDialog(
                             if (!scopeValid) BasicText(Strings.aiTools.contextInvalid(), style = TextStyle(color = colors.danger))
                             AiProbeField(Strings.aiProbe.endpoint(), endpoint, { if (it.length <= 4096) endpoint = it })
                             AiProbeField(Strings.aiProbe.model(), model, { if (it.length <= 256) model = it })
+                            if (aiChatToolsUseNoReasoning(dialect, model)) {
+                                BasicText(Strings.aiTools.chatReasoningNone(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
+                            }
+                            AiProbeField(Strings.aiProbe.maxTokens(), maxTokensText, { maxTokensText = it })
+                            AiProbeField(Strings.aiProbe.temperature(), temperatureText, { temperatureText = it })
+                            if (requestParameters.isFailure) BasicText(Strings.aiProbe.invalidParameters(), style = TextStyle(color = colors.danger))
                             if (dialect ==
                                 AiRequestDialect.AnthropicMessages
                             ) {
@@ -257,7 +268,7 @@ internal fun AiDiagramToolDialog(
                             ShellButton(
                                 Strings.aiTools.start(),
                                 enabled =
-                                    scopeValid && sessionCurrent() && task.isNotBlank() && endpoint.isNotBlank() && model.isNotBlank() &&
+                                    requestParameters.isSuccess && scopeValid && sessionCurrent() && task.isNotBlank() && endpoint.isNotBlank() && model.isNotBlank() &&
                                         (auth == "None" || token.isNotBlank()),
                                 onClick = startTask@{
                                     if (busy || applying || !open) return@startTask
@@ -265,7 +276,7 @@ internal fun AiDiagramToolDialog(
                                         AiServerProfile(
                                             endpoint,
                                             if (localHttp) AiServerLocation.Local else AiServerLocation.Remote,
-                                            AiRequestBodyProfile(dialect, model, 4096),
+                                            AiRequestBodyProfile(dialect, model, requestParameters.getOrThrow().maxOutputTokens, requestParameters.getOrThrow().temperature),
                                             version.takeIf {
                                                 dialect ==
                                                     AiRequestDialect.AnthropicMessages
@@ -302,11 +313,11 @@ internal fun AiDiagramToolDialog(
                                                                     sessionCurrent()
                                                             },
                                                             credentialHeaders = {
-                                                                when (mode) {
-                                                                    "Bearer" -> headersOf(HttpHeaders.Authorization, "Bearer $credential")
-                                                                    "x-api-key" -> headersOf("x-api-key", credential)
-                                                                    else -> Headers.Empty
-                                                                }
+                                                                aiCredentialHeaders(when (mode) {
+                                                                    "Bearer" -> AiProbeAuthentication.Bearer
+                                                                    "x-api-key" -> AiProbeAuthentication.ApiKey
+                                                                    else -> AiProbeAuthentication.None
+                                                                    }, credential)
                                                             },
                                                             onProgress = { event ->
                                                                 if (open) {

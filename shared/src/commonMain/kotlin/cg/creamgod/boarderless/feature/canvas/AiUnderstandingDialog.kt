@@ -49,6 +49,11 @@ internal fun AiUnderstandingDialog(
     var step by remember { mutableStateOf(0) }
     var endpoint by remember { mutableStateOf("") }
     var model by remember { mutableStateOf("") }
+    var maxTokensText by remember { mutableStateOf("") }
+    var temperatureText by remember { mutableStateOf("") }
+    val requestParameters = remember(maxTokensText, temperatureText) {
+        runCatching { parseAiRequestParameters(maxTokensText, temperatureText) }
+    }
     var token by remember { mutableStateOf("") }
     var dialect by remember { mutableStateOf(AiRequestDialect.OpenAiChat) }
     var version by remember { mutableStateOf("") }
@@ -226,6 +231,9 @@ internal fun AiUnderstandingDialog(
                                     }
                                 })
                             }
+                            AiProbeField(Strings.aiProbe.maxTokens(), maxTokensText, { maxTokensText = it; resetApproval() })
+                            AiProbeField(Strings.aiProbe.temperature(), temperatureText, { temperatureText = it; resetApproval() })
+                            if (requestParameters.isFailure) BasicText(Strings.aiProbe.invalidParameters(), style = TextStyle(color = colors.danger))
                             AiProbeField(Strings.aiProbe.token(), token, {
                                 if (it.length <=
                                     8192
@@ -249,7 +257,7 @@ internal fun AiUnderstandingDialog(
                             ShellButton(
                                 Strings.aiProbe.next(),
                                 enabled =
-                                    endpoint.isNotBlank() && model.isNotBlank() &&
+                                    requestParameters.isSuccess && endpoint.isNotBlank() && model.isNotBlank() &&
                                         (auth == "None" || token.isNotBlank()) &&
                                         (dialect != AiRequestDialect.AnthropicMessages || version.isNotBlank()),
                                 onClick = {
@@ -267,13 +275,13 @@ internal fun AiUnderstandingDialog(
                                 )
                             }
                             ShellButton(Strings.aiProbe.consent(), accent = consent, enabled = !busy, onClick = { consent = !consent })
-                            ShellButton(Strings.aiProbe.send(), enabled = consent && !busy, onClick = {
+                            ShellButton(Strings.aiProbe.send(), enabled = consent && !busy && requestParameters.isSuccess, onClick = {
                                 val approvedPacket = packet
                                 val server =
                                     AiServerProfile(
                                         endpoint,
                                         if (localHttp) AiServerLocation.Local else AiServerLocation.Remote,
-                                        AiRequestBodyProfile(dialect, model, 4096),
+                                        AiRequestBodyProfile(dialect, model, requestParameters.getOrThrow().maxOutputTokens, requestParameters.getOrThrow().temperature),
                                         anthropicVersion = version.takeIf { dialect == AiRequestDialect.AnthropicMessages },
                                         allowInsecureLocalHttp = localHttp,
                                     )
@@ -293,16 +301,24 @@ internal fun AiUnderstandingDialog(
                                 complete = false
                                 answer = ""
                                 message = null
-                                diagnostics = listOf(AiProbeDiagnostic(AiProbeStage.Preparing))
+                                diagnostics = emptyList()
+                                var lastRecorded: AiProbeDiagnostic? = null
+                                fun recordDiagnostic(event: AiProbeDiagnostic) {
+                                    if (lastRecorded == event) return
+                                    lastRecorded = event
+                                    log?.record(event)
+                                    if (open) diagnostics = (diagnostics + event).takeLast(24)
+                                }
+                                recordDiagnostic(AiProbeDiagnostic(AiProbeStage.Preparing))
                                 job =
                                     scope.launch {
                                         try {
                                             val credentials =
-                                                when (approvedAuth) {
-                                                    "Bearer" -> headersOf(HttpHeaders.Authorization, "Bearer $approvedToken")
-                                                    "x-api-key" -> headersOf("x-api-key", approvedToken)
-                                                    else -> Headers.Empty
-                                                }
+                                                aiCredentialHeaders(when (approvedAuth) {
+                                                    "Bearer" -> AiProbeAuthentication.Bearer
+                                                    "x-api-key" -> AiProbeAuthentication.ApiKey
+                                                    else -> AiProbeAuthentication.None
+                                                    }, approvedToken)
                                             val result =
                                                 runAiUnderstandingProbe(
                                                     server,
@@ -336,12 +352,7 @@ internal fun AiUnderstandingDialog(
                                                         }
                                                     },
                                                     onText = { if (open) answer = it },
-                                                    onDiagnostic = { event ->
-                                                        log?.record(event)
-                                                        if (open && diagnostics.lastOrNull() != event) {
-                                                            diagnostics = (diagnostics + event).takeLast(24)
-                                                        }
-                                                    },
+                                                    onDiagnostic = ::recordDiagnostic,
                                                 )
                                             ensureActive()
                                             if (open) {
@@ -353,24 +364,17 @@ internal fun AiUnderstandingDialog(
                                             if (open) {
                                                 complete = false
                                                 message = null
-                                                if (diagnostics.lastOrNull()?.stage != AiProbeStage.Cancelled) {
-                                                    diagnostics = (diagnostics + AiProbeDiagnostic(AiProbeStage.Cancelled)).takeLast(24)
-                                                }
+                                            }
+                                            if (lastRecorded?.stage != AiProbeStage.Cancelled) {
+                                                recordDiagnostic(AiProbeDiagnostic(AiProbeStage.Cancelled))
                                             }
                                             throw cancelled
                                         } catch (_: Exception) {
                                             if (open) {
                                                 message = Strings.aiProbe.failed()
-                                                if (diagnostics.lastOrNull()?.stage != AiProbeStage.Failed) {
-                                                    diagnostics =
-                                                        (
-                                                            diagnostics +
-                                                                AiProbeDiagnostic(
-                                                                    AiProbeStage.Failed,
-                                                                    AiProbeFailure.Configuration,
-                                                                )
-                                                        ).takeLast(24)
-                                                }
+                                            }
+                                            if (lastRecorded?.stage != AiProbeStage.Failed) {
+                                                recordDiagnostic(AiProbeDiagnostic(AiProbeStage.Failed, AiProbeFailure.Configuration))
                                             }
                                         }
                                         // Each attempt consumes consent, including preflight rejection.
@@ -443,12 +447,13 @@ internal fun aiProbeDiagnosticHint(event: AiProbeDiagnostic): String =
         }
 
         AiProbeFailure.HttpRejected -> {
-            when (event.httpStatus) {
-                401, 403 -> Strings.aiProbe.debugHintAuth()
-                404 -> Strings.aiProbe.debugHintEndpoint()
-                400, 422 -> Strings.aiProbe.debugHintRequest()
-                429 -> Strings.aiProbe.debugHintLimit()
-                in 500..599 -> Strings.aiProbe.debugHintServer()
+            when {
+                event.providerError?.rejection == AiWireRejection.ReasoningToolsInChat -> Strings.aiProbe.debugHintReasoningTools()
+                event.httpStatus == 401 || event.httpStatus == 403 -> Strings.aiProbe.debugHintAuth()
+                event.httpStatus == 404 -> Strings.aiProbe.debugHintEndpoint()
+                event.httpStatus == 400 || event.httpStatus == 422 -> Strings.aiProbe.debugHintRequest()
+                event.httpStatus == 429 -> Strings.aiProbe.debugHintLimit()
+                event.httpStatus?.let { it in 500..599 } == true -> Strings.aiProbe.debugHintServer()
                 else -> Strings.aiProbe.failed()
             }
         }

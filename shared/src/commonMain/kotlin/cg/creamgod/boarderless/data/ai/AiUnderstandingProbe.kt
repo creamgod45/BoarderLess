@@ -32,6 +32,8 @@ internal suspend fun runAiUnderstandingProbe(
                 event.copy(
                     httpStatus = event.httpStatus ?: response?.httpStatus,
                     responseType = event.responseType ?: response?.responseType,
+                    preparedAuthentication = event.preparedAuthentication ?: response?.preparedAuthentication,
+                    authenticationChallenge = event.authenticationChallenge ?: response?.authenticationChallenge,
                 )
             } else {
                 event

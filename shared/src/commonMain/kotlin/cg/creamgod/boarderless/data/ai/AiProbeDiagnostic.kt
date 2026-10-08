@@ -1,6 +1,6 @@
 package cg.creamgod.boarderless.data.ai
 
-/** Only typed safe metadata. Never raw exception text, request/response body, URL or headers. */
+/** Typed request/response summaries only; never raw bodies, URLs, headers or exception text. */
 internal enum class AiProbeStage { Preparing, CheckingWorkspace, Connecting, HttpResponse, Receiving, Completed, Cancelled, Failed }
 
 internal enum class AiProbeFailure {
@@ -31,6 +31,10 @@ internal data class AiProbeDiagnostic(
     val failure: AiProbeFailure? = null,
     val httpStatus: Int? = null,
     val responseType: AiProbeResponseType? = null,
+    val preparedAuthentication: AiPreparedAuthentication? = null,
+    val authenticationChallenge: AiAuthenticationChallenge? = null,
+    val request: AiWireRequestDiagnostic? = null,
+    val providerError: AiWireErrorDiagnostic? = null,
 ) {
     fun reportLine(): String =
         buildString {
@@ -38,6 +42,10 @@ internal data class AiProbeDiagnostic(
             failure?.let { append(" code=").append(it.name) }
             httpStatus?.let { append(" HTTP=").append(it) }
             responseType?.let { append(" contentType=").append(it.name) }
+            preparedAuthentication?.let { append(" preparedAuth=").append(it.name) }
+            authenticationChallenge?.let { append(" authChallenge=").append(it.name) }
+            request?.let { append(" ").append(it.report()) }
+            providerError?.let { append(" ").append(it.report()) }
         }
 }
 

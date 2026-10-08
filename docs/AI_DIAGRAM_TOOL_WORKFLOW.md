@@ -1,5 +1,8 @@
 # AI 圖形規劃與工具流程
 
+2026-10-08 選填請求參數：AI圖形草稿與AI畫布理解新增「最大輸出 Tokens」及「Temperature」欄位，兩者初始皆空白。移除UI固定4096輸出tokens；AiRequestBodyProfile改nullable，普通請求與工具初次／後續round共用同一wire參數組裝。有填值才送數值；留空或僅空白完全省略key，不送null、不補預設。Token名稱維持明確protocol mapping：OpenAI Chat為max_completion_tokens，Anthropic Messages為max_tokens。輸入tokens須正整數且可由Int表示，temperature須有限數值；非法輸入顯示提示且停用送出，不默默轉成省略或預設值，未自行限制tokens為65536或temperature為某個供應商區間。參數跟隨不可變server profile，整個工具流程每輪一致，畫布理解編輯參數會重置approval。此變更沒有發出付費AI請求，也不代替供應商／模型的實際相容性驗收。
+
+驗證：獨立建置目錄、停用build cache／incremental編譯，完整JVM1026 tests（6既有skip）與Desktop52 tests零failures／errors；新增三項參數解析與兩protocol普通／工具初次及後續round wire tests，涵蓋空白、省略任一欄、temperature=0、65537 tokens不被自行拒絕及非法輸入。Desktop distributable通過並更新desktopApp/build/verified/BoarderLess.app，git diff --check通過。
 2026-10-06 APP工具任務與批次review已接線：Ai理解視窗新增「AI圖形草稿」入口，editor且提交佇列／recovery安全時可用，延續canvas modal／鍵盤隔離。AiDiagramToolDialog提供selection或whole≤128objects、模型／完整endpoint／認證／version／local HTTP、任務，key僅記憶體，沒有設定／key持久化；Router工具支援需真任務驗證，初始capability僅APP既有七shape／preset node colors／group，selfLoop=false，未宣稱pen/media/v2能力。每個真正HTTP都先展示完整不可變body＋endpoint/model並等待新checkbox＋send，拒絕／取消／dispose釋放pending gate；gate依同一review實例而非round值同意，stale／double按鈕不能批准下一輪。session／history／role／queue／recovery變化同步guard並取消清plan；backend fresh check失敗以WorkspaceBackend typed status區分AI本身HTTP。
 
 完成後唯本機preview：call items中文／英文操作名稱、逐項include/exclude→立即重算domain dependencies/version、node shapes/color/group/rotation fit preview與完整文字／geometry／relation direction/label/intent inventory，Double bounds避免大座標Float overflow；小圖連線是中心直線概略，不宣称正式geometry或實機視覺已驗。AiDiagramDraft→loop Ready新增本機logical refs mapping，維持read N及new A等名稱，UUID僅UI、未進任何provider body／safe log。final無proposal顯「未提出可套用變更」，不假稱產生圖形。

@@ -31,6 +31,24 @@ class AiDiagramToolWireTest {
         result: AiDiagramToolResult = read,
     ) = AiDiagramToolTurn("Planning", listOf(call), listOf(result))
 
+    @Test fun knownGpt56ChatToolsUseNoneButOtherModelsAndUnderstandingKeepTheirParameters() {
+        for (model in listOf("gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol", "gpt-5.6")) {
+            val profile = AiRequestBodyProfile(AiRequestDialect.OpenAiChat, model)
+            val b = Json.parseToJsonElement(aiDiagramToolRequestBody(profile, "request", "session", "Build", caps)).jsonObject
+            assertEquals("none", b.getValue("reasoning_effort").jsonPrimitive.content)
+            assertFalse("max_completion_tokens" in b)
+            assertFalse("temperature" in b)
+            val request = AiCoworkRequest("request", "Understand", AiContextSnapshot("w", 0, AiContextScope.PromptOnly, emptyList(), emptyList()))
+            assertFalse("reasoning_effort" in Json.parseToJsonElement(aiRequestBody(profile, request)).jsonObject)
+            val claude = Json.parseToJsonElement(aiDiagramToolRequestBody(profile.copy(dialect = AiRequestDialect.AnthropicMessages), "request", "session", "Build", caps)).jsonObject
+            assertFalse("reasoning_effort" in claude)
+        }
+        for (model in listOf("explicit-model", "router/gpt-5.6-luna", "gpt-5.6-luna-custom")) {
+            val b = Json.parseToJsonElement(aiDiagramToolRequestBody(AiRequestBodyProfile(AiRequestDialect.OpenAiChat, model), "request", "session", "Build", caps)).jsonObject
+            assertFalse("reasoning_effort" in b)
+        }
+    }
+
     @Test fun definitionsExposeAllEightCompleteSchemasAndConfirmedSubsetOnly() {
         for (dialect in AiRequestDialect.entries) {
             val b = body(dialect)

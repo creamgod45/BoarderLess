@@ -73,10 +73,16 @@ internal class AiSseHttpTransport(
             try {
                 channelFlow {
                     currentCoroutineContext().ensureActive()
-                    onDiagnostic(AiProbeDiagnostic(AiProbeStage.Connecting))
+                    var preparedAuth: AiPreparedAuthentication? = null
                     client
                         .prepareRequest {
                             buildRequest(request)
+                            preparedAuth = aiPreparedAuthentication(headers.build())
+                            onDiagnostic(AiProbeDiagnostic(
+                                AiProbeStage.Connecting,
+                                preparedAuthentication = preparedAuth,
+                                request = (body as? String)?.let { aiWireRequestDiagnostic(it, url.build().encodedPath) },
+                            ))
                             // Override the builder's timeout/Accept; no optional unlimited stream.
                             headers.remove(HttpHeaders.Accept)
                             headers.append(HttpHeaders.Accept, "text/event-stream")
@@ -108,15 +114,23 @@ internal class AiSseHttpTransport(
                                         AiProbeStage.HttpResponse,
                                         httpStatus = response.status.value,
                                         responseType = typeCategory,
+                                        preparedAuthentication = preparedAuth,
+                                        authenticationChallenge = aiAuthenticationChallenge(response.headers),
                                     ),
                                 )
                                 if (response.status.value != 200) {
+                                    val providerError = if (typeCategory == AiProbeResponseType.Json) {
+                                        channel.aiWireErrorDiagnostic()
+                                    } else AiWireErrorDiagnostic(AiWireErrorBody.NonJson, 0)
                                     onDiagnostic(
                                         AiProbeDiagnostic(
                                             AiProbeStage.Failed,
                                             AiProbeFailure.HttpRejected,
                                             response.status.value,
                                             typeCategory,
+                                            preparedAuthentication = preparedAuth,
+                                            authenticationChallenge = aiAuthenticationChallenge(response.headers),
+                                            providerError = providerError,
                                         ),
                                     )
                                     throw AiSseHttpResponseException(response.status.value == 429 || response.status.value in 500..599)

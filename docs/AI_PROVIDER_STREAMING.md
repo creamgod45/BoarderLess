@@ -55,7 +55,7 @@ ConfiguredAiProviderTest 七 cases 用 MockEngine／真实 SSE channel 串接所
 
 PromptOnly 只送原始 user prompt，不送 workspaceId／version／requestId；矛盾的 scope 與非空選取資料直接拒絕。Selection 額外放一筆 user content JSON，保留 selected object／relation／version，驗唯一 ID、選取內端點與安全整數；不提升成 system instruction。使用者內容可能包含 URL 或其他私密文字，serializer 不假裝已去識別化，仍須送出前摘要／逐次同意。
 
-APP 政策上限：prompt／單物件文字 64 KiB UTF-8、128 objects／256 relations、selection JSON 256 KiB、完整 body 1 MiB；model／ID 256 bytes、maxOutputTokens 1..65536。超限拒絕，不截斷；這些不是 provider 支援能力或 context window 保證。驗證錯誤為安全常數且不可重試。尚無 key／URL／system prompt／tools／媒體 binary／proposal 執行／持久化。
+APP 政策上限：prompt／單物件文字 64 KiB UTF-8、128 objects／256 relations、selection JSON 256 KiB、完整 body 1 MiB；model／ID 256 bytes、maxOutputTokens 選填正整數（Int 表示範圍）、temperature 選填有限數值，未填時完全省略 JSON key。超限拒絕，不截斷；這些不是 provider 支援能力或 context window 保證。驗證錯誤為安全常數且不可重試。尚無 key／URL／system prompt／tools／媒體 binary／proposal 執行／持久化。
 
 依 OpenAI Docs skill 核對 [Chat 串流](https://developers.openai.com/api/docs/guides/streaming-responses) 與 [token 參數](https://developers.openai.com/api/docs/guides/token-counting)，Chat 使用 `max_completion_tokens`；依 [Anthropic Messages](https://platform.claude.com/docs/en/api/messages/create) 使用 `max_tokens`。舊 Local Server 若只支援 `max_tokens` 的 Chat 變體，仍須明確能力設定後另接，不偷偷退回舊欄位。沒有 API-key provisioning tool，未讀金鑰或發真實請求。
 

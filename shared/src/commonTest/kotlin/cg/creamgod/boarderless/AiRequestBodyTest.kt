@@ -126,6 +126,6 @@ class AiRequestBodyTest {
         }
         assertFailsWith<AiRequestValidationException> { aiRequestBody(profile.copy(model = ""), request) }
         assertFailsWith<AiRequestValidationException> { aiRequestBody(profile.copy(maxOutputTokens = 0), request) }
-        assertFailsWith<AiRequestValidationException> { aiRequestBody(profile.copy(maxOutputTokens = 65537), request) }
+        assertFailsWith<AiRequestValidationException> { aiRequestBody(profile.copy(temperature = Double.NaN), request) }
     }
 }

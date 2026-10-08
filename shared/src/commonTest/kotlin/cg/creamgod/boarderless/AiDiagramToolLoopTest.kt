@@ -192,6 +192,39 @@ class AiDiagramToolLoopTest {
             frame("message_stop")
     }
 
+    @Test fun gpt56ChatToolsAvoidReasoningRejectionOnEveryIndividuallyApprovedRound() = runTest {
+        var sent = 0
+        var approvedBody = ""
+        val approvedRounds = mutableListOf<Int>()
+        val profile = server(AiRequestDialect.OpenAiChat).copy(body = AiRequestBodyProfile(AiRequestDialect.OpenAiChat, "gpt-5.6-luna"))
+        val http = client { outgoing ->
+            sent++
+            val raw = wire(outgoing.body)
+            assertEquals(approvedBody, raw)
+            val body = Json.parseToJsonElement(raw).jsonObject
+            if (body["reasoning_effort"]?.jsonPrimitive?.content != "none") {
+                respond("""{"error":{"type":"invalid_request_error","param":"reasoning_effort","message":"Function tools with reasoning_effort are not supported in /v1/chat/completions"}}""", HttpStatusCode.BadRequest, headersOf(HttpHeaders.ContentType, "application/json"))
+            } else {
+                assertEquals(8, body.getValue("tools").jsonArray.size)
+                assertFalse("max_completion_tokens" in body)
+                assertFalse("temperature" in body)
+                respond(reply(AiRequestDialect.OpenAiChat, if (sent == 1) "c1" else null), HttpStatusCode.OK, sseHeaders)
+            }
+        }
+        val result = runAiDiagramToolLoop(profile, "request", "session", "Build", workspace, emptySet(), caps,
+            approve = { review ->
+                approvedRounds += review.round
+                approvedBody = review.body
+                assertEquals("none", Json.parseToJsonElement(review.body).jsonObject.getValue("reasoning_effort").jsonPrimitive.content)
+                true
+            }, validateScope = { true }, isSessionCurrent = { true }, credentialHeaders = { headersOf(HttpHeaders.Authorization, "Bearer fixture") }, client = http)
+        val ready = assertIs<AiDiagramLoopResult.Ready>(result)
+        assertNotNull(ready.proposal)
+        assertEquals(listOf(1, 2), approvedRounds)
+        assertEquals(2, sent)
+        assertTrue(workspace.objects.isEmpty())
+    }
+
     @Test fun bothDialectsApproveExactBodyBeforeFreshCredentialsAndReturnOnlyProposal() =
         runTest {
             for (dialect in AiRequestDialect.entries) {

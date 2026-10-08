@@ -5,6 +5,12 @@ import cg.creamgod.boarderless.domain.ai.*
 import cg.creamgod.boarderless.domain.model.RelationDirection
 import kotlinx.serialization.json.*
 
+/** GPT-5.6 Chat function tools require the non-reasoning mode. This is an explicit
+ * tool-request setting shown before approval, never an HTTP retry or protocol fallback.
+ * Unknown/router-specific model IDs are not guessed from prefixes. */
+internal fun aiChatToolsUseNoReasoning(dialect: AiRequestDialect, model: String): Boolean =
+    dialect == AiRequestDialect.OpenAiChat && model in setOf("gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna")
+
 /** Completed turns only. Call arguments remain raw until the isolated executor validates them.
  * No credential lookup, HTTP, execution or canvas mutation. Caller reviews each generated body.
  */
@@ -213,7 +219,7 @@ internal fun aiDiagramToolRequestBody(
 ): String {
     try {
         wireCheck(wireId(requestId) && wireId(sessionId) && profile.model.isNotBlank() && profile.model.length <= 256)
-        wireCheck(profile.maxOutputTokens in 1..65536 && prompt.isNotBlank() && turns.size <= 8)
+        wireCheck(aiRequestParametersValid(profile) && prompt.isNotBlank() && turns.size <= 8)
         wireBound(profile.model, 256)
         wireBound(prompt, 65536)
         val known =
@@ -356,7 +362,8 @@ internal fun aiDiagramToolRequestBody(
                 put("model", profile.model)
                 put("stream", true)
                 put("messages", messages)
-                put(if (profile.dialect == AiRequestDialect.OpenAiChat) "max_completion_tokens" else "max_tokens", profile.maxOutputTokens)
+                putAiRequestParameters(profile)
+                if (aiChatToolsUseNoReasoning(profile.dialect, profile.model)) put("reasoning_effort", "none")
                 put("tools", aiDiagramToolDefinitions(profile.dialect, capabilities))
             }.toString()
         wireBound(body, 1024 * 1024)

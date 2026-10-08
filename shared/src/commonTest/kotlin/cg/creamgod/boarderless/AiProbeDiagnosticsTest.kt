@@ -11,6 +11,26 @@ import kotlin.test.*
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AiProbeDiagnosticsTest {
+    @Test fun rejectionReportsPreparedHeaderShapeAndSafeChallengeOnly() = runTest {
+        val events = mutableListOf<AiProbeDiagnostic>()
+        var calls = 0
+        val c = client { request ->
+            calls++
+            assertEquals("Bearer private-key", request.headers[HttpHeaders.Authorization])
+            respond(secrets, HttpStatusCode.Unauthorized, Headers.build {
+                append(HttpHeaders.ContentType, "text/plain")
+                append(HttpHeaders.WWWAuthenticate, "Basic realm=\"$secrets\"")
+            })
+        }
+        assertFails { runAiUnderstandingProbe(server, aiCredentialHeaders(AiProbeAuthentication.Bearer, "Bearer private-key"), secrets, { true }, {}, c, events::add) }
+        assertEquals(1, calls)
+        val final = events.last()
+        assertEquals(401, final.httpStatus)
+        assertEquals(AiPreparedAuthentication.Bearer, final.preparedAuthentication)
+        assertEquals(AiAuthenticationChallenge.Basic, final.authenticationChallenge)
+        assertTrue(final.reportLine().contains("preparedAuth=Bearer authChallenge=Basic"))
+        assertSafe(events)
+    }
     private val server =
         AiServerProfile(
             "https://fixture.invalid/chat",

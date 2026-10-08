@@ -6,11 +6,12 @@ import kotlinx.serialization.json.*
 /** Local servers must explicitly select one of these dialects; never auto-detect/fallback. */
 internal enum class AiRequestDialect { OpenAiChat, AnthropicMessages }
 
-/** Not a credential/endpoint profile. Model and output budget are explicit, not guessed defaults. */
+/** Not a credential/endpoint profile. Sampling parameters are optional and never assigned guessed defaults. */
 internal data class AiRequestBodyProfile(
     val dialect: AiRequestDialect,
     val model: String,
-    val maxOutputTokens: Int,
+    val maxOutputTokens: Int? = null,
+    val temperature: Double? = null,
 )
 
 internal class AiRequestValidationException : IllegalArgumentException("AI request is invalid")
@@ -39,7 +40,7 @@ internal fun aiRequestBody(
         bounded(text, 256)
     }
     identifier(profile.model)
-    checkRequest(profile.maxOutputTokens in 1..65536)
+    checkRequest(aiRequestParametersValid(profile))
     checkRequest(request.prompt.isNotBlank())
     bounded(request.prompt, 65536)
     val context = request.context
@@ -127,13 +128,7 @@ internal fun aiRequestBody(
             put("model", profile.model)
             put("stream", true)
             put("messages", messages)
-            put(
-                when (profile.dialect) {
-                    AiRequestDialect.OpenAiChat -> "max_completion_tokens"
-                    AiRequestDialect.AnthropicMessages -> "max_tokens"
-                },
-                profile.maxOutputTokens,
-            )
+            putAiRequestParameters(profile)
         }.toString()
     bounded(body, 1048576)
     return body

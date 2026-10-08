@@ -514,7 +514,7 @@ internal class AiDiagramDraft(
                                         AiDiagramToolFailure.Unsupported,
                                     )
                                     val previous =
-                                        TextNodeAttributes(node.zIndex, node.locked, node.colorToken, node.shape, node.vectorPath)
+                                        TextNodeAttributes(node.zIndex, node.locked, node.colorToken, node.shape, node.vectorPath, node.textPlacement)
                                     ops.add(
                                         UpdateTextNodeAttributesOperation(
                                             randomUuid(),
