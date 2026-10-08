@@ -26,7 +26,6 @@ import cg.creamgod.boarderless.data.discardBlankDraftDocument
 import cg.creamgod.boarderless.data.loadAndroidGif
 import cg.creamgod.boarderless.data.loadAndroidGiphyAnimation
 import cg.creamgod.boarderless.data.loadAndroidVideo
-import cg.creamgod.boarderless.data.remote.BackendAssetTransferGateway
 import cg.creamgod.boarderless.data.remote.loadGiphyStill
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -277,55 +276,51 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) intent.openRequestedWorkspace()
 
         setContent {
-            val mediaImportRuntime =
+            val workspaceStorageRuntime =
                 remember {
-                    val previews = AndroidAssetPreviewLoader(applicationContext.cacheDir)
-                    val exportImages = AndroidExportImageLoader(applicationContext.cacheDir)
-                    val gifDownloads = Semaphore(2)
-                    MediaImportRuntime(
-                        playbackActivity = mediaActivity.activity,
-                        loadExportImage = { session, assetId, width, height ->
-                            val gateway = BackendAssetTransferGateway()
-                            try { exportImages.load(gateway, session, assetId, width, height) }
-                            finally { gateway.close() }
+                    cg.creamgod.boarderless.data.WorkspaceStorageRuntime(
+                        localRepository = { cg.creamgod.boarderless.data.persistence.androidFileWorkspaceRepository(applicationContext) },
+                        mediaRuntimeFor = { repository ->
+                            val previews = AndroidAssetPreviewLoader(applicationContext.cacheDir)
+                            val exportImages = AndroidExportImageLoader(applicationContext.cacheDir)
+                            val gifDownloads = Semaphore(2)
+                            MediaImportRuntime(
+                                playbackActivity = mediaActivity.activity,
+                                loadExportImage = { session, assetId, width, height ->
+                                    cg.creamgod.boarderless.data.withWorkspaceAssetDownloadGateway(repository) { gateway ->
+                                        exportImages.load(gateway, session, assetId, width, height)
+                                    }
+                                },
+                                selectSource = ::selectMediaSource,
+                                clearPreviewCache = previews::clear,
+                                loadGiphyAnimation = ::loadAndroidGiphyAnimation,
+                                loadGiphyStill = { url ->
+                                    withContext(Dispatchers.IO) {
+                                        loadGiphyStill(url, AndroidAssetPreviewLoader::decodeBytes)
+                                    }
+                                },
+                                loadPreview = { session, assetId ->
+                                    cg.creamgod.boarderless.data.withWorkspaceAssetDownloadGateway(repository) { gateway ->
+                                        previews.load(gateway, session, assetId)
+                                    }
+                                },
+                                loadGif = { session, assetId ->
+                                    gifDownloads.withPermit {
+                                        cg.creamgod.boarderless.data.withWorkspaceAssetDownloadGateway(repository) { gateway ->
+                                            loadAndroidGif(gateway, session, assetId, applicationContext.cacheDir)
+                                        }
+                                    }
+                                },
+                                loadVideo = { session, assetId ->
+                                    gifDownloads.withPermit {
+                                        cg.creamgod.boarderless.data.withWorkspaceAssetDownloadGateway(repository) { gateway ->
+                                            loadAndroidVideo(gateway, session, assetId, applicationContext.cacheDir, applicationContext)
+                                        }
+                                    }
+                                },
+                                videoSurface = { playback, modifier -> AndroidVideoSurface(playback, modifier) },
+                            )
                         },
-                        selectSource = ::selectMediaSource,
-                        clearPreviewCache = previews::clear,
-                        loadGiphyAnimation = ::loadAndroidGiphyAnimation,
-                        loadGiphyStill = { url ->
-                            withContext(Dispatchers.IO) {
-                                loadGiphyStill(url, AndroidAssetPreviewLoader::decodeBytes)
-                            }
-                        },
-                        loadPreview = { session, assetId ->
-                            val gateway = BackendAssetTransferGateway()
-                            try {
-                                previews.load(gateway, session, assetId)
-                            } finally {
-                                gateway.close()
-                            }
-                        },
-                        loadGif = { session, assetId ->
-                            gifDownloads.withPermit {
-                                val gateway = BackendAssetTransferGateway()
-                                try {
-                                    loadAndroidGif(gateway, session, assetId, applicationContext.cacheDir)
-                                } finally {
-                                    gateway.close()
-                                }
-                            }
-                        },
-                        loadVideo = { session, assetId ->
-                            gifDownloads.withPermit {
-                                val gateway = BackendAssetTransferGateway()
-                                try {
-                                    loadAndroidVideo(gateway, session, assetId, applicationContext.cacheDir, applicationContext)
-                                } finally {
-                                    gateway.close()
-                                }
-                            }
-                        },
-                        videoSurface = { playback, modifier -> AndroidVideoSurface(playback, modifier) },
                     )
                 }
             val launcherShortcuts = remember { LauncherShortcuts(applicationContext) }
@@ -340,7 +335,7 @@ class MainActivity : ComponentActivity() {
                 quickSchemeRepository = quickSchemeRepository,
                 schemeBundleRuntime = schemeBundleRuntime,
                 canvasExportRuntime = canvasExportRuntime,
-                mediaImportRuntime = mediaImportRuntime,
+                workspaceStorageRuntime = workspaceStorageRuntime,
                 recentWorkspacesPublisher = launcherShortcuts,
                 draftBackupRuntime = draftBackupRuntime,
                 draftImportRuntime = draftImportRuntime,

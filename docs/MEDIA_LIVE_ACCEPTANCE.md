@@ -1,5 +1,76 @@
 # APP 素材真實服務驗收紀錄
 
+## 2026-10-08：GIPHY 搜尋語言與分頁一致性
+
+- 物件庫的 GIPHY 瀏覽器改用 APP 已啟用語言，英文 en、繁體中文 zh-TW；依官方支持代碼正規化 locale，中文 script 優先於區域，unsupported fallback en。搜尋原詞原樣送出。
+- 每次請求凍結語言；切換語言取消查詢／preview refresh、失效 generation 並清除結果／預覽／offset，保留 key/query，不自動多送 API。next page 不能沿用另一語言的 offset，遲到舊語言成功回應不能發佈。
+- JVM GiphyClientTest 14、JS Browser 947、Wasm Browser 947 全部 0 failure/error/skip；Desktop distributable、Android APK、iOS simulator compile、Web JS/Wasm production distribution BUILD SUCCESSFUL（4m12s）。verified 成品已更新；兩份 Web 的 durable-records.js / scheme-bundle.js 與來源一致。
+- MockEngine 驗實際 lang/query/offset，未驗真實 key、語言切換 GUI 或 GIPHY canvas 插入。正式 external canvas kind／backend projection／provider-ID 跨端保存及 renderer 仍未實作，不能把查詢改進當成完整 GIPHY 交付。goal 保持 active。詳見 [GIPHY 規格](GIPHY_API_INTEGRATION_SPEC.md)。
+
+## 2026-10-08：Desktop 方案簿實際 GUI 重開與強制結束驗收
+
+- 隔離目前 verified Desktop APP 的 user.home 與 UI preferences，保留正式 native file workspace / quick-scheme repositories；未動正式使用者資料，也未呼叫 AI 或 backend。
+- 真實 GUI 保存方案 1（5 物件、4 連結、v6）後正常退出並重開，方案可載入並插入。再保存方案 2，驗 record generation=2 / nextId=3 / checksum 後僅 SIGKILL 自有 QA PID；重開仍有兩份方案，方案 2 可插入。
+- 插入後画布 10→15 個節點，選單復原 15→10、重做 10→15；library checksum 不變，測試 APP 已正常關閉。詳見 [驗收記錄](DESKTOP_SCHEME_RESTART_ACCEPTANCE.md)。鍵盤快捷鍵、保存中途 kill、power loss、Web/mobile restart、跨裝置/cloud 同步未由此次驗收證明。完整 goal 保持 active。
+
+## 2026-10-08：方案簿 awaited durable 保存接入 Web APP
+
+- 新增 AwaitedQuickSchemeRepository 與 AwaitedPersistentQuickSchemeStore。每次從實際 durable store 讀取完整 generation/payload，沿用既有 PersistentQuickSchemeStore 的格式、schema/UTF-8/Clipboard 驗證與單調 ID；記憶體只作一次操作的工作快照，回傳前必須等待實際 CAS 與 confirmDurable，不作儲存 fallback。
+- Web APP 注入 browserQuickSchemeRepository；方案簿使用獨立 BoarderLess.quick-schemes.v1 strict IndexedDB，而收據仍是 BoarderLess.bundle-receipts.v1。Kotlin 每份 scheme 上限 1 MiB、完整 library 4 MiB，收據仍保留 1 MiB 上限；不把 library 降成 receipt 限制。持續保存仍需要 browser 真正 persisted/persist grant。
+- 原生端以既有同步 repository 的 awaited adapter 保留既有格式與 force/CAS；在 Dispatchers.Default 執行，不在畫布執行緒做檔案 I/O。App / WorkspaceScreen 支援選填 awaited provider；既有 native factories 仍可沿用原介面。
+- UI 初始載入使用 LaunchedEffect，保存／改名／刪除／JSON 匯入／bundle 匯入與匯出 freshness 都等待操作。保存中显示提示並阻擋重複操作；保存之前凍結選取 payload、名稱、ID 與來源工作區，scope 改變取消工作，epoch 防止舊工作清掉新 busy 狀態。JSON import 取消／關閉會取消其自己的 pending 工作，uncertain save 保留 review，可再確認同一份内容。
+- 素材包／JSON import 的 review retry 先比對完整方案，已有相同已保存方案便使用原 ID；storage confirmed failure 不自動重新分配 ID。刷新失敗是 library unavailable，不冒充保存成功；corrupt library 不 reset。
+- 真實 IndexedDB 測試新增 6 項：strict publication → reopen UTF-8 / rename / delete / ID 不重用、put success 仍未 save ACK + cancel rollback、兩 repository 競爭不覆寫、denied／aborted transaction 不回 saved scheme、CAS 已 commit 但確認失敗的 review retry 不再分配 ID、1.4 MiB 完整 library 不截斷。grant accepted/denied 是明確 fixture，transaction 是真正 Chrome strict IDB，並非實際 browser permission/eviction/APP process restart 證據。
+- 最終版本 JS Browser 945 / Wasm Browser 945 與 JVM focused 18 全數通過，0 failure/error/skip；Web JS/Wasm production distribution、Desktop distributable、Android APK、iOS simulator compile 最終 BUILD SUCCESSFUL（4m13s）。全部 verified 成品已更新，Web durable-records.js 與來源位元組一致性已確認。未刪除旧 Settings 內容，也未自動 migration／合併。新 Web library 初始沒有舊 Settings 的方案。
+- 六主線還缺實際裝置之間的完整素材交付 GUI、真實持續保存 grant／跨 APP restart、cloud quick-scheme UUID/revision/outbox/conflict 同步，以及 formal collaboration / shared background / GIPHY / AI 真實成功等原目標。goal 保持 active。
+
+
+## 2026-10-08：Web 素材包暫存租約與下載確認回收
+
+- OPFS stage 使用獨立 boarderless-bundle-stages-v2 目錄，避免掃到沒有租約協定的舊版 root 檔案。每個隨機 UUID 檔在建立前取得 origin-scoped Web Lock，持有到自己的刪除完成；清理以 ifAvailable 嘗試，不排隊、不 steal、不遞迴刪除，略過非協定檔名與 directory。
+- 新的 pick/create 會回收已沒有租約且未發佈下載的檔案。分頁卸載／worker termination 的租約釋放由 browser LockManager 處理，不用時間或 heartbeat 猜測活躍狀態。
+- 分頁關閉不能證明 browser download 已結束。匯出在 anchor dispatch 前保存 .download 標記；自動掃描保留有標記的檔案，可能已 dispatch 的失敗／取消也不 abort 刪除其 backing file。匯出對話框有「我已確認本網站的下載完成，清理閒置暫存」，清理本視窗已取得的目的地與無活躍租約的舊下載；別的分頁活躍檔不會被清理。
+- 清理 ACK 等到實際 removeEntry 完成；刪除失敗保留 handle/lease，可明確重試相同 stage，不宣稱已清理。取消／錯誤 callback 仍會返回有限分類，不因 cleanup 失敗而掛住。
+- 新增真實 Worker + Web Locks + OPFS 測試：活躍 worker lease 阻擋掃除、worker terminate 後鎖實際釋放且未發佈檔可回收、有 .download 標記的 idle 檔自動保留而明確 ACK 才清理、非協定 sentinel 與 matching-name directory 保留。既有 33 MiB 原始素材回圈加入重複下載確認；新增實際 removeEntry 故障注入，未 ACK 且重試不增加下載次數。
+- JS Browser 939 / Wasm Browser 939（各含 6 項素材包測試）已通過，0 failure/error/skip。多平台平行編譯曾因 Kotlin daemon 3 GiB heap 內並行 IR/link 工作造成 GC overhead OOM；改用 --no-parallel --max-workers=1 重跑通過瀏覽器測試。最終包含發佈後 abort 保留 backing file 的驗證仍全數 pass；JS/Wasm production distribution、shared JVM / Android / iOS simulator compile 最終 BUILD SUCCESSFUL（3m16s）。Web verified/js 與 verified/wasmJs 已更新，script 與來源位元組一致且 index 引用核對通過。GUI 下載保存、人為確認時序與真正 browser process kill 仍未驗，worker termination 不等同 OS 電源中斷；Web 方案簿 awaited durable 保存及其餘六主線仍未完成。goal 保持 active。
+- 原理：https://www.w3.org/TR/web-locks/ （origin lock 排他、ifAvailable、document unload/agent termination）。
+
+
+## 2026-10-08：Web 完整原檔方案素材包入口
+
+- Web APP 已注入 browserSchemeBundleRuntime，接上既有完整 QuickSchemeBundleCodec 與 browserSchemeBundleReceipts；不是縮圖或只有 JSON 的方案檔。
+- JS/Wasm 共用 browser interop，選檔後以 1 MiB 分段複製至隨機命名的私有 OPFS 快照，讀取位置/長度與固定 file size 經檢查。匯出也以私有磁碟 stage 分段 append，不把整個最大 1 GiB bundle 存成 Kotlin byte-array list。
+- 每個 await 前後檢查取消、工作區 scope 與頁面 visibility；native/Kotlin Mutex 避免交錯讀寫。取消或失敗清理自己取得的 stage/snapshot；遲到 callback、continuation resume 途中取消也釋放自有 handle。從不刪除或修改使用者選的原檔。
+- 發佈只能嘗試一次，完整 codec SHA 校驗後才交給瀏覽器下載；UI 使用「下載含原檔方案素材包」與「已要求下載」，不把 dispatch 當成 OS 已保存。輸出檔名含 UUID。下載 backing stage 暫時保留，不能在固定短時間後刪除仍可能被大型下載讀取的檔案。
+- 真實 Chrome OPFS / File 測試 4 項：33 MiB 原始素材 export → download File → private snapshot → codec review SHA；建立快照後再改動選取的磁碟檔仍讀到完整原始內容；實際 writer 返回前撤權或取消不下載且清理 stage；選檔複製中取消清理 late snapshot，原 selected File 仍可再讀。OS picker/anchor click 被 fixture 接管，因此不是人工下載保存 GUI 的證據。
+- JS Browser 937 / Wasm Browser 937 全數通過，0 failure/error/skip。Web JS/Wasm production distribution 最終建置成功，已更新 webApp/build/verified/js 與 wasmJs；index.html 引用與 scheme-bundle.js / durable-records.js 位元組一致性已核對。
+- 下一步：已發佈下載 stage 與異常關閉 stage 的安全回收（需區別活躍 tab，不能掃刪別人使用中的檔案）、Web 方案簿 awaited durable 保存；真實 browser persist grant、GUI 選檔/下載與跨裝置完整鏈仍需驗收。完整六主線 goal active，未宣稱全部交付。
+- 原理：https://developer.mozilla.org/en-US/docs/Web/API/File_System_API/Origin_private_file_system 。OPFS 是受 browser quota 管理的私有 origin storage，並非使用者下載資料夾。
+
+
+## 2026-10-08：Web strict IndexedDB 收據保存與 awaited 授權邊界
+
+- SchemeBundleReceipts 的 beforeComplete / ready 改為 suspend；PersistentSchemeBundleImportReceipts 使用 AwaitedDurableLocalRecordStore。Desktop/Android/iOS 以現有同步 durable store 的 awaited adapter 保留原檔案格式與 force/CAS 語意，不新增 migration。
+- Web 新增 BrowserDurableLocalRecordStore 與 browserSchemeBundleReceipts factory、JS/Wasm bridge、durable-records.js。需要 secure context 和實際 StorageManager persisted/persist grant，不以 volatile memory/localStorage 或 relaxed transaction 假裝 ACK；IndexedDB records 的 CAS 比較完整已驗證舊 document，確認 strict transaction 並且只在 transaction complete 回報。
+- Kotlin 檢查嚴格 JSON/UTF-8、generation+payload SHA256 和安全整數 generation；損壞、storage denial、transaction abort／stale CAS 不 reset。confirmDurable 也等待 strict 同內容重新發佈。取消會 abort 未提交 transaction，遲到 open connection 關閉，沒有自動 retry。
+- materialize 現在於 awaited receipt recovery 之後重新檢查 fresh authority，且在 pending receipt 發佈之後、server confirm 之前再檢查；避免等待 IDB／權限提示期間撤權或版本改變卻繼續 prepare/confirm。共用測試驗「發佈未 ACK → confirm=0」、「保存失敗 → confirm=0」以及 read/publish 邊界撤權。
+- 最終驗證：JS Browser 932 與 Wasm Browser 932 全數通過、無 skip（各包含 4 項真正 strict IDB fixture），JVM focused 11、iOS native 14 都 pass；Android 收據 3 項以 adb -s emulator-5560 明確安裝/執行 AndroidJUnitRunner，輸出 OK (3 tests)。未對同時在線的 emulator-5554 安裝或關閉。Android APP APK、Desktop distributable 與跨端編譯通過，兩個 verified 成品更新。
+- Browser fixture 的持續保存 grant 為明確 accepted/denied fixture（沒有假稱已驗真實 browser persist permission）；DB / transactions / request success / complete / rollback 都使用實際 Chrome API。驗 utf8 / connection reopen、put success 先於 ACK、取消已 put 未 commit、兩 connection 競爭只一成功、corrupt 不 reset。這些不是 browser eviction／power loss／正式 APP restart 的證據。
+- Web 完整素材包 Source/Destination/File picker 和 APP runtime 仍未接好；factory 現在可供後續入口使用，不能宣称整條 Web 匯入可用了。Web 快速方案簿亦未切換 IndexedDB。完整六主線 goal 保持 active。
+- 原理依據：https://www.w3.org/TR/IndexedDB/ 、https://developer.chrome.com/blog/indexeddb-durability-mode-now-defaults-to-relaxed 、https://developer.mozilla.org/en-US/docs/Web/API/StorageManager/persist 。
+
+
+## 2026-10-08：iOS 原始素材包反向匯入與方案簿 durable 保存
+
+- iOS 的同一個 IosDraftImportPicker 現在支援 JSON 草稿與 UTTypeData 素材包選取（互斥 pending / 關閉及動畫 continuation 沿用原邏輯）。MainViewController 組合 export/import runtime 與 scope-bound receipt factory，APP 的 .blscheme 匯入入口已接上。
+- IosSchemeBundleSource 只在讀取時持有 security-scoped grant，並經 NSFileCoordinator 以最多 1 MiB chunk 複製成自有 0600 私有快照。只接受 regular file、45 bytes 至 BLQS0001 的 1 GiB 協定上限，拒絕短檔／增長／截斷；後續範圍審閱／上傳讀取私有快照，取消／scope change 清理自有副本，不修改原始 Files 文件。
+- 新增 IosAtomicLocalRecordStore：0700 owned leaf、0600 regular records/lock、process NSRecursiveLock + flock、generation CAS、嚴格 UTF-8／strict JSON／SHA256，force 檔案、rename、force 目錄、回讀後 ACK。不存在的 key 可以建立；損壞、symlink、錯誤權限不自動 reset。framework Library parent canonicalize，owned leaf symlink 不解參照。
+- 素材收據使用 PersistentSchemeBundleImportReceipts 保存 user/client/workspace/bundleDigest 和 pending destination IDs；只有原本 ID 的 GET Ready／owner／素材 metadata 相符才可復用。Pending 未解決時仍拒絕自動配置新 ID；尚未實作完成 pending server upload 的自動續傳。
+- iOS App → WorkspaceScreen 同時注入 IosFileQuickSchemeStore，共用 Desktop/Android 的單一 library v1 與 nextId 方案驗證；原本 Settings 資料不搬移／刪除，新方案簿初次為空。
+- 原生證據：最新 test XML timestamp 2026-10-08T04:06:23–26Z（台灣 12:06），iOS simulator 14 項全部 pass、無 skip（Persistence 6、Destination 4、CanvasExport 4）。涵蓋 33 MiB 完整 bundle codec export → native private snapshot → review checksum，CAS stale/corrupt/modes/symlink，pending ID 重開與 Ready 正確復用，方案改名／刪除／ID 重新讀回，copy 中途 cancellation/scope 失敗清理與原始檔不變。ios arm64 及 simulator production compile 通過。
+- 實際 Files picker／iCloud provider GUI、APP process kill/power loss、Desktop↔iPhone 實際檔案轉移及正式後端自動同步仍未驗收；沒有產出簽署真機 IPA。完整六主線 goal 保持 active。AI log 最新仍為 11:15 的舊 reasoning/tools 拒絕，尚無 none 修正後的真實成功記錄。
+
+
 ## 2026-10-08：iOS 素材方案包串流匯出
 
 - 新增 IosSchemeBundleDestination；iOS MainViewController 透過現有 IosCanvasExportPicker 的 schemeBundleRuntime 將 .blscheme 匯出入口注入 APP。Files 選取資料夾時尚不寫入素材；取消／生命週期 close 沿用同一個 native picker 管理，避免 PNG/PDF 與 bundle 同時開兩個系統視窗。

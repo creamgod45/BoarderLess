@@ -4,7 +4,9 @@ import cg.creamgod.boarderless.data.*
 import cg.creamgod.boarderless.data.persistence.QuickScheme
 import cg.creamgod.boarderless.domain.model.*
 import cg.creamgod.boarderless.feature.canvas.*
-import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.*
+import kotlinx.coroutines.test.runCurrent
+import cg.creamgod.boarderless.data.persistence.*
 import kotlinx.coroutines.test.runTest
 import org.kotlincrypto.hash.sha2.SHA256
 import kotlin.test.*
@@ -85,6 +87,76 @@ class QuickSchemeBundleTest {
     }
     private suspend fun bundle(): File = File().also {
         QuickSchemeBundleCodec.export(scheme, sourceSession, Download(), it, { true }, { scheme })
+    }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test fun authorityRevokedDuringReceiptReadOrPublicationPreventsNewUploadOrConfirm() = runTest {
+        for (boundary in listOf("read", "publish")) {
+            val review = QuickSchemeBundleCodec.review(Source(bundle().bytes())) { true }
+            val upload = Upload()
+            var fresh = destination
+            var receiptWritten = false
+            assertFails {
+                QuickSchemeBundleCodec.materialize(review, destination, upload, { true }, { fresh },
+                    { _, _ ->
+                        receiptWritten = true
+                        if (boundary == "publish") fresh = destination.copy(role = WorkspaceMemberRole.Viewer)
+                    },
+                    {
+                        if (boundary == "read") fresh = destination.copy(role = WorkspaceMemberRole.Viewer)
+                        null
+                    }, { _, _ -> error("must not record ready") })
+            }
+            assertEquals(0, upload.confirms)
+            assertEquals(if (boundary == "read") 0 else 1, upload.prepares)
+            assertEquals(boundary == "publish", receiptWritten)
+            review.release()
+        }
+    }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test fun asynchronousReceiptPublicationIsAwaitedBeforeServerConfirmAndFailureCannotComplete() = runTest {
+        for (fail in listOf(false, true)) supervisorScope {
+            val publication = CompletableDeferred<Unit>()
+            val entered = CompletableDeferred<Unit>()
+            var record: DurableLocalRecord? = null
+            val files = object : AwaitedDurableLocalRecordStore {
+                override suspend fun read(key: String) = record
+                override suspend fun compareAndSet(key: String, generation: Long?, payload: ByteArray) {
+                    check(record?.generation == generation)
+                    entered.complete(Unit)
+                    publication.await()
+                    record = DurableLocalRecord((generation ?: 0L) + 1, payload.copyOf())
+                }
+                override suspend fun confirmDurable(key: String, generation: Long) { check(record?.generation == generation) }
+            }
+            val review = QuickSchemeBundleCodec.review(Source(bundle().bytes())) { true }
+            val ledger = PersistentSchemeBundleImportReceipts(files, destination,
+                review.digest.joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }, review.assets)
+            val upload = Upload()
+            val work = async {
+                QuickSchemeBundleCodec.materialize(review, destination, upload, { true }, { destination },
+                    { id, imported -> ledger.beforeComplete(review.assets.single { it.sourceId == id }, imported) },
+                    { ledger.recovered(it, object : AssetRepository {
+                        override suspend fun listAssets(session: WorkspaceSession) = error("unexpected")
+                        override suspend fun getAsset(session: WorkspaceSession, assetId: String): WorkspaceAsset = error("unexpected")
+                    }) },
+                    { id, imported -> ledger.ready(review.assets.single { it.sourceId == id }, imported) })
+            }
+            entered.await(); runCurrent()
+            assertEquals(0, upload.confirms); assertFalse(work.isCompleted)
+            if (fail) {
+                publication.completeExceptionally(IllegalStateException("Storage commit failed"))
+                assertFails { work.await() }
+                assertEquals(0, upload.confirms)
+            } else {
+                publication.complete(Unit)
+                assertEquals("destination", work.await().sourceWorkspaceId)
+                assertEquals(1, upload.confirms)
+                assertNotNull(record)
+            }
+            review.release()
+        }
     }
 
     @Test fun streamedOriginalRoundTripDeduplicatesSharedMediaAndRemapsBothReferences() = runTest {

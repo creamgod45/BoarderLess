@@ -3,6 +3,8 @@ package cg.creamgod.boarderless
 import androidx.compose.runtime.remember
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.window.ComposeViewport
+import cg.creamgod.boarderless.data.persistence.browserQuickSchemeRepository
+import cg.creamgod.boarderless.data.browserSchemeBundleRuntime
 import cg.creamgod.boarderless.data.browserDraftBackupRuntime
 import cg.creamgod.boarderless.data.browserCanvasExportRuntime
 import cg.creamgod.boarderless.data.browserDraftImportRuntime
@@ -16,7 +18,11 @@ fun main() {
             val draftBackupRuntime = remember { browserDraftBackupRuntime() }
             val draftImportRuntime = remember { browserDraftImportRuntime() }
             val canvasExportRuntime = remember { browserCanvasExportRuntime() }
+            val schemeBundleRuntime = remember { browserSchemeBundleRuntime() }
+            val schemeRepository = remember { browserQuickSchemeRepository() }
             App(
+                awaitedQuickSchemeRepository = schemeRepository,
+                schemeBundleRuntime = schemeBundleRuntime,
                 canvasExportRuntime = canvasExportRuntime,
                 mediaImportRuntime = mediaImportRuntime,
                 draftBackupRuntime = draftBackupRuntime,

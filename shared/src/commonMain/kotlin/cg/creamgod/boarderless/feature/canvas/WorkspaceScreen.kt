@@ -1,5 +1,7 @@
 package cg.creamgod.boarderless.feature.canvas
 
+import cg.creamgod.boarderless.data.persistence.awaited
+
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -1058,6 +1060,7 @@ private fun builtInComponents(density: Float): List<BuiltInComponent> {
 @Composable
 fun WorkspaceScreen(
     workspaceRepository: cg.creamgod.boarderless.data.CanvasWorkspaceRepository? = null,
+    onChooseStorageMode: (() -> Unit)? = null,
     mediaImportRuntime: MediaImportRuntime = MediaImportRuntime.Unavailable,
     reduceTransparency: Boolean = false,
     onReduceTransparencyChange: (Boolean) -> Unit = {},
@@ -1071,6 +1074,7 @@ fun WorkspaceScreen(
     draftImportRuntime: DraftImportRuntime = DraftImportRuntime.Unavailable,
     schemeBundleRuntime: SchemeBundleRuntime = SchemeBundleRuntime.Unavailable,
     canvasExportRuntime: CanvasExportRuntime = CanvasExportRuntime.Unavailable,
+    awaitedQuickSchemeRepository: cg.creamgod.boarderless.data.persistence.AwaitedQuickSchemeRepository? = null,
     quickSchemeRepository: cg.creamgod.boarderless.data.persistence.QuickSchemeRepository? = null,
 ) {
     val colors = BoarderLessTheme.colors
@@ -1101,7 +1105,7 @@ fun WorkspaceScreen(
     var mediaImportJob by remember { mutableStateOf<Job?>(null) }
     var mediaImportLabel by remember { mutableStateOf("") }
     val canvasPreferences = remember { CanvasPreferences() }
-    val quickSchemeStore = remember(repository, quickSchemeRepository) { quickSchemeRepository ?: repository.quickSchemeRepository ?: QuickSchemeStore() }
+    val quickSchemeStore = remember(repository, quickSchemeRepository, awaitedQuickSchemeRepository) { awaitedQuickSchemeRepository ?: (quickSchemeRepository ?: repository.quickSchemeRepository ?: QuickSchemeStore()).awaited() }
     val libraryPreferences =
         remember {
             cg.creamgod.boarderless.data.persistence
@@ -1277,13 +1281,23 @@ fun WorkspaceScreen(
     var presenceScreenCursor by remember(presencePublicationOwnerId) { mutableStateOf<Vec2?>(null) }
     var statusMessage by remember { mutableStateOf(Strings.status.connectingToWorkspace()) }
     var schemesUnavailable by remember(quickSchemeStore) { mutableStateOf(false) }
-    var schemes by remember(quickSchemeStore) {
-        mutableStateOf(
-            runCatching { quickSchemeStore.list() }.getOrElse {
-                schemesUnavailable = true
-                emptyList()
-            },
-        )
+    var schemes by remember(quickSchemeStore) { mutableStateOf<List<QuickScheme>>(emptyList()) }
+    var schemeImportJob by remember { mutableStateOf<Job?>(null) }
+    var schemeLibraryJob by remember(quickSchemeStore) { mutableStateOf<Job?>(null) }
+    var schemeLibraryEpoch by remember(quickSchemeStore) { mutableStateOf(0L) }
+    var schemesBusy by remember(quickSchemeStore) { mutableStateOf(true) }
+    DisposableEffect(draftReviewScopeId, quickSchemeStore) {
+        onDispose { schemeLibraryEpoch++; schemeLibraryJob?.cancel(); schemesBusy = false }
+    }
+    LaunchedEffect(quickSchemeStore, draftReviewScopeId) {
+        val epoch = ++schemeLibraryEpoch
+        schemesBusy = true
+        try {
+            val loaded = quickSchemeStore.list()
+            if (epoch == schemeLibraryEpoch) { schemes = loaded; schemesUnavailable = false }
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { if (epoch == schemeLibraryEpoch) schemesUnavailable = true }
+        finally { if (epoch == schemeLibraryEpoch) schemesBusy = false }
     }
     var showSchemeLibrary by remember { mutableStateOf(false) }
     var showComponentLibrary by remember { mutableStateOf(false) }
@@ -3192,20 +3206,36 @@ fun WorkspaceScreen(
         selectionClipboardPayload()?.let(::pastePayload)
     }
 
-    fun saveQuickScheme() {
-        val payload = selectionClipboardPayload() ?: return
+    suspend fun refreshSchemes(): Result<List<QuickScheme>> = try {
+        Result.success(quickSchemeStore.list())
+    } catch (cancelled: CancellationException) { throw cancelled }
+    catch (failure: Exception) { Result.failure(failure) }
+
+    fun runSchemeAction(action: suspend () -> Unit): Job? {
+        if (schemesBusy || schemeTransferBusy) return null
+        schemesBusy = true
+        val epoch = ++schemeLibraryEpoch
+        schemeLibraryJob = uiScope.launch {
+            try { action() }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { statusMessage = Strings.schemes.saveUnconfirmed() }
+            finally { if (schemeLibraryEpoch == epoch) schemesBusy = false }
+        }
+        return schemeLibraryJob
+    }
+
+    suspend fun saveQuickSchemeAwaited(payload: ClipboardPayload, sourceWorkspaceId: String) {
         val saved =
             try {
                 quickSchemeStore.save(
                     payload = ClipboardJson.encodeToString(payload),
                     schemaVersion = payload.version,
                     sourceWorkspaceId =
-                        history.workspace.id.value
-                            .takeIf { payload.media.isNotEmpty() },
+                        sourceWorkspaceId.takeIf { payload.media.isNotEmpty() },
                 )
-            } catch (_: Exception) {
+            } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) {
                 statusMessage = Strings.schemes.saveUnconfirmed()
-                runCatching { quickSchemeStore.list() }
+                refreshSchemes()
                     .onSuccess {
                         schemes = it
                         schemesUnavailable = false
@@ -3215,7 +3245,7 @@ fun WorkspaceScreen(
         schemes =
             try {
                 quickSchemeStore.list()
-            } catch (_: Exception) {
+            } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) {
                 schemesUnavailable = true
                 statusMessage = Strings.schemes.libraryUnavailable()
                 return
@@ -3225,6 +3255,13 @@ fun WorkspaceScreen(
         schemeNameDraft = saved.name
         statusMessage = Strings.status.saved(saved.name)
     }
+
+    fun saveQuickScheme() {
+        val payload = selectionClipboardPayload() ?: return
+        val source = history.workspace.id.value
+        runSchemeAction { saveQuickSchemeAwaited(payload, source) }
+    }
+
 
     fun insertScheme(scheme: QuickScheme) {
         val payload = decodeQuickSchemePayload(scheme)
@@ -3343,14 +3380,13 @@ fun WorkspaceScreen(
         }
     }
 
-    fun renameSelectedScheme() {
-        val id = selectedSchemeId ?: return
+    suspend fun renameSelectedSchemeAwaited(id: Int, name: String) {
         val renamed =
             try {
-                quickSchemeStore.rename(id, schemeNameDraft)
-            } catch (_: Exception) {
+                quickSchemeStore.rename(id, name)
+            } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) {
                 statusMessage = Strings.schemes.saveUnconfirmed()
-                runCatching { quickSchemeStore.list() }
+                refreshSchemes()
                     .onSuccess {
                         schemes = it
                         schemesUnavailable = false
@@ -3363,7 +3399,7 @@ fun WorkspaceScreen(
         schemes =
             try {
                 quickSchemeStore.list()
-            } catch (_: Exception) {
+            } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) {
                 schemesUnavailable = true
                 statusMessage = Strings.schemes.libraryUnavailable()
                 return
@@ -3372,14 +3408,19 @@ fun WorkspaceScreen(
         statusMessage = Strings.status.renamed(renamed.name)
     }
 
-    fun deleteSelectedScheme() {
+    fun renameSelectedScheme() {
         val id = selectedSchemeId ?: return
-        val deletedName = schemes.firstOrNull { it.id == id }?.name ?: return
+        val name = schemeNameDraft
+        runSchemeAction { renameSelectedSchemeAwaited(id, name) }
+    }
+
+
+    suspend fun deleteSelectedSchemeAwaited(id: Int, deletedName: String) {
         try {
             if (!quickSchemeStore.delete(id)) return
-        } catch (_: Exception) {
+        } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) {
             statusMessage = Strings.schemes.saveUnconfirmed()
-            runCatching { quickSchemeStore.list() }
+            refreshSchemes()
                 .onSuccess {
                     schemes = it
                     schemesUnavailable = false
@@ -3392,7 +3433,7 @@ fun WorkspaceScreen(
         schemes =
             try {
                 quickSchemeStore.list()
-            } catch (_: Exception) {
+            } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) {
                 schemesUnavailable = true
                 statusMessage = Strings.schemes.libraryUnavailable()
                 return
@@ -3401,6 +3442,13 @@ fun WorkspaceScreen(
         schemeNameDraft = schemes.lastOrNull()?.name.orEmpty()
         statusMessage = Strings.status.deleted(deletedName)
     }
+
+    fun deleteSelectedScheme() {
+        val id = selectedSchemeId ?: return
+        val name = schemes.firstOrNull { it.id == id }?.name ?: return
+        runSchemeAction { deleteSelectedSchemeAwaited(id, name) }
+    }
+
 
     fun groupSelection() {
         val selectedObjects = selectedIds.mapNotNull(history.workspace::objectById)
@@ -5299,7 +5347,7 @@ fun WorkspaceScreen(
                         label = if (workspaceSwitchInProgress) Strings.toolbar.opening() else Strings.toolbar.spaces(),
                         icon = ShellIcon.Workspaces,
                         accent = showWorkspaceSwitcher,
-                        enabled = session != null && !connectionFailed && !workspaceSwitchInProgress,
+                        enabled = ((session != null && !connectionFailed) || onChooseStorageMode != null) && !workspaceSwitchInProgress,
                         onClick = {
                             showWorkspaceSwitcher = !showWorkspaceSwitcher
                             if (showWorkspaceSwitcher) {
@@ -6138,6 +6186,15 @@ fun WorkspaceScreen(
                                 fontWeight = FontWeight.SemiBold,
                             ),
                     )
+                    onChooseStorageMode?.let { choose ->
+                        ShellButton(Strings.workspaceStorage.change(), enabled =
+                            submissionQueue.isEmpty && !syncInProgress && !workspaceSwitchInProgress &&
+                            pendingRecovery == null && pendingDraftRecovery == null && !pendingRecoveryChecking && !pendingRecoveryBusy &&
+                            !mediaImportBusy && editingId == null && !inspectorTextEditing && !workspaceFormEditing && pendingNewNode == null &&
+                            dragPreviews.isEmpty() && transformPreviews.isEmpty() && relationGeometryDrag == null && connectionDragPreview == null &&
+                            marquee == null && libraryDragPreview == null && !brushMode,
+                            onClick = choose, modifier = Modifier.width(inspectorWidth - 16.dp))
+                    }
                     workspaceSummaries
                         .sortedWith(compareBy<WorkspaceSummary>({ it.title.lowercase() }, { it.id.value }))
                         .forEach { summary ->
@@ -6673,17 +6730,20 @@ fun WorkspaceScreen(
                                 !connectionFailed,
                         onClick = ::importSchemeFile,
                     )
+                    if (schemesBusy) BasicText(Strings.schemes.loading(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
                     if (schemesUnavailable) {
                         BasicText(Strings.schemes.libraryUnavailable(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
                         ShellButton(label = Strings.schemes.retry(), icon = ShellIcon.Retry, onClick = {
-                            runCatching { quickSchemeStore.list() }
+                            runSchemeAction {
+                            refreshSchemes()
                                 .onSuccess {
                                     schemes = it
                                     schemesUnavailable = false
                                 }.onFailure { statusMessage = Strings.schemes.libraryUnavailable() }
+                            }
                         })
                     }
-                    if (schemes.isEmpty() && !schemesUnavailable) {
+                    if (schemes.isEmpty() && !schemesUnavailable && !schemesBusy) {
                         BasicText(
                             text = Strings.schemes.selectObjectsAndChooseSave(),
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -6798,12 +6858,13 @@ fun WorkspaceScreen(
                         ShellButton(
                             label = Strings.schemes.rename(),
                             icon = ShellIcon.Rename,
-                            enabled = schemeNameDraft.trim().isNotEmpty() && schemeNameDraft.trim() != scheme.name,
+                            enabled = !schemesBusy && schemeNameDraft.trim().isNotEmpty() && schemeNameDraft.trim() != scheme.name,
                             onClick = ::renameSelectedScheme,
                         )
                         ShellButton(
                             label = Strings.schemes.deleteScheme(),
                             icon = ShellIcon.Delete,
+                            enabled = !schemesBusy,
                             onClick = ::deleteSelectedScheme,
                         )
                     }
@@ -8122,16 +8183,27 @@ fun WorkspaceScreen(
                     !connectionFailed && !workspaceSwitchInProgress && !syncInProgress && !mediaImportBusy &&
                         submissionQueue.isEmpty && pendingRecovery == null && pendingDraftRecovery == null) },
                 onSaved = { saved ->
-                    schemes = quickSchemeStore.list()
-                    schemesUnavailable = false
-                    selectedSchemeId = saved.id
-                    schemeNameDraft = saved.name
-                    workspaceAssetsRefreshAttempt++
-                    statusMessage = Strings.status.saved(saved.name)
+                    val ownerScope = draftReviewScopeId
+                    uiScope.launch {
+                        val loaded = refreshSchemes()
+                        if (ownerScope != latestDraftReviewScopeId) return@launch
+                        loaded.onSuccess {
+                            schemes = it
+                            schemesUnavailable = false
+                            selectedSchemeId = saved.id
+                            schemeNameDraft = saved.name
+                            workspaceAssetsRefreshAttempt++
+                            statusMessage = Strings.status.saved(saved.name)
+                        }.onFailure {
+                            schemesUnavailable = true
+                            statusMessage = Strings.schemes.libraryUnavailable()
+                        }
+                    }
                 },
                 onDismiss = { showSchemeBundleImport = false; exportSchemeBundle = null })
         }
         incomingScheme?.let { reviewed ->
+            DisposableEffect(reviewed) { onDispose { schemeImportJob?.cancel() } }
             val payload = remember(reviewed) { checkNotNull(decodeQuickSchemePayload(reviewed)) }
             GlassSurface(modifier = Modifier.align(Alignment.Center).windowInsetsPadding(WindowInsets.safeDrawing).padding(12.dp)) {
                 Column(
@@ -8157,20 +8229,17 @@ fun WorkspaceScreen(
                         accent = incomingSchemeConfirmed,
                         onClick = { incomingSchemeConfirmed = !incomingSchemeConfirmed },
                     )
+                    if (schemesBusy) BasicText(Strings.schemes.loading(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
                     ShellButton(
                         label = Strings.schemes.saveImported(),
                         enabled =
-                            incomingSchemeConfirmed && !schemeTransferBusy && session != null && !connectionFailed &&
+                            incomingSchemeConfirmed && !schemesBusy && !schemeTransferBusy && session != null && !connectionFailed &&
                                 !workspaceSwitchInProgress,
                         onClick = {
+                            schemeImportJob = runSchemeAction {
                             try {
                                 val saved =
-                                    quickSchemeStore.save(
-                                        reviewed.payload,
-                                        reviewed.name,
-                                        reviewed.schemaVersion,
-                                        reviewed.sourceWorkspaceId,
-                                    )
+                                    saveMaterializedBundle(quickSchemeStore, reviewed)
                                 schemes = quickSchemeStore.list()
                                 schemesUnavailable = false
                                 selectedSchemeId = saved.id
@@ -8178,11 +8247,10 @@ fun WorkspaceScreen(
                                 incomingScheme = null
                                 incomingSchemeConfirmed = false
                                 statusMessage = Strings.status.saved(saved.name)
-                            } catch (_: Exception) {
-                                incomingScheme = null
+                            } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) {
                                 incomingSchemeConfirmed = false
                                 statusMessage = Strings.schemes.saveUnconfirmed()
-                                runCatching { quickSchemeStore.list() }
+                                refreshSchemes()
                                     .onSuccess {
                                         schemes = it
                                         schemesUnavailable = false
@@ -8191,9 +8259,11 @@ fun WorkspaceScreen(
                                             true
                                     }
                             }
+                            }
                         },
                     )
                     ShellButton(label = Strings.common.cancel(), onClick = {
+                        schemeLibraryJob?.cancel()
                         incomingScheme = null
                         incomingSchemeConfirmed = false
                     })
@@ -8344,6 +8414,7 @@ fun WorkspaceScreen(
                     AiDiagramToolDialog(
                         snapshot,
                         selectedIds,
+                        supportsRelationGeometry = repository.supportsRelationGeometry,
                         validateScope = { diagramFresh() },
                         isSessionCurrent = { diagramCurrent() },
                         onApply = { proposal ->

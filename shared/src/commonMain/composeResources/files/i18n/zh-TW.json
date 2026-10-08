@@ -54,7 +54,11 @@
     "working": "正在驗證並保存原檔…",
     "confirm": "我已檢視此內容，確認進行這次交付",
     "importSave": "保存原檔與方案",
+    "confirmDownloads": "我已確認本網站的下載完成，清理閒置暫存",
+    "downloadsCleared": "已清理已確認下載的暫存檔。",
+    "exportDownload": "下載含原檔方案素材包",
     "exportSave": "選擇位置並匯出",
+    "downloadRequested": "已要求下載方案素材包，請查看瀏覽器下載清單確認檔案已保存。",
     "exported": "方案 bundle 已保存。",
     "failed": "尚未確認交付完成。重試會查回已保存的素材 receipt；工作區變更時請關閉並重開。"
 },
@@ -867,6 +871,7 @@
     "workspaceAccessWasRevokedOr": "工作區存取權已被撤銷，或此工作區已不存在"
   },
   "schemes": {
+    "loading": "正在讀取或保存方案簿…",
     "importFile": "匯入方案檔",
     "exportFile": "匯出方案檔",
     "fileSaved": "方案檔已保存",
@@ -1189,6 +1194,7 @@
     "documentOpened": "已開啟文件"
   },
   "aiProbe": {
+    "consentDeclined": "未授權，本次請求未送出；任務已停止。",
     "debugHintReasoningTools": "供應商已確認：此模型的 Chat Completions 不接受額外推理與圖形工具的組合。請使用新版 GPT-5.6 工具請求（reasoning_effort=none）；不能只把 endpoint 改成 Responses，兩種請求格式不同。",
     "debugHintConfig": "AI 尚未送出：請檢查完整 endpoint、協定、模型、認證格式與 HTTP 設定。",
     "debugHintWorkspace": "AI 尚未送出：工作區範圍、版本或本機快照與後端不一致。請等待同步完成後關閉並重新開啟驗證視窗。",
@@ -1211,6 +1217,8 @@
     "debugReceiving": "正在接收 AI 文字回應",
     "debugCancelled": "請求已取消；不會自動重試",
     "debugFailed": "請求失敗，請查看下方安全錯誤分類／HTTP 狀態",
+    "tokenLimitField": "Chat 輸出上限參數",
+    "tokenLimitFieldHint": "目前 OpenAI 模型請使用 max_completion_tokens；只有路由或模型要求舊格式時才選 max_tokens。上限留空便不送這兩個欄位，不會自動重試。",
     "maxTokens": "最大輸出 Tokens（選填；留空不傳送）",
     "temperature": "Temperature（選填；留空不傳送）",
     "invalidParameters": "Tokens 請輸入正整數；Temperature 請輸入有限數值，或留空。",
@@ -1262,11 +1270,13 @@
   },
   "aiTools": {
     "chatReasoningNone": "GPT-5.6 Chat 圖形工具相容設定：reasoning_effort = none。此設定會包含在每次待批准的請求中。",
-      "title": "AI 圖形草稿",
+      "title": "AI 協助編輯圖形（草稿）",
       "warning": "工具只修改隔離草稿。每次可能計費的請求須分別審閱與同意，再審核完整方案後套用。Router 工具支援需以實際成功任務確認。",
       "task": "描述圖形任務",
       "scope": "批准物件：{count} 個。工具不能讀取此範圍外的內容。",
-      "start": "開始工具任務",
+      "dataShared": "AI 可依描述新增分支、排列節點或在連線插入節點。工具讀取核准範圍的文字、位置、尺寸與連線資料；不傳送圖片像素或素材網址。下方 N／E 代號只供本次任務使用，請依箭頭描述關係。",
+      "insertRelationNode": "在連線插入節點並拆成兩段",
+      "start": "產生編輯草稿",
       "approve": "同意送出本次請求",
       "deny": "拒絕本次請求",
       "round": "審閱第 {round} 次請求（最多 8 次）",
@@ -1311,6 +1321,14 @@
       "height": "節點高度",
       "invalid": "請使用 ±1,000,000 內的有限座標，尺寸須為 1～100,000，並檢查文字長度。",
       "contextPreview": "預覽包含兩端、新節點與附近物件，可調整位置與尺寸。"
+  },
+  "workspaceStorage": {
+      "title": "選擇畫布儲存方式",
+      "explanation": "本機畫布與匯入原檔可離線使用，透過素材包與其他裝置交換。伺服器模式連線到已設定的服務；兩種模式各自保存，不會自動搬移資料。可從「空間」切換模式。",
+      "local": "本機畫布（可離線）",
+      "server": "伺服器畫布",
+      "change": "切換儲存模式",
+      "preferenceFailed": "無法保存模式選擇，請重試。"
   },
   "localStorage": {
     "mode": "本機檔案",

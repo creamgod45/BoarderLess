@@ -24,6 +24,8 @@ interface SchemeBundleDestination {
     suspend fun writeChunk(bytes: ByteArray)
     suspend fun commit()
     suspend fun abort()
+    /** Browser only: explicit human acknowledgement that its download has finished. */
+    suspend fun acknowledgeDownload() {}
 }
 
 @Serializable data class SchemeBundleAsset(
@@ -290,9 +292,12 @@ internal object QuickSchemeBundleCodec {
                 require(readBytes == asset.byteSize && hashText(digest.digest()) == asset.checksum)
                 authority()
                 beforeComplete(asset.sourceId, destinationId)
-                checkScope(isCurrent)
+                // A durable browser transaction can yield; permissions/version may change while waiting.
+                authority()
             }
-            val imported = readImported(asset) ?: coordinator.import(destination, source) { onStage(asset.sourceId, it) }
+            val recovered = readImported(asset)
+            authority()
+            val imported = recovered ?: coordinator.import(destination, source) { onStage(asset.sourceId, it) }
             checkScope(isCurrent)
             require(imported.asset.status == AssetStatus.Ready && imported.asset.workspaceId == destination.workspace.id &&
                 imported.asset.ownerId == destination.userId && imported.asset.mediaType == asset.mediaType &&

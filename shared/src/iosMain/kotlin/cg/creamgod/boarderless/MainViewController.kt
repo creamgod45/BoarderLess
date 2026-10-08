@@ -38,11 +38,17 @@ fun MainViewController(): UIViewController {
                 )
             }
             val quickSchemeRepository = remember { cg.creamgod.boarderless.data.persistence.iosFileQuickSchemeStore() }
+            val workspaceStorageRuntime = remember(mediaPicker) {
+                cg.creamgod.boarderless.data.WorkspaceStorageRuntime(
+                    localRepository = { cg.creamgod.boarderless.data.persistence.iosFileWorkspaceRepository() },
+                    mediaRuntimeFor = mediaPicker::runtimeFor,
+                )
+            }
             App(
+                workspaceStorageRuntime = workspaceStorageRuntime,
                 quickSchemeRepository = quickSchemeRepository,
                 canvasExportRuntime = exportPicker.runtime,
                 schemeBundleRuntime = schemeBundleRuntime,
-                mediaImportRuntime = mediaPicker.runtime,
                 recentWorkspacesPublisher = HomeScreenQuickActions,
                 draftBackupRuntime = backupPicker.runtime,
                 draftImportRuntime = importPicker.runtime,

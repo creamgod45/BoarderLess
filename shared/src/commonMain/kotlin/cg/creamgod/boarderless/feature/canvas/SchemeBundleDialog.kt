@@ -13,6 +13,7 @@ import androidx.compose.ui.window.Dialog
 import cg.creamgod.boarderless.data.*
 import cg.creamgod.boarderless.data.persistence.QuickScheme
 import cg.creamgod.boarderless.data.persistence.QuickSchemeRepository
+import cg.creamgod.boarderless.data.persistence.AwaitedQuickSchemeRepository
 import cg.creamgod.boarderless.data.remote.BackendAssetTransferGateway
 import cg.creamgod.boarderless.designsystem.*
 import cg.creamgod.boarderless.domain.model.Workspace
@@ -21,6 +22,11 @@ import kotlinx.coroutines.*
 
 /** Save may have completed before an IO error. Re-read exact content before allocating a library ID. */
 internal fun saveMaterializedBundle(library: QuickSchemeRepository, prepared: QuickScheme): QuickScheme =
+    library.list().filter { it.name == prepared.name.trim() && it.payload == prepared.payload &&
+        it.schemaVersion == prepared.schemaVersion && it.sourceWorkspaceId == prepared.sourceWorkspaceId }.minByOrNull { it.id }
+        ?: library.save(prepared.payload, prepared.name, prepared.schemaVersion, prepared.sourceWorkspaceId)
+
+internal suspend fun saveMaterializedBundle(library: AwaitedQuickSchemeRepository, prepared: QuickScheme): QuickScheme =
     library.list().filter { it.name == prepared.name.trim() && it.payload == prepared.payload &&
         it.schemaVersion == prepared.schemaVersion && it.sourceWorkspaceId == prepared.sourceWorkspaceId }.minByOrNull { it.id }
         ?: library.save(prepared.payload, prepared.name, prepared.schemaVersion, prepared.sourceWorkspaceId)
@@ -34,7 +40,7 @@ internal fun schemeBundleScopeMatches(owner: WorkspaceSession, baseline: Workspa
 @Composable internal fun SchemeBundleDialog(
     runtime: SchemeBundleRuntime,
     repository: CanvasWorkspaceRepository,
-    library: QuickSchemeRepository,
+    library: AwaitedQuickSchemeRepository,
     sourceOwner: WorkspaceSession,
     sourceBaseline: Workspace,
     requestedExportScheme: QuickScheme?,
@@ -55,6 +61,7 @@ internal fun schemeBundleScopeMatches(owner: WorkspaceSession, baseline: Workspa
     var prepared by remember { mutableStateOf<QuickScheme?>(null) }
     var confirmed by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
+    var downloads by remember { mutableStateOf<List<SchemeBundleDestination>>(emptyList()) }
     var problem by remember { mutableStateOf<String?>(null) }
     var open by remember { mutableStateOf(true) }
     var job by remember { mutableStateOf<Job?>(null) }
@@ -120,6 +127,20 @@ internal fun schemeBundleScopeMatches(owner: WorkspaceSession, baseline: Workspa
                         }
                     }
                 })
+                if (exportScheme != null && runtime.usesBrowserDownload && runtime.acknowledgeIdleDownloads != null) ShellButton(Strings.bundle.confirmDownloads(), enabled = !busy, onClick = {
+                    busy = true
+                    job = scope.launch {
+                        try {
+                            val completed = downloads
+                            for (download in completed) download.acknowledgeDownload()
+                            runtime.acknowledgeIdleDownloads?.invoke()
+                            downloads = downloads.filterNot { it in completed }
+                            if (open) problem = Strings.bundle.downloadsCleared()
+                        } catch (cancelled: CancellationException) { throw cancelled }
+                        catch (_: Exception) { if (open) problem = Strings.bundle.failed() }
+                        finally { if (open) busy = false }
+                    }
+                })
                 selected?.let {
                     BasicText(it.name, style = TextStyle(color = colors.contentText, fontSize = 14.sp))
                     payload?.let { definition -> QuickSchemePreview(definition, Modifier.fillMaxWidth().height(240.dp)) }
@@ -140,7 +161,7 @@ internal fun schemeBundleScopeMatches(owner: WorkspaceSession, baseline: Workspa
                 ShellButton(if (confirmed) Strings.schemes.confirmed() else Strings.bundle.confirm(),
                     enabled = selected != null && current && sourceAvailable && !busy,
                     accent = confirmed, onClick = { confirmed = !confirmed })
-                ShellButton(if (exportScheme == null) Strings.bundle.importSave() else Strings.bundle.exportSave(),
+                ShellButton(if (exportScheme == null) Strings.bundle.importSave() else if (runtime.usesBrowserDownload) Strings.bundle.exportDownload() else Strings.bundle.exportSave(),
                     enabled = confirmed && selected != null && current && sourceAvailable && !busy &&
                         (exportScheme != null || (owner.canEditContent && runtime.receipts != null)), onClick = {
                         busy = true
@@ -157,8 +178,9 @@ internal fun schemeBundleScopeMatches(owner: WorkspaceSession, baseline: Workspa
                                             started = true
                                             QuickSchemeBundleCodec.export(exportScheme, authority, gateway as AssetDownloadGateway,
                                                 destination, ::valid, { library.list().singleOrNull { it.id == exportScheme.id } })
-                                            if (valid()) { problem = Strings.bundle.exported(); confirmed = false }
+                                            if (valid()) { problem = if (runtime.usesBrowserDownload) Strings.bundle.downloadRequested() else Strings.bundle.exported(); confirmed = false }
                                         } finally {
+                                            if (runtime.usesBrowserDownload && started) downloads = downloads + destination
                                             if (!started) withContext(NonCancellable) { destination.abort() }
                                         }
                                     }

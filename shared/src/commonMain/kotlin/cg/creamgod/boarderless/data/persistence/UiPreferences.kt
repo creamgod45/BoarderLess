@@ -1,12 +1,17 @@
 package cg.creamgod.boarderless.data.persistence
 
 import cg.creamgod.boarderless.designsystem.color.ColorModel
+import cg.creamgod.boarderless.data.WorkspaceStorageMode
 import cg.creamgod.boarderless.i18n.LanguagePreference
 import com.russhwolf.settings.Settings
 
 class UiPreferences(
     private val settings: Settings = Settings(),
 ) {
+    var workspaceStorageMode: WorkspaceStorageMode?
+        get() = WorkspaceStorageMode.fromToken(settings.getStringOrNull(WorkspaceStorageModeKey))
+        set(value) { if (value == null) settings.remove(WorkspaceStorageModeKey) else settings.putString(WorkspaceStorageModeKey, value.token) }
+
     var reduceTransparency: Boolean
         get() = settings.getBoolean(ReduceTransparencyKey, false)
         set(value) = settings.putBoolean(ReduceTransparencyKey, value)
@@ -68,6 +73,7 @@ class UiPreferences(
             )
 
     private companion object {
+        const val WorkspaceStorageModeKey = "ui.workspace.storageMode"
         const val ReduceTransparencyKey = "ui.accessibility.reduceTransparency"
         const val ReduceMotionKey = "ui.accessibility.reduceMotion"
         const val LanguageKey = "ui.language"

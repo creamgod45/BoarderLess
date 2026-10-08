@@ -115,7 +115,7 @@ internal class PersistentQuickSchemeStore(private val files: DurableLocalRecordS
         return true
     }
 
-    private companion object {
+    internal companion object {
         val Key = org.kotlincrypto.hash.sha2.SHA256().digest("BoarderLess.local-schemes.v1".encodeToByteArray()).joinToString("") {
             (it.toInt() and 255).toString(16).padStart(2, '0')
         }

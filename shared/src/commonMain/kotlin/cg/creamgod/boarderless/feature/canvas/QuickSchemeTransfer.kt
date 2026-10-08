@@ -92,7 +92,7 @@ internal suspend fun exportQuickScheme(
     runtime: DraftBackupRuntime,
     scheme: QuickScheme,
     isCurrent: () -> Boolean,
-    readFresh: () -> QuickScheme?,
+    readFresh: suspend () -> QuickScheme?,
 ): DraftBackupResult {
     val context = currentCoroutineContext()
 

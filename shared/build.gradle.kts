@@ -285,6 +285,10 @@ tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
 tasks.matching { it.name == "jsBrowserTest" || it.name == "wasmJsBrowserTest" }.configureEach {
     inputs.file(rootProject.layout.projectDirectory.file("webApp/src/webMain/resources/media-import.js"))
     inputs.file(rootProject.layout.projectDirectory.file("webApp/src/webMain/resources/image-export.js"))
+    inputs.file(rootProject.layout.projectDirectory.file("webApp/src/webMain/resources/durable-records.js"))
+    inputs.file(rootProject.layout.projectDirectory.file("webApp/src/webMain/resources/scheme-bundle.js"))
+    inputs.file(layout.projectDirectory.file("src/webTest/resources/scheme-bundle-fixture.js"))
+    inputs.file(layout.projectDirectory.file("src/webTest/resources/durable-records-fixture.js"))
     inputs.file(layout.projectDirectory.file("src/webTest/resources/image-export-fixture.js"))
     inputs.file(rootProject.layout.projectDirectory.file("webApp/src/webMain/resources/video-playback.js"))
     inputs.file(layout.projectDirectory.file("src/webTest/resources/media-import-fixture.js"))

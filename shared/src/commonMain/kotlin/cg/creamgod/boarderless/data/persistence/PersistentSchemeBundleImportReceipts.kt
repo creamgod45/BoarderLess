@@ -19,11 +19,14 @@ internal interface DurableLocalRecordStore {
 /** Scope-bound durable IDs written before completion. A pending identity is reconciled by GET;
  * it never silently becomes permission to allocate another upload on restart. */
 internal class PersistentSchemeBundleImportReceipts(
-    private val files: DurableLocalRecordStore,
+    private val files: AwaitedDurableLocalRecordStore,
     private val owner: WorkspaceSession,
     private val bundleDigest: String,
     assets: List<SchemeBundleAsset>,
 ) : SchemeBundleReceipts {
+    constructor(files: DurableLocalRecordStore, owner: WorkspaceSession, bundleDigest: String, assets: List<SchemeBundleAsset>) :
+        this(files.awaited(), owner, bundleDigest, assets)
+
     private val json = Json { encodeDefaults = true }
     private val expected = assets.toList()
     @Serializable private data class Entry(val source: SchemeBundleAsset, val destinationId: String, val ready: Boolean = false)
@@ -37,7 +40,7 @@ internal class PersistentSchemeBundleImportReceipts(
         require(bundleDigest.matches(Regex("[0-9a-f]{64}")))
         require(expected.size <= 64 && expected.map { it.sourceId }.distinct().size == expected.size)
     }
-    private fun read(): Pair<Long?, Document> {
+    private suspend fun read(): Pair<Long?, Document> {
         val record = files.read(key) ?: return null to empty
         val raw = requireNotNull(record.payload).decodeToString(throwOnInvalidSequence = true)
         val document = json.decodeFromJsonElement(Document.serializer(), parseStrictJsonObject(raw))
@@ -49,7 +52,7 @@ internal class PersistentSchemeBundleImportReceipts(
         }
         return record.generation to document
     }
-    private fun update(asset: SchemeBundleAsset, destinationId: String, ready: Boolean) {
+    private suspend fun update(asset: SchemeBundleAsset, destinationId: String, ready: Boolean) {
         require(asset in expected && destinationId.matches(Regex("[A-Za-z0-9_-]{1,128}")))
         val (generation, document) = read()
         val previous = document.entries.singleOrNull { it.source.sourceId == asset.sourceId }
@@ -60,8 +63,8 @@ internal class PersistentSchemeBundleImportReceipts(
         if (next == document) files.confirmDurable(key, requireNotNull(generation))
         else files.compareAndSet(key, generation, json.encodeToString(next).encodeToByteArray())
     }
-    override fun beforeComplete(asset: SchemeBundleAsset, destinationId: String) = update(asset, destinationId, false)
-    override fun ready(asset: SchemeBundleAsset, imported: ImportedMedia) {
+    override suspend fun beforeComplete(asset: SchemeBundleAsset, destinationId: String) = update(asset, destinationId, false)
+    override suspend fun ready(asset: SchemeBundleAsset, imported: ImportedMedia) {
         require(imported.asset.status == AssetStatus.Ready && imported.asset.workspaceId == owner.workspace.id && imported.asset.ownerId == owner.userId)
         require(imported.asset.mediaType == asset.mediaType && imported.asset.byteSize == asset.byteSize && imported.asset.checksum == asset.checksum &&
             imported.asset.width == asset.width && imported.asset.height == asset.height && imported.asset.durationMs == asset.durationMs &&

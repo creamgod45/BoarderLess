@@ -5,6 +5,8 @@ import cg.creamgod.boarderless.data.persistence.DesktopFileWorkspaceRepository
 import cg.creamgod.boarderless.data.remote.*
 import cg.creamgod.boarderless.domain.history.*
 import cg.creamgod.boarderless.domain.model.*
+import cg.creamgod.boarderless.domain.ai.*
+import cg.creamgod.boarderless.feature.canvas.*
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.*
 import java.nio.file.Files
@@ -23,6 +25,39 @@ class DesktopFileWorkspaceRepositoryTest {
 
     private val node = TextNode(CanvasObjectId("node"), transform = CanvasTransform(Vec2(34f, 80f), CanvasSize(260f, 132f)), text = "離線🙂")
     private val create = CreateObjectsOperation("create", listOf(node))
+
+    @Test fun reviewedAiSelfLoopAndItsQuickSchemeSurviveRepositoryReopen() = temporary { root ->
+        runTest {
+            val repo = DesktopFileWorkspaceRepository(root)
+            val opened = repo.openOrCreateWorkspace()
+            repo.retainDraft(opened, opened.workspace, create)
+            val baseline = repo.refresh(opened)
+            val draft = AiDiagramDraft("request", "session", baseline.workspace, setOf(node.id), aiCanvasToolCapabilities(repo.supportsRelationGeometry))
+            val result = draft.execute(AiDiagramToolCall("request", "session", "loop", "create_relations",
+                """{"relations":[{"id":"R","source":"N1","target":"N1","direction":"Forward","label":"重試🙂"}]}"""))
+            assertEquals(AiDiagramToolStatus.Proposed, result.status)
+            val reviewed = assertIs<AiDiagramApplyReview.Ready>(reviewAiDiagramApply(assertNotNull(draft.proposal()), baseline.workspace, baseline.workspace, baseline, baseline, baseline))
+            repo.retainDraft(baseline, baseline.workspace, reviewed.operation)
+            val saved = repo.refresh(baseline)
+            val edge = saved.workspace.relations.values.single()
+            assertIs<RelationRoute.Loop>(assertNotNull(edge.geometry).route)
+            val copied = assertNotNull(workspaceClipboardPayload(saved.workspace, setOf(node.id)))
+            val scheme = assertNotNull(repo.quickSchemeRepository).save(
+                ClipboardJson.encodeToString(ClipboardPayload.serializer(), copied), "AI 自循環", copied.version, saved.workspace.id.value,
+            )
+            repo.close()
+            val reopened = DesktopFileWorkspaceRepository(root)
+            val restored = reopened.openOrCreateWorkspace()
+            assertEquals(saved.workspace, restored.workspace)
+            assertEquals("重試🙂", restored.workspace.relations.values.single().label)
+            assertEquals(SubmitOutcome.Accepted(saved.workspaceVersion, 0), reopened.submit(baseline, reviewed.operation))
+            val restoredScheme = assertNotNull(reopened.quickSchemeRepository).list().single()
+            assertEquals(scheme, restoredScheme)
+            assertEquals(copied, decodeQuickSchemePayload(restoredScheme))
+            assertEquals(1, clipboardGeometryRoutes(assertNotNull(decodeQuickSchemePayload(restoredScheme))).size)
+            reopened.close()
+        }
+    }
 
     @Test fun saveIsDurableBeforeSubmitAndRestartRestoresLatestQueuedEditsAndSameIdentity() =
         temporary { root ->

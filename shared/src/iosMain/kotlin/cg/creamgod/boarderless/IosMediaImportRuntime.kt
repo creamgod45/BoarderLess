@@ -2,6 +2,8 @@
 
 package cg.creamgod.boarderless
 
+import cg.creamgod.boarderless.data.CanvasWorkspaceRepository
+import cg.creamgod.boarderless.data.withWorkspaceAssetDownloadGateway
 import cg.creamgod.boarderless.data.IosAssetPreviewLoader
 import cg.creamgod.boarderless.data.IosFileAssetTransferSource
 import cg.creamgod.boarderless.data.IosGifAnimation
@@ -13,7 +15,6 @@ import cg.creamgod.boarderless.data.loadIosGif
 import cg.creamgod.boarderless.data.loadIosPhotoSelection
 import cg.creamgod.boarderless.data.loadIosVideo
 import cg.creamgod.boarderless.data.loadIosExportImage
-import cg.creamgod.boarderless.data.remote.BackendAssetTransferGateway
 import cg.creamgod.boarderless.data.remote.loadGiphyStill
 import cg.creamgod.boarderless.i18n.Strings
 import kotlinx.coroutines.CancellableContinuation
@@ -54,16 +55,16 @@ internal class IosMediaPicker(
 
     private val previewPermits = Semaphore(2)
     val activityTracker = MediaActivityTracker()
-    private val previewCache = bitmapPreviewCache()
-    val runtime =
-        MediaImportRuntime(
+    fun runtimeFor(repository: CanvasWorkspaceRepository): MediaImportRuntime {
+        val previewCache = bitmapPreviewCache()
+        return MediaImportRuntime(
             clearPreviewCache = previewCache::clear,
             playbackActivity = activityTracker.activity,
             loadExportImage = { session, assetId, width, height ->
                 previewPermits.withPermit {
-                    val gateway = BackendAssetTransferGateway()
-                    try { loadIosExportImage(gateway, session, assetId, width, height) }
-                    finally { gateway.close() }
+                    withWorkspaceAssetDownloadGateway(repository) { gateway ->
+                        loadIosExportImage(gateway, session, assetId, width, height)
+                    }
                 }
             },
             loadGiphyAnimation = { url ->
@@ -84,36 +85,28 @@ internal class IosMediaPicker(
             },
             loadPreview = { session, assetId ->
                 previewPermits.withPermit {
-                    val gateway = BackendAssetTransferGateway()
-                    try {
+                    withWorkspaceAssetDownloadGateway(repository) { gateway ->
                         IosAssetPreviewLoader(gateway, previewCache).load(session, assetId)
-                    } finally {
-                        gateway.close()
                     }
                 }
             },
             loadGif = { session, assetId ->
                 previewPermits.withPermit {
-                    val gateway = BackendAssetTransferGateway()
-                    try {
+                    withWorkspaceAssetDownloadGateway(repository) { gateway ->
                         loadIosGif(gateway, session, assetId)
-                    } finally {
-                        gateway.close()
                     }
                 }
             },
             loadVideo = { session, assetId ->
                 previewPermits.withPermit {
-                    val gateway = BackendAssetTransferGateway()
-                    try {
+                    withWorkspaceAssetDownloadGateway(repository) { gateway ->
                         loadIosVideo(gateway, session, assetId)
-                    } finally {
-                        gateway.close()
                     }
                 }
             },
             videoSurface = { playback, modifier -> IosVideoSurface(playback, modifier) },
         )
+    }
 
     private suspend fun chooseSource(): Boolean? =
         suspendCancellableCoroutine { pending ->

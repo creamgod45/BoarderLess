@@ -11,6 +11,41 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.*
 
 class GiphyClientTest {
+    @Test fun searchLocalePreservesChineseScriptAndUsesProviderLanguageCodes() {
+        assertEquals("zh-TW", giphySearchLanguage("zh-Hant-HK"))
+        assertEquals("zh-TW", giphySearchLanguage("ZH_tw"))
+        assertEquals("zh-CN", giphySearchLanguage("zh-Hans-CN"))
+        assertEquals("zh-CN", giphySearchLanguage("zh-Hans-TW"))
+        assertEquals("en", giphySearchLanguage("en-US"))
+        assertEquals("pt", giphySearchLanguage("pt-BR"))
+        assertEquals("en", giphySearchLanguage("unsupported"))
+    }
+
+    @Test fun localizedSearchAndNextPageSendSameLanguageAndExactUserQuery() = runTest {
+        val calls = mutableListOf<Pair<String, Int>>()
+        val query = "貓 & dog + @artist"
+        val client = GiphyClient(
+            "fixture",
+            HttpClient(MockEngine { request ->
+                val offset = requireNotNull(request.url.parameters["offset"]).toInt()
+                calls += requireNotNull(request.url.parameters["lang"]) to offset
+                assertEquals(query, request.url.parameters["q"])
+                respond("""{"data":[{"id":"a"}],"pagination":{"offset":$offset,"count":1,"total_count":2},"meta":{"status":200}}""")
+            }),
+            GiphyRequestBudget({ 0 }),
+        )
+        try {
+            val language = giphySearchLanguage("en-GB")
+            val first = client.browse(query, language = language)
+            client.browse(query, requireNotNull(first.nextOffset), language)
+            // Changing APP language starts a new query at zero, rather than appending a foreign page.
+            client.browse(query, language = giphySearchLanguage("zh-TW"))
+            assertEquals(listOf("en" to 0, "en" to 1, "zh-TW" to 0), calls)
+        } finally {
+            client.close()
+        }
+    }
+
     @Test fun nextPageUsesProviderOffsetAndTargetsFirstNewResultWithoutDroppingOverlap() =
         runTest {
             val offsets = mutableListOf<Int>()

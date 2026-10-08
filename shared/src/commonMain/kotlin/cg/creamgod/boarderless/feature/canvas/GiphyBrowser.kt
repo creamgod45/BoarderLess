@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.sp
 import cg.creamgod.boarderless.data.MediaImportRuntime
 import cg.creamgod.boarderless.data.remote.*
 import cg.creamgod.boarderless.designsystem.*
+import cg.creamgod.boarderless.i18n.Localization
 import cg.creamgod.boarderless.i18n.Strings
 import io.ktor.http.encodeURLPathPart
 import kotlinx.coroutines.*
@@ -26,6 +27,9 @@ import kotlinx.coroutines.*
     onTextEditingChange: (Boolean) -> Unit = {},
 ) {
     val colors = BoarderLessTheme.colors
+    val searchLanguage = giphySearchLanguage(Localization.language.tag)
+    val currentSearchLanguage by rememberUpdatedState(searchLanguage)
+    var resultsLanguage by remember { mutableStateOf(searchLanguage) }
     var keyFocused by remember { mutableStateOf(false) }
     var queryFocused by remember { mutableStateOf(false) }
     val editingCallback by rememberUpdatedState(onTextEditingChange)
@@ -54,10 +58,30 @@ import kotlinx.coroutines.*
     val uri = LocalUriHandler.current
     DisposableEffect(client) { onDispose { client.close() } }
 
+    // A page offset belongs to its search language. Changing locale clears that session without
+    // spending API budget; the user starts the next query explicitly. Keep the entered key/query.
+    LaunchedEffect(searchLanguage) {
+        generation++
+        job?.cancel()
+        previewJob?.cancel()
+        previewGeneration++
+        busy = false
+        previewRefreshing = false
+        previewMissing = false
+        items = emptyList()
+        preview = null
+        nextOffset = null
+        hasResponse = false
+        issuedQuery = null
+        resultsLanguage = searchLanguage
+        error = null
+    }
+
     fun request(
         term: String?,
         offset: Int = 0,
     ) {
+        if (offset > 0 && resultsLanguage != searchLanguage) return
         job?.cancel()
         if (offset == 0) {
             previewJob?.cancel()
@@ -73,14 +97,16 @@ import kotlinx.coroutines.*
             hasResponse = false
         }
         issuedQuery = term
+        val language = searchLanguage // Freeze the language for the entire pending request.
+        resultsLanguage = language
         busy = true
         error = null
         job =
             scope.launch {
                 try {
-                    val page = client.browse(term, offset, language = "zh-TW")
+                    val page = client.browse(term, offset, language = language)
                     currentCoroutineContext().ensureActive()
-                    if (generation == epoch) {
+                    if (generation == epoch && currentSearchLanguage == language) {
                         val update = giphyResultsAfterPage(items, page)
                         items = update.items
                         update.firstNewIndex?.let { resultsScrollRequest = GiphyGridScrollRequest(epoch, it) }
@@ -188,7 +214,7 @@ import kotlinx.coroutines.*
         previewMissing = false
         preview = item
     }
-    if (!busy && nextOffset != null && error != GiphyIssue.RateLimited) {
+    if (!busy && nextOffset != null && error != GiphyIssue.RateLimited && resultsLanguage == searchLanguage) {
         ShellButton(label = Strings.giphy.more(), onClick = { request(issuedQuery, nextOffset!!) })
     }
     preview?.let { item ->

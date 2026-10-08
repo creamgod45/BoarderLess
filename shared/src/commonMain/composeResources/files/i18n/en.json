@@ -54,7 +54,11 @@
     "working": "Verifying and saving originals…",
     "confirm": "I reviewed this bundle and approve this transfer",
     "importSave": "Save originals and scheme",
+    "confirmDownloads": "I confirmed this site’s downloads finished; clear idle temporary files",
+    "downloadsCleared": "Temporary files for the confirmed downloads have been cleared.",
+    "exportDownload": "Download complete scheme bundle",
     "exportSave": "Choose destination and export",
+    "downloadRequested": "Download requested. Check your browser downloads to confirm the file was saved.",
     "exported": "Bundle saved.",
     "failed": "Transfer was not confirmed complete. Retry uses saved asset receipts; close and reopen if the workspace changed."
 },
@@ -880,6 +884,7 @@
     "workspaceAccessWasRevokedOr": "Workspace access was revoked or is no longer available"
   },
   "schemes": {
+    "loading": "Reading or saving the scheme library…",
     "importFile": "Import scheme file",
     "exportFile": "Export scheme file",
     "fileSaved": "Scheme file saved",
@@ -1208,6 +1213,7 @@
     "documentOpened": "Document opened"
   },
   "aiProbe": {
+    "consentDeclined": "Not authorized. This request was not sent; the task has stopped.",
     "debugHintReasoningTools": "Provider confirmed: this model rejects reasoning with function tools in Chat Completions. Use the updated GPT-5.6 tool request (reasoning_effort=none). Changing only the endpoint to Responses will not work; its wire format differs.",
     "debugHintConfig": "AI not dispatched: check complete endpoint, dialect, model, credential format and HTTP policy.",
     "debugHintWorkspace": "AI not dispatched: workspace scope, version or local snapshot differs from the backend. Wait for sync, then close and reopen this window.",
@@ -1230,6 +1236,8 @@
     "debugReceiving": "Receiving AI text",
     "debugCancelled": "Request cancelled; no automatic retry",
     "debugFailed": "Request failed; inspect safe error code / HTTP status below",
+    "tokenLimitField": "Chat output limit parameter",
+    "tokenLimitFieldHint": "Use max_completion_tokens for current OpenAI models. Choose max_tokens only when your Router/model requires the older format. Blank token limits omit both fields; requests are not retried automatically.",
     "maxTokens": "Maximum output tokens (optional; blank omits parameter)",
     "temperature": "Temperature (optional; blank omits parameter)",
     "invalidParameters": "Enter a positive integer for tokens and a finite number for temperature, or leave blank.",
@@ -1281,11 +1289,13 @@
   },
   "aiTools": {
     "chatReasoningNone": "GPT-5.6 Chat tool compatibility: reasoning_effort = none. This setting appears in every request for approval.",
-      "title": "AI diagram draft",
+      "title": "Edit diagram with AI (draft)",
       "warning": "Tools change an isolated draft. Review each paid request separately, then review the whole proposal before applying. Router tool support is unverified until a task succeeds.",
       "task": "Describe the diagram task",
       "scope": "Approved objects: {count}. Tools cannot read outside this scope.",
-      "start": "Start tool task",
+      "dataShared": "Describe adding a branch, arranging nodes or inserting a node on a relation. Tools read approved text, positions, sizes and relations; image pixels and asset URLs are not sent. N/E aliases below are local to this task. Follow the arrows when describing relations.",
+      "insertRelationNode": "Insert a node on a relation and split it in two",
+      "start": "Generate edit draft",
       "approve": "Approve this request",
       "deny": "Reject this request",
       "round": "Review request {round} of at most 8",
@@ -1330,6 +1340,14 @@
       "height": "Node height",
       "invalid": "Use finite coordinates within ±1,000,000 and dimensions from 1 to 100,000; check text limits.",
       "contextPreview": "Preview includes the endpoints, new node and nearby objects. Adjust position and dimensions as needed."
+  },
+  "workspaceStorage": {
+      "title": "Choose canvas storage",
+      "explanation": "Local canvases and imported originals work offline and can be exchanged using scheme bundles. Server mode connects to the configured service. The modes save separately; data is not moved automatically. Change mode from Spaces.",
+      "local": "Local canvas (offline)",
+      "server": "Server canvas",
+      "change": "Change storage mode",
+      "preferenceFailed": "Could not save the storage choice. Try again."
   },
   "localStorage": {
     "mode": "Local file",

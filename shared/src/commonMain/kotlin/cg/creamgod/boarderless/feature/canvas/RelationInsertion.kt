@@ -69,10 +69,6 @@ internal class RelationInsertionDraft(
         require(firstLabel == null || firstLabel.encodeToByteArray().size <= 64 * 1024)
         require(firstIntent == null || firstIntent.encodeToByteArray().size <= 4096)
         require(abs(position.x) <= 1_000_000 && abs(position.y) <= 1_000_000 && size.width in 1f..100_000f && size.height in 1f..100_000f)
-        val backward = original.direction == RelationDirection.Backward
-        val start = if (backward) original.targetObjectId else original.sourceObjectId
-        val end = if (backward) original.sourceObjectId else original.targetObjectId
-        val direction = if (backward) RelationDirection.Forward else original.direction
         val node =
             TextNode(
                 nodeId,
@@ -81,38 +77,11 @@ internal class RelationInsertionDraft(
                 parentId = source.parentId.takeIf { it == target.parentId },
                 zIndex = (baseline.objects.values.maxOfOrNull { it.zIndex } ?: 0) + 1,
             )
-        val first =
-            Relation(
-                firstId,
-                sourceObjectId = start,
-                targetObjectId = node.id,
-                direction = direction,
-                intent = firstIntent,
-                label = firstLabel,
-                colorToken = original.colorToken,
-            )
-        val second =
-            Relation(
-                secondId,
-                sourceObjectId = node.id,
-                targetObjectId = end,
-                direction = direction,
-                intent = null,
-                label = null,
-                colorToken = original.colorToken,
-            )
-        val operation =
-            TransactionOperation(
-                transactionId,
-                listOf(
-                    CreateObjectsOperation(createId, listOf(node)),
-                    DeleteRelationsOperation(deleteId, listOf(original)),
-                    CreateRelationsOperation(relationsId, listOf(first, second)),
-                ),
-            )
+        val inserted = relationNodeInsertion(original, node, firstId, secondId, transactionId, createId, deleteId, relationsId, firstLabel, firstIntent)
+        val operation = inserted.operation
         val result = operation.applyTo(baseline)
         require(result is OperationResult.Applied)
-        return RelationInsertionPlan(operation, node, first, second, result.workspace)
+        return RelationInsertionPlan(operation, node, inserted.first, inserted.second, result.workspace)
     }
 
     fun isCurrent(workspace: Workspace) = workspace == baseline

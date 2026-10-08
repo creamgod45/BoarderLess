@@ -1,5 +1,169 @@
 # 當前 loop 剩餘目標
 
+## 2026-10-09：行動端本機／伺服器 APP 模式入口
+
+- 新WorkspaceStorageRuntime與WorkspaceStorageMode，Android MainActivity／iOS MainViewController實際注入native local file factory及media runtime factory，伺服器仍使用既有BackendWorkspaceRepository。未選過模式時先顯示中英文選擇；明確選擇才建立repository並保存偏好，未知token不擅自選Server，偏好寫失敗保留chooser提示重試。不搬移本機或server資料。
+- App以repository為Compose key，切換模式重新建立畫布／任務／播放狀態，避免舊remember資料混入新scope；每個media runtime有自己的preview cache。空間面板新增切換入口，編輯／拖曳／待保存／復原／匯入中阻擋切換。Spaces入口在server連不上／無session時仍可開，無未結變更时可以返回chooser；有待復原journal時需先處理該狀態。
+- withWorkspaceAssetDownloadGateway集中選擇：已有platform gateway必須支援download並直接借用，不由单次preview/export/GIF/video回合close；local-only缺gateway或僅upload能力明確拒絕，不走HTTP。Server回合使用既有BackendAssetTransferGateway並finally close。Android四種load closure及IosMediaPicker.runtimeFor均改用此入口，GIPHY仍是線上的直接顯示預覽。
+- 新WorkspaceMediaRoutingTest驗借用同一gateway、decoder失敗也不close，以及缺少／僅upload的local gateway拒絕且不呼叫download callback；與common local document、WorkspaceChangePolicy回歸共JVM9/9 pass、0failed/skipped。JS／Wasm／iOS simulator／Android APK及Desktop入口編譯 BUILD SUCCESSFUL（1m49s）。最終之後只整理縮排與移除未使用import，無行為變更。
+- 尚未操作新的mobile mode chooser GUI、正式APP cold restart、GIF/video播放或跨模式原檔交換，不能用此前gateway原生測試取代APP驗收。快捷入口的workspace ID與模式對應仍需檢查，沒有宣稱完整六主線達成。
+- build-and-clean.sh清除約253.2MiB、dry-run0B，不保留APK／APP或build；未修改／啟動backend、未提交／push，goal繼續active。
+
+## 2026-10-09：iOS 本機原檔 gateway 與預覽重開
+
+- 新增 IosFileAssetGateway，接 IosFileWorkspaceRepository.localAssetGateway、listAssets/getAsset，沿用已完成共用catalog。原檔以1MiB上限分段POSIX write/read，核對大小／SHA-256，force original及directory後才發布Ready；Pending已發布原檔可重開同IDrecover。metadata／Workspace只保存ID與屬性，不保存picker path／temporary download URL。
+- canonical root、私有0700目錄／0600原檔、owner/type驗證、NOFOLLOW、process Mutex及cross-process flock保護原檔變更；讀取descriptor再fstat核對size／permissions，處理EINTR與部分write。取消／失敗清除自己的part；Ready確認失敗不刪既有已發布原檔，重試以同catalog identity確認。
+- 新IosLocalAssetTest真實IOS file source snapshot→AssetImportCoordinator→本機gateway→MediaNode保存→刪原選檔來源→新repository重開→原生download sink全bytes一致及真正IosAssetPreviewLoader解碼1×1 PNG。另驗upload後Ready前重開Pending並同ID恢復、截斷source清理Pending/part、原檔改bytes後拒download、path traversal／錯client／跨workspace拒絕。
+- 最終iOS原生聚焦5/5 pass、0failed/skipped（新素材2＋本機畫布1＋共用unknown publication／UTF-8兩項），iOS arm64真機目標共用編譯通過，BUILD SUCCESSFUL（1m31s）。這是booted iOS27 simulator的原生檔案與預覽，不是實體iPhone／原生pickerGUI／GIF/video／跨APP process kill或OS電源中斷驗收。
+- 本輪未改Android、Desktop原檔格式或backend；兩行動端已有原檔gateway，但MainActivity/MainViewController仍待明確本機／後端模式入口及preview/GIF/video runtime選擇，不宣稱已能在完整APP使用本機模式。跨端完整bundle及其餘六主線仍未完成。
+- 此次boot的iPhone18 Pro simulator已恢復Shutdown，沒有其他Booted simulator；build-and-clean.sh清除約159.4MiB，dry-run0B，未保留APP／build或test XML、未提交／push，goal繼續active。
+
+## 2026-10-09：Android 本機原檔與可恢復素材 catalog
+
+- 新增共用 PersistentLocalAssetCatalog，以單一4MiB原子record保存最多4096份原檔metadata；包含workspace/owner/type/size/checksum/dimensions/status/createdAt。catalog嚴格UTF-8／JSON／ID／status驗證，Pending→Ready可重試確認同一generation；列表不依掃描原檔檔名或picker路徑。iOSgateway尚未接入，Desktop既有gateway未改格式。
+- 新AndroidFileAssetGateway已接AndroidFileWorkspaceRepository.localAssetGateway、listAssets/getAsset，提供prepare／bounded1MiB分段upload／size與SHA-256核對／force original+directory→Ready metadata／同IDrecover、list、authorize及stream download。API24相容java.io＋android.system.Os，原檔0600／目錄0700、canonical path／owner／NOFOLLOW／process Mutex與cross-process writer lock，取消清理自己part，保存結果不明保留可重開original，不silent reupload或allocate replacement ID。
+- AssetDownloadCoordinator與真正AndroidFileAssetDownloadSink驗32×24 PNG，刪除原picker-source fixture後新repository仍有MediaNode、完整asset與原檔；download byte-for-byte相同、BitmapFactory真解碼。另在upload完成、Ready前重開，同IDrecover後list保持一份；截斷source清理Pending／part，損壞原檔不publish cache，錯client／跨workspace／path traversal被拒。
+- AndroidLocalAssetDeviceTest在read-only獨立emulator-5560実際執行兩項，instrumentation兩個status0、OK (2 tests)，0.241s；原始輸出保留/tmp/boarderless-android-local-asset-result.txt。本輪只用fixture PNG，未涵蓋GIF／video／大檔或GUI原生chooser。
+- 最終JVM focused6/6 pass（共用文件與Desktop原檔回歸），JS／Wasm／iOS共用程式碼及AndroidDeviceTest build+native instrumentation BUILD SUCCESSFUL（2m24s）。首次Android編譯用了不存在的Os.unlink，改Os.remove後重新完整驗證上述最終結果，未用失敗版本作交付證據。
+- MainActivity／MainViewController仍未切換本機模式；Android runtime preview/GIF/video尚需選對local download gateway，iOS原檔gateway與入口尚未做，跨装置素材包全流程及六主線仍未完成。未修改或啟動backend。
+- 自有Android test package已uninstall、5560 emulator session已確認exit0；未對5554安裝或停止。build-and-clean.sh自動清除約271.8MiB，dry-run0B；未保留APK／APP或build，未提交／push，goal繼續active。
+
+## 2026-10-09：Android／iOS 原生本機畫布 store adapter
+
+- 新增 AndroidFileWorkspaceRepository／androidFileWorkspaceRepository 與 IosFileWorkspaceRepository／iosFileWorkspaceRepository，委派既有共用 PersistentLocalWorkspaceRepository。使用 app-private filesDir／Library local-documents、各平台同步鎖、既有原子store 4MiB上限與force/CAS；沒有記憶體fallback或backend請求。Android時間格式使用所有支援API可用的UTC SimpleDateFormat，不引入minSdk24無法直接用的java.time。
+- 尚未注入 MainActivity／MainViewController，不把無local asset gateway的repository直接切換為APP預設；行動端既有backend模式保持。接續需完成原檔／preview／GIF／video gateway與明確local/server入口，不能宣稱整個離線APP已交付。
+- 新NativeLocalDocumentAcceptance透過實際平台檔案store驗UTF-8文字、明確Loop geometry、背景修改、收據舊操作submit、同ID改內容拒絕、Undo/Redo再次重開、第二份文件與改名／activeID切換。AndroidFileWorkspaceDeviceTest在指定emulator-5560執行，runner必須收到OK (1 test)才exit0；localDocumentAndroidDeviceQa成功，不使用emulator-5554。iOS新IosFileWorkspaceRepositoryTest與兩項共用failure回歸在booted simulator執行3/3 pass、0failed/skipped；JVM既有Desktop／common回歸11/11 pass。
+- 最終 :shared:iosSimulatorArm64Test／Android device APK及原生instrumentation／JVM BUILD SUCCESSFUL（4m28s）。臨時providers.exec捕獲Android runner stdout未回印Actions風格console，成功依runner內的精確OK斷言及Gradle assertNormalExitValue證明；沒有保留該APK或原生test XML。
+- Android使用既有AVD的read-only獨立5560 instance，未修改5554；自有test package已uninstall並停止5560。此次啟動的iPhone18 Pro simulator（原為Shutdown）已恢復Shutdown。根目錄只刪自有UUID test leaf，未刪使用者文件或整個simulator／AVD。
+- build-and-clean.sh自動清除約363.2MiB，dry-run0B。這是原生repository重開，不是APP process kill／GUI保存／OS電源中斷或跨裝置同步；未修改或啟動backend，六主線goal繼續active。
+
+## 2026-10-09：本機畫布保存移至共用引擎
+
+- 確認 Android MainActivity／iOS MainViewController 目前僅注入本機 quick-scheme／bundle 保存，未注入本機 CanvasWorkspaceRepository；畫布仍為後端模式，不能把方案保存宣稱為離線畫布交付。
+- 將 DesktopFileWorkspaceRepository 的多文件／active ID／原子 generation CAS／操作摘要收據／UTF-8及sequence驗證／同ID重試確認邏輯移至 commonMain PersistentLocalWorkspaceRepository。平台提供 DurableLocalRecordStore、LocalDocumentLock 及時間，SHA-256改用既有共用 kotlincrypto；Desktop APP 的 repository 已真正改委派此引擎，並保留原 file格式／hash key／素材與方案gateway。沒有新增 migration 或複製測試server資料。
+- 共用引擎不假造素材能力：檔案／原檔存取仍需平台gateway，Desktop保留原 list/recover；行動端尚未接入此引擎，仍需完成各端store adapter、local assets及APP模式入口。尚未切換行動端而使現有backend媒體讀取失效，也沒有宣稱native離線或跨裝置完成。
+- 新共用回歸注入CAS已發佈後失敗，重開可恢復UTF-8畫布；重試同收據只confirm、不增加generation／改寫bytes，改內容重用ID及stale workspace被拒。非法UTF-8不reset，恢復原完整record仍可開啟。既有Desktop真正atomic-file／素材／背景UndoRedo／AI loop／多文件等回歸一起執行。
+- 最終聚焦JVM15/15 pass、0 failed/skipped；JS／Wasm／Android／iOS simulator共用編譯與Desktop入口編譯 BUILD SUCCESSFUL（1m33s）。首輪共用層引用Desktop具體asset list/recover編譯失敗已修正為平台層提供，最終結果為修正後版本。未驗新的手機GUI／native檔案重開或OS crash。
+- build-and-clean.sh清除約127.7MiB，本機未保留build／APP；未修改或啟動backend、未提交／push，完整六主線goal繼續active。
+
+## 2026-10-09：Desktop 真實 AI 設定與拒絕授權驗收
+
+- 使用隔離 user.home、QA-only MemoryPreferencesFactory 與正式 native file repositories 的自有 Desktop APP，實際檢視新版名稱／用途說明、15 個 N aliases 與12條 E aliases，捲動至設定與任務欄位；取消能回畫布。未讀正式使用者的 key／preferences 或連線 backend。
+- 真正 GUI 分別進入 OpenAI Chat（max_completion_tokens=2048）與 Claude Messages（max_tokens=2048/input_schema）的第一輪審核，勾選前同意送出按鈕 disabled，拒絕後回設定；最終新版另驗 Chat max_tokens picker 確實改變待審核 body。使用 example.invalid endpoint、fixture-model、無 key，未批准任何 API 請求。
+- GUI 發現 ConsentDenied 誤導為請求／設定失敗，改用共用 diagnostic label/hint 及工具 task message 明示「未授權，本次請求未送出；任務已停止。」最終 APP 已親眼確認；安全診斷仍保留型別化 ConsentDenied，不改授權／transport 行為。相同提示目前在狀態／hint／message 三處重複，後續可簡化顯示。
+- 自有 log6行／3次 ConsentDenied、零 Connecting/HttpResponse；最後一輪前後2份 native records SHA-256完全一致，已確認自有QA PID停止。詳見 AI_DESKTOP_CONSENT_ACCEPTANCE.md。不是實際 provider 成功、第二輪工具審核或最終套用／多人驗收。
+- 最終JS／Wasm／Android／iOS simulator共用編譯、Desktop distributable與GUI QA task BUILD SUCCESSFUL（3m04s，含人工操作等待）；初輪臨時 init 使用 Gradle9已移除的 project.exec 失敗已改用 providers.exec。中間首次退出後 AX重新選取啟動新QA程序，cleanup正確拒絕；停止已識別自有程序再清理完成，最終正常退出後直接確認PID，不再讀已關閉APP的AX。
+- 最終自動清理約553.4 MiB、dry-run0 B，未保留APP／build。未提交／push、未修改或啟動backend；六主線完整 goal 保持active。
+
+## 2026-10-09：AI 編輯草稿用途與任務代號
+
+- 使用者先前無法從功能名稱判斷用途，標題改為「AI 協助編輯圖形（草稿）」／Edit diagram with AI (draft)，開始按鈕改為「產生編輯草稿」。補中英文說明：可新增分支、排列或插入節點，工具讀取核准文字／位置／尺寸／關係，不傳圖片像素或素材 URL 欄位。沒有新增 vision 或模型任意操作 APP 的權限。
+- 開始前的核准物件列表顯示 N 代號，另列 E 代號、source／target 與實際 Forward／Backward／Both／None 箭頭及 label。工具引擎和畫面共用 alias factory，按 object/relation ID 排序；平行關係各有 E 代號，範圍外關係不列。這些代號只在該次 task 有效，仍需逐輪審閱實際 body。
+- 原先只在引擎拒絕的超過256條核准關係，現在也在開始前禁用；草稿審核的 insert_node_on_relation 改顯示中英文操作名稱，避免使用者只看到 raw tool name。
+- 新回歸直接比較核准範圍的 alias 與 read_approved_graph 真正工具回傳，包含輸入順序不同、平行反向線及 outside relation；JVM 聚焦33/33 pass、0 failed/skipped。JS／Wasm／Android／iOS simulator 共用程式碼編譯 BUILD SUCCESSFUL（1m34s）；尚未實際檢視 GUI 排版或呼叫真實 Router。
+- build-and-clean.sh 已清除約124.6 MiB；成品沒有保留。未修改或啟動 backend，完整六主線 goal 保持 active。
+
+## 2026-10-09：AI 草稿連線插入節點
+
+- 新增明確 capability 控制的 insert_node_on_relation，OpenAI Chat／Claude Messages 均使用同一份閉合 schema。啟用時共九個工具，未啟用維持八個；節點位置、尺寸、文字、形狀與顏色必須明確提供。
+- 手動與 AI 插入共用一筆 create/delete/create 交易，保留實際流向、第一段 label/intent 及顏色；新連線重新路由，Undo 還原完整原 geometry。沿用四個既有 wire operation，不新增後端契約。AI 新節點與手動一致置於最高圖層，檢查可表示的圖層／原 relation 版本及端點座標範圍。
+- 移除的 relation logical ID 在整次任務仍保留，不能被後續工具重用。範圍、鎖定、時序圖保護與最後 fresh-authority review 持續生效；每輪 HTTP body 各自審閱與授權，拒絕插入不修改 references 或 proposal。
+- 最終 JVM 聚焦 48/48 pass、0 failed/skipped，涵蓋方向、隔離提案、wire、Undo/Redo、portable loop、圖層與超界拒絕、兩協定逐輪授權串流。JS／Wasm／Android／iOS simulator 共用程式碼編譯 BUILD SUCCESSFUL（1m35s）。使用 MockEngine，未呼叫真實付費 API，未驗實際 GUI 或正式多人 backend。
+- build-and-clean.sh 結束後已清除約124.4 MiB建置資料，未保留成品。六主線仍未完整交付，goal 保持 active；backend 範圍確認仍未收到回覆，本輪未修改或啟動 backend。
+
+## 2026-10-08：AI 本機自循環與 durable 方案 geometry
+
+- AI 圖形草稿移除固定 selfLoops=false，透過 aiCanvasToolCapabilities 使用與手動畫布相同的 repository.supportsRelationGeometry；Desktop 本機文件支援時宣告 true，正式 BackendWorkspaceRepository 仍 false。未修改 backend 或放寬其 self-loop 拒絕。
+- AI create_relations 同端點時保存明確 RelationGeometry(route=Loop)，按 working workspace 的既有與同批新增 self-loop 數量沿用 80+count*32（上限4096）extent。避免只靠 renderer 隱式自循環而讓 Clipboard／方案簿驗證與 preview 失敗；不新增 AI wire 工具或供應商呼叫。
+- 新共用測試覆蓋 capability、雙 self-loop 的不同 extent、隔離 proposal／fresh-authority review、live route、Clipboard JSON roundtrip、方案 preview 與 Undo/Redo；native 新增實際 DesktopFileWorkspaceRepository 保存→新 repository 重開、UTF-8 label／geometry／已保存提交收據及 quick-scheme 讀回。最終聚焦 JVM 24/24 pass、0 failed/skipped，JS、Wasm、Android、iOS simulator 共用程式碼編譯 BUILD SUCCESSFUL（1m48s）。首輪錯誤引用 graph 的編譯失敗已修正為 working workspace，最終上述結果為修正後版本。
+- build-and-clean.sh 已在此次驗證結束後清除約124 MiB，新產物沒有保留；最後 dry-run 0 B。此入口之後預設 --no-build-cache，避免重新累積本專案的全域編譯輸出 cache；清理與 wrapper 的失敗後清理／保留錯誤碼共11項 disposable tests通過。
+- 尚無此功能的真實 Router/GUI 或正式多人跨端驗收；backend 的範圍確認仍待使用者回覆，不能用本機旗標代替 server capability。其他五主線與完整六條 goal 繼續 active。
+
+## 2026-10-08：AI Chat 輸出上限欄位的明確相容選項
+
+- AI 理解驗證與圖形草稿的 OpenAI Chat 設定新增 max_completion_tokens / max_tokens 選擇；預設保留較新欄位，不因 HTTP 400 自動切換或重試。上限空白不送任何一個欄位；Claude Messages 仍在指定上限時使用 max_tokens。
+- AiRequestBodyProfile 凍結選擇，理解與每輪工具 body 使用同一個選項、最多一個 token 上限欄位。理解視窗切換選項會清除授權；工具開始時凍結設定，仍保留每輪請求 review/consent。既有安全診斷會記錄實際欄位及數值，不增加原始 request/response 保存。
+- 新增兩項共用測試，涵蓋兩種 Chat 選擇、理解／初始工具／後續工具、既有 safe diagnostic、空白與 Claude 欄位隔離。聚焦 AiRequestParametersTest / AiRequestBodyTest / AiDiagramToolWireTest / AiDiagramToolLoopTest / AiWireDiagnosticTest 的 JVM 測試及 JS、Wasm、Android、iOS simulator 共用程式碼編譯 BUILD SUCCESSFUL（1m57s）。未驗真實 Router、GUI 點選或聲稱供應商所有模型皆支援舊參數。
+- 此次透過 build-and-clean.sh 執行，結束後實際刪除約 124 MiB 新 build / .gradle / .kotlin；最後 dry-run 為 0 B。没有重新保留 verified 成品。AI log 仍只有台灣 11:15 的舊 reasoning/tools 拒絕，修正後實際 API 成功待驗。
+- 共用背景的 backend capability / operation / projection 仍未接上；已提出是否解除既有不動 backend 限制的範圍確認，尚無回覆，沒有修改或啟動 backend。其他 APP 工作仍可繼續，六主線 goal 保持 active。
+
+## 2026-10-08：依使用者要求清除本機建置與成品
+
+- 使用者確認本機只保留專案，最後成品也刪除；正式下載由 GitHub Actions 統一打包發佈。新增根目錄 Clean BoarderLess Build.command、scripts/clean-build-artifacts.py 與 build-and-clean.sh（建置後自動清理），說明見 BUILD_CLEANUP.md。
+- 已實際清除所有當前專案 build/verified、artifacts、.gradle、.kotlin，三個已知隔離 build root、media-validation 的 build/gradle-cache 與三個 QA APP 副本；兩輪合計約 8.5 GiB 建置資料。最後 dry-run 計畫為 0 B。先前記錄的 verified 安裝／發佈檔與 /tmp test XML 已按要求刪除，不能再假設那些檔案仍可用。
+- 清理保護 10 項 disposable fixture 測試與兩支 shell 語法檢查通過；Git tracked source、原始資料與共用 Gradle/toolchain cache 保留。之後本機驗證需要重建，結束後使用清理腳本，不持續累積成品。六主線 goal 不因此完成。
+
+## 2026-10-08：GIPHY 搜尋語言與分頁一致性
+
+- 物件庫的 GIPHY 瀏覽器改用 APP 已啟用語言，英文 en、繁體中文 zh-TW；依官方支持代碼正規化 locale，中文 script 優先於區域，unsupported fallback en。搜尋原詞原樣送出。
+- 每次請求凍結語言；切換語言取消查詢／preview refresh、失效 generation 並清除結果／預覽／offset，保留 key/query，不自動多送 API。next page 不能沿用另一語言的 offset，遲到舊語言成功回應不能發佈。
+- JVM GiphyClientTest 14、JS Browser 947、Wasm Browser 947 全部 0 failure/error/skip；Desktop distributable、Android APK、iOS simulator compile、Web JS/Wasm production distribution BUILD SUCCESSFUL（4m12s）。verified 成品已更新；兩份 Web 的 durable-records.js / scheme-bundle.js 與來源一致。
+- MockEngine 驗實際 lang/query/offset，未驗真實 key、語言切換 GUI 或 GIPHY canvas 插入。正式 external canvas kind／backend projection／provider-ID 跨端保存及 renderer 仍未實作，不能把查詢改進當成完整 GIPHY 交付。goal 保持 active。詳見 [GIPHY 規格](GIPHY_API_INTEGRATION_SPEC.md)。
+
+## 2026-10-08：Desktop 方案簿實際 GUI 重開與強制結束驗收
+
+- 隔離目前 verified Desktop APP 的 user.home 與 UI preferences，保留正式 native file workspace / quick-scheme repositories；未動正式使用者資料，也未呼叫 AI 或 backend。
+- 真實 GUI 保存方案 1（5 物件、4 連結、v6）後正常退出並重開，方案可載入並插入。再保存方案 2，驗 record generation=2 / nextId=3 / checksum 後僅 SIGKILL 自有 QA PID；重開仍有兩份方案，方案 2 可插入。
+- 插入後画布 10→15 個節點，選單復原 15→10、重做 10→15；library checksum 不變，測試 APP 已正常關閉。詳見 [驗收記錄](DESKTOP_SCHEME_RESTART_ACCEPTANCE.md)。鍵盤快捷鍵、保存中途 kill、power loss、Web/mobile restart、跨裝置/cloud 同步未由此次驗收證明。完整 goal 保持 active。
+
+## 2026-10-08：方案簿 awaited durable 保存接入 Web APP
+
+- 新增 AwaitedQuickSchemeRepository 與 AwaitedPersistentQuickSchemeStore。每次從實際 durable store 讀取完整 generation/payload，沿用既有 PersistentQuickSchemeStore 的格式、schema/UTF-8/Clipboard 驗證與單調 ID；記憶體只作一次操作的工作快照，回傳前必須等待實際 CAS 與 confirmDurable，不作儲存 fallback。
+- Web APP 注入 browserQuickSchemeRepository；方案簿使用獨立 BoarderLess.quick-schemes.v1 strict IndexedDB，而收據仍是 BoarderLess.bundle-receipts.v1。Kotlin 每份 scheme 上限 1 MiB、完整 library 4 MiB，收據仍保留 1 MiB 上限；不把 library 降成 receipt 限制。持續保存仍需要 browser 真正 persisted/persist grant。
+- 原生端以既有同步 repository 的 awaited adapter 保留既有格式與 force/CAS；在 Dispatchers.Default 執行，不在畫布執行緒做檔案 I/O。App / WorkspaceScreen 支援選填 awaited provider；既有 native factories 仍可沿用原介面。
+- UI 初始載入使用 LaunchedEffect，保存／改名／刪除／JSON 匯入／bundle 匯入與匯出 freshness 都等待操作。保存中显示提示並阻擋重複操作；保存之前凍結選取 payload、名稱、ID 與來源工作區，scope 改變取消工作，epoch 防止舊工作清掉新 busy 狀態。JSON import 取消／關閉會取消其自己的 pending 工作，uncertain save 保留 review，可再確認同一份内容。
+- 素材包／JSON import 的 review retry 先比對完整方案，已有相同已保存方案便使用原 ID；storage confirmed failure 不自動重新分配 ID。刷新失敗是 library unavailable，不冒充保存成功；corrupt library 不 reset。
+- 真實 IndexedDB 測試新增 6 項：strict publication → reopen UTF-8 / rename / delete / ID 不重用、put success 仍未 save ACK + cancel rollback、兩 repository 競爭不覆寫、denied／aborted transaction 不回 saved scheme、CAS 已 commit 但確認失敗的 review retry 不再分配 ID、1.4 MiB 完整 library 不截斷。grant accepted/denied 是明確 fixture，transaction 是真正 Chrome strict IDB，並非實際 browser permission/eviction/APP process restart 證據。
+- 最終版本 JS Browser 945 / Wasm Browser 945 與 JVM focused 18 全數通過，0 failure/error/skip；Web JS/Wasm production distribution、Desktop distributable、Android APK、iOS simulator compile 最終 BUILD SUCCESSFUL（4m13s）。全部 verified 成品已更新，Web durable-records.js 與來源位元組一致性已確認。未刪除旧 Settings 內容，也未自動 migration／合併。新 Web library 初始沒有舊 Settings 的方案。
+- 六主線還缺實際裝置之間的完整素材交付 GUI、真實持續保存 grant／跨 APP restart、cloud quick-scheme UUID/revision/outbox/conflict 同步，以及 formal collaboration / shared background / GIPHY / AI 真實成功等原目標。goal 保持 active。
+
+
+## 2026-10-08：Web 素材包暫存租約與下載確認回收
+
+- OPFS stage 使用獨立 boarderless-bundle-stages-v2 目錄，避免掃到沒有租約協定的舊版 root 檔案。每個隨機 UUID 檔在建立前取得 origin-scoped Web Lock，持有到自己的刪除完成；清理以 ifAvailable 嘗試，不排隊、不 steal、不遞迴刪除，略過非協定檔名與 directory。
+- 新的 pick/create 會回收已沒有租約且未發佈下載的檔案。分頁卸載／worker termination 的租約釋放由 browser LockManager 處理，不用時間或 heartbeat 猜測活躍狀態。
+- 分頁關閉不能證明 browser download 已結束。匯出在 anchor dispatch 前保存 .download 標記；自動掃描保留有標記的檔案，可能已 dispatch 的失敗／取消也不 abort 刪除其 backing file。匯出對話框有「我已確認本網站的下載完成，清理閒置暫存」，清理本視窗已取得的目的地與無活躍租約的舊下載；別的分頁活躍檔不會被清理。
+- 清理 ACK 等到實際 removeEntry 完成；刪除失敗保留 handle/lease，可明確重試相同 stage，不宣稱已清理。取消／錯誤 callback 仍會返回有限分類，不因 cleanup 失敗而掛住。
+- 新增真實 Worker + Web Locks + OPFS 測試：活躍 worker lease 阻擋掃除、worker terminate 後鎖實際釋放且未發佈檔可回收、有 .download 標記的 idle 檔自動保留而明確 ACK 才清理、非協定 sentinel 與 matching-name directory 保留。既有 33 MiB 原始素材回圈加入重複下載確認；新增實際 removeEntry 故障注入，未 ACK 且重試不增加下載次數。
+- JS Browser 939 / Wasm Browser 939（各含 6 項素材包測試）已通過，0 failure/error/skip。多平台平行編譯曾因 Kotlin daemon 3 GiB heap 內並行 IR/link 工作造成 GC overhead OOM；改用 --no-parallel --max-workers=1 重跑通過瀏覽器測試。最終包含發佈後 abort 保留 backing file 的驗證仍全數 pass；JS/Wasm production distribution、shared JVM / Android / iOS simulator compile 最終 BUILD SUCCESSFUL（3m16s）。Web verified/js 與 verified/wasmJs 已更新，script 與來源位元組一致且 index 引用核對通過。GUI 下載保存、人為確認時序與真正 browser process kill 仍未驗，worker termination 不等同 OS 電源中斷；Web 方案簿 awaited durable 保存及其餘六主線仍未完成。goal 保持 active。
+- 原理：https://www.w3.org/TR/web-locks/ （origin lock 排他、ifAvailable、document unload/agent termination）。
+
+
+## 2026-10-08：Web 完整原檔方案素材包入口
+
+- Web APP 已注入 browserSchemeBundleRuntime，接上既有完整 QuickSchemeBundleCodec 與 browserSchemeBundleReceipts；不是縮圖或只有 JSON 的方案檔。
+- JS/Wasm 共用 browser interop，選檔後以 1 MiB 分段複製至隨機命名的私有 OPFS 快照，讀取位置/長度與固定 file size 經檢查。匯出也以私有磁碟 stage 分段 append，不把整個最大 1 GiB bundle 存成 Kotlin byte-array list。
+- 每個 await 前後檢查取消、工作區 scope 與頁面 visibility；native/Kotlin Mutex 避免交錯讀寫。取消或失敗清理自己取得的 stage/snapshot；遲到 callback、continuation resume 途中取消也釋放自有 handle。從不刪除或修改使用者選的原檔。
+- 發佈只能嘗試一次，完整 codec SHA 校驗後才交給瀏覽器下載；UI 使用「下載含原檔方案素材包」與「已要求下載」，不把 dispatch 當成 OS 已保存。輸出檔名含 UUID。下載 backing stage 暫時保留，不能在固定短時間後刪除仍可能被大型下載讀取的檔案。
+- 真實 Chrome OPFS / File 測試 4 項：33 MiB 原始素材 export → download File → private snapshot → codec review SHA；建立快照後再改動選取的磁碟檔仍讀到完整原始內容；實際 writer 返回前撤權或取消不下載且清理 stage；選檔複製中取消清理 late snapshot，原 selected File 仍可再讀。OS picker/anchor click 被 fixture 接管，因此不是人工下載保存 GUI 的證據。
+- JS Browser 937 / Wasm Browser 937 全數通過，0 failure/error/skip。Web JS/Wasm production distribution 最終建置成功，已更新 webApp/build/verified/js 與 wasmJs；index.html 引用與 scheme-bundle.js / durable-records.js 位元組一致性已核對。
+- 下一步：已發佈下載 stage 與異常關閉 stage 的安全回收（需區別活躍 tab，不能掃刪別人使用中的檔案）、Web 方案簿 awaited durable 保存；真實 browser persist grant、GUI 選檔/下載與跨裝置完整鏈仍需驗收。完整六主線 goal active，未宣稱全部交付。
+- 原理：https://developer.mozilla.org/en-US/docs/Web/API/File_System_API/Origin_private_file_system 。OPFS 是受 browser quota 管理的私有 origin storage，並非使用者下載資料夾。
+
+
+## 2026-10-08：Web strict IndexedDB 收據保存與 awaited 授權邊界
+
+- SchemeBundleReceipts 的 beforeComplete / ready 改為 suspend；PersistentSchemeBundleImportReceipts 使用 AwaitedDurableLocalRecordStore。Desktop/Android/iOS 以現有同步 durable store 的 awaited adapter 保留原檔案格式與 force/CAS 語意，不新增 migration。
+- Web 新增 BrowserDurableLocalRecordStore 與 browserSchemeBundleReceipts factory、JS/Wasm bridge、durable-records.js。需要 secure context 和實際 StorageManager persisted/persist grant，不以 volatile memory/localStorage 或 relaxed transaction 假裝 ACK；IndexedDB records 的 CAS 比較完整已驗證舊 document，確認 strict transaction 並且只在 transaction complete 回報。
+- Kotlin 檢查嚴格 JSON/UTF-8、generation+payload SHA256 和安全整數 generation；損壞、storage denial、transaction abort／stale CAS 不 reset。confirmDurable 也等待 strict 同內容重新發佈。取消會 abort 未提交 transaction，遲到 open connection 關閉，沒有自動 retry。
+- materialize 現在於 awaited receipt recovery 之後重新檢查 fresh authority，且在 pending receipt 發佈之後、server confirm 之前再檢查；避免等待 IDB／權限提示期間撤權或版本改變卻繼續 prepare/confirm。共用測試驗「發佈未 ACK → confirm=0」、「保存失敗 → confirm=0」以及 read/publish 邊界撤權。
+- 最終驗證：JS Browser 932 與 Wasm Browser 932 全數通過、無 skip（各包含 4 項真正 strict IDB fixture），JVM focused 11、iOS native 14 都 pass；Android 收據 3 項以 adb -s emulator-5560 明確安裝/執行 AndroidJUnitRunner，輸出 OK (3 tests)。未對同時在線的 emulator-5554 安裝或關閉。Android APP APK、Desktop distributable 與跨端編譯通過，兩個 verified 成品更新。
+- Browser fixture 的持續保存 grant 為明確 accepted/denied fixture（沒有假稱已驗真實 browser persist permission）；DB / transactions / request success / complete / rollback 都使用實際 Chrome API。驗 utf8 / connection reopen、put success 先於 ACK、取消已 put 未 commit、兩 connection 競爭只一成功、corrupt 不 reset。這些不是 browser eviction／power loss／正式 APP restart 的證據。
+- Web 完整素材包 Source/Destination/File picker 和 APP runtime 仍未接好；factory 現在可供後續入口使用，不能宣称整條 Web 匯入可用了。Web 快速方案簿亦未切換 IndexedDB。完整六主線 goal 保持 active。
+- 原理依據：https://www.w3.org/TR/IndexedDB/ 、https://developer.chrome.com/blog/indexeddb-durability-mode-now-defaults-to-relaxed 、https://developer.mozilla.org/en-US/docs/Web/API/StorageManager/persist 。
+
+
+## 2026-10-08：iOS 原始素材包反向匯入與方案簿 durable 保存
+
+- iOS 的同一個 IosDraftImportPicker 現在支援 JSON 草稿與 UTTypeData 素材包選取（互斥 pending / 關閉及動畫 continuation 沿用原邏輯）。MainViewController 組合 export/import runtime 與 scope-bound receipt factory，APP 的 .blscheme 匯入入口已接上。
+- IosSchemeBundleSource 只在讀取時持有 security-scoped grant，並經 NSFileCoordinator 以最多 1 MiB chunk 複製成自有 0600 私有快照。只接受 regular file、45 bytes 至 BLQS0001 的 1 GiB 協定上限，拒絕短檔／增長／截斷；後續範圍審閱／上傳讀取私有快照，取消／scope change 清理自有副本，不修改原始 Files 文件。
+- 新增 IosAtomicLocalRecordStore：0700 owned leaf、0600 regular records/lock、process NSRecursiveLock + flock、generation CAS、嚴格 UTF-8／strict JSON／SHA256，force 檔案、rename、force 目錄、回讀後 ACK。不存在的 key 可以建立；損壞、symlink、錯誤權限不自動 reset。framework Library parent canonicalize，owned leaf symlink 不解參照。
+- 素材收據使用 PersistentSchemeBundleImportReceipts 保存 user/client/workspace/bundleDigest 和 pending destination IDs；只有原本 ID 的 GET Ready／owner／素材 metadata 相符才可復用。Pending 未解決時仍拒絕自動配置新 ID；尚未實作完成 pending server upload 的自動續傳。
+- iOS App → WorkspaceScreen 同時注入 IosFileQuickSchemeStore，共用 Desktop/Android 的單一 library v1 與 nextId 方案驗證；原本 Settings 資料不搬移／刪除，新方案簿初次為空。
+- 原生證據：最新 test XML timestamp 2026-10-08T04:06:23–26Z（台灣 12:06），iOS simulator 14 項全部 pass、無 skip（Persistence 6、Destination 4、CanvasExport 4）。涵蓋 33 MiB 完整 bundle codec export → native private snapshot → review checksum，CAS stale/corrupt/modes/symlink，pending ID 重開與 Ready 正確復用，方案改名／刪除／ID 重新讀回，copy 中途 cancellation/scope 失敗清理與原始檔不變。ios arm64 及 simulator production compile 通過。
+- 實際 Files picker／iCloud provider GUI、APP process kill/power loss、Desktop↔iPhone 實際檔案轉移及正式後端自動同步仍未驗收；沒有產出簽署真機 IPA。完整六主線 goal 保持 active。AI log 最新仍為 11:15 的舊 reasoning/tools 拒絕，尚無 none 修正後的真實成功記錄。
+
+
 ## 2026-10-08：iOS 素材方案包串流匯出
 
 - 新增 IosSchemeBundleDestination；iOS MainViewController 透過現有 IosCanvasExportPicker 的 schemeBundleRuntime 將 .blscheme 匯出入口注入 APP。Files 選取資料夾時尚不寫入素材；取消／生命週期 close 沿用同一個 native picker 管理，避免 PNG/PDF 與 bundle 同時開兩個系統視窗。
@@ -360,7 +524,7 @@ DesktopFileAssetGatewayTest4cases：真正PNG來源→import coordinator→media
 
 - 2026-10-06 verified activation／native SessionPreferences routing已實作：Preparing gen1→空draft持久tombstone槽gen1→Active gen2，綁Published receipt／source／target，partial resume只接受exact初始state。94060重現原始empty scope後續草稿丟檔誤當absence，已修；啟用後任何native artifact消失停止。open先後核完整legacy source／全部typed scope／最低floor，每次facade與clientId核control／必要exclusion／identity。原生draft／fence／deletion／sequence一併接，legacy counter不mirror、不mint缺身份、直接clientSequence拒絕；多workspace共ledger，foreign client archive保留但禁止送出、新scope未登記拒絕。新增9cases、9fault及9個獨立JVM kill；79972 JVM815／Desktop46及跨平台實際compile成功21s，零fail/error、shared6skip。未動userprefs或預設APP bootstrap，不把fixture callback當舊writer排除。下一步真實legacy exclusion／全scope catalog／new native enrollment／default routing，再完整ACK settlement與fresh review→Apply；門禁缺證時推進AI tool schema／隔離draft，不重做已驗activation。
 
-- 2026-10-06 完整native遷移publication coordinator已實作／驗證：先保存綁target／完整sourceDigest／exact artifact digest與generation的Preparing receipt，再跨scope draft／safety及共用namespace ledger發布，全讀回才CAS為Published。全native record catalog排除未知／外來／symlink，absence保持absence；同receipt的partial resume只補缺artifact，既有generation1必須exact match，advanced／tombstone／corrupt與source drift拒絕且不rewind，Published丟檔不補。每步必要writer exclusion callback無default，不把合作lease或double read當舊writer排除。新增7cases、33個publication fault及15個真正独立JVM kill；97160全套JVM806／Desktop46和跨平台檢查成功12s、零fail/error、shared6skip。來源legacy／staging保留，不啟用production、不改userprefs、无HTTP。下一步利用Published receipt接activation／runtime routing及真正legacy exclusion，再跨檔ACK settlement與fresh review→Apply；不重做已驗publication coordinator，詳APP_DRAFT_JOURNAL_DURABILITY_PLAN。
+- 2026-10-06 完整native遷移publication coordinator已實作／驗證：先保存綁target／完整sourceDigest／exact artifact digest與generation的Preparing receipt，再跨scope draft／safety及共用namespace ledger發布，全讀回才CAS為Published。全native record catalog排除未知／外來／symlink，absence保持absence；同receipt的partial resume只補缺artifact，既有generation1必須exact match，advanced／tombstone／corrupt與source drift拒絕且不rewind，Published丟檔不補。每步必要writer exclusion callback無default，不把合作lease或double read當舊writer排除。新增7cases、33個publication fault及15個真正獨立JVM kill；97160全套JVM806／Desktop46和跨平台檢查成功12s、零fail/error、shared6skip。來源legacy／staging保留，不啟用production、不改userprefs、无HTTP。下一步利用Published receipt接activation／runtime routing及真正legacy exclusion，再跨檔ACK settlement與fresh review→Apply；不重做已驗publication coordinator，詳APP_DRAFT_JOURNAL_DURABILITY_PLAN。
 
 - 2026-10-06 AI實際失敗已由安全報告確認HTTP401／Other／HttpRejected，尚未進串流；不能據此斷言是哪層認證錯。依使用者要求已接Desktop自動安全log，位於`~/.boarderless/logs/ai-probe.log`，每檔256KiB＋一backup，UTC／attempt ID／dialect／auth mode／安全事件，不保存Key／endpoint／model／context／原回應。背景bounded queue／每attempt24筆／寫檔與排隊錯誤隔離；POSIX私有權限／symlink拒絕。使用者後續不用手動複製診斷；新Desktop build執行才會收集，未重啟使用者APP或代發AI。新增5cases；33073最後跨平台compile及全套JVM799／Desktop46成功25s，3909追加不可寫來源fixture後JVM799成功5s，零fail/error、shared6skip。Android main compile97589成功11s。真Router401是否解除與WindowsGUI未驗；詳AI_UNDERSTANDING_ACCEPTANCE。下一步利用後續本地log確認設定；等待有效認證依據時繼續migration receipt／partial recovery及tool schema，不再把「未收到安全報告」當阻塞。
 
@@ -550,7 +714,7 @@ SSE 本輪證據：42687 首輪六-case 跨 JVM／Desktop／JS／Wasm tests、An
 
 42537 首輪 JVM／Desktop／JS／Wasm tests、Android APK／Web entries 成功（1m31s），Anthropic 6 cases通過；補第7 limits／unknown delta case後最終結果另列。文字事件層開發與HTTP／UI／proposal正式交付分開，完整六項與人工QA保留。
 
-Anthropic 文字事件接續（2026-10-05）：独立 named SSE decoder／AiCoworkProvider adapter；message／text block lifecycle、索引／stage、正常 reason＋message_stop，EOF 不成功，unknown 顶層 metadata 不改state，unsupported blocks／delta／異常停止不採用。常數錯誤／bounds／取消／terminal cleanup，不猜 endpoint、不讀 key、不生成 operation。6 common fixture tests，最終回歸確認後另列；HTTP／真正 SSE framing／request／三類服務／secret／UI／proposal／確認提交仍待完成，詳 AI_PROVIDER_STREAMING，原六項保持。
+Anthropic 文字事件接續（2026-10-05）：獨立 named SSE decoder／AiCoworkProvider adapter；message／text block lifecycle、索引／stage、正常 reason＋message_stop，EOF 不成功，unknown 顶層 metadata 不改state，unsupported blocks／delta／異常停止不採用。常數錯誤／bounds／取消／terminal cleanup，不猜 endpoint、不讀 key、不生成 operation。6 common fixture tests，最終回歸確認後另列；HTTP／真正 SSE framing／request／三類服務／secret／UI／proposal／確認提交仍待完成，詳 AI_PROVIDER_STREAMING，原六項保持。
 
 5967 iOS 最後全套成功（48s），AI chat event adapter 7 tests 通過，四目標 regression 補齊，新 boot simulator 已恢復 shutdown。接續完整三類 provider／HTTP／SSE／UI／proposal／確認提交，固定 event decoder 不重做，六項完整 goal 維持 active，效能最後。
 
