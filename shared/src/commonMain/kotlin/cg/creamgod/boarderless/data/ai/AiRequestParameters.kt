@@ -23,7 +23,7 @@ internal fun aiRequestParametersValid(profile: AiRequestBodyProfile): Boolean =
 internal fun JsonObjectBuilder.putAiRequestParameters(profile: AiRequestBodyProfile) {
     if (!aiRequestParametersValid(profile)) throw AiRequestValidationException()
     profile.maxOutputTokens?.let {
-        put(if (profile.dialect == AiRequestDialect.OpenAiChat) "max_completion_tokens" else "max_tokens", it)
+        put(if (profile.dialect == AiRequestDialect.OpenAiChat) profile.chatTokenLimitField.wireName else "max_tokens", it)
     }
     profile.temperature?.let { put("temperature", it) }
 }

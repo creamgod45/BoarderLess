@@ -50,6 +50,7 @@ internal fun AiUnderstandingDialog(
     var endpoint by remember { mutableStateOf("") }
     var model by remember { mutableStateOf("") }
     var maxTokensText by remember { mutableStateOf("") }
+    var chatTokenLimitField by remember { mutableStateOf(AiChatTokenLimitField.MaxCompletionTokens) }
     var temperatureText by remember { mutableStateOf("") }
     val requestParameters = remember(maxTokensText, temperatureText) {
         runCatching { parseAiRequestParameters(maxTokensText, temperatureText) }
@@ -106,7 +107,7 @@ internal fun AiUnderstandingDialog(
                     BasicText(Strings.aiProbe.warning(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
                     val latest = diagnostics.lastOrNull()
                     BasicText(
-                        aiProbeStageLabel(latest?.stage) + (latest?.failure?.let { " · ${it.name}" } ?: "") +
+                        aiProbeDiagnosticLabel(latest) + (latest?.failure?.let { " · ${it.name}" } ?: "") +
                             (latest?.httpStatus?.let { " · HTTP $it" } ?: ""),
                         style =
                             TextStyle(
@@ -232,6 +233,12 @@ internal fun AiUnderstandingDialog(
                                 })
                             }
                             AiProbeField(Strings.aiProbe.maxTokens(), maxTokensText, { maxTokensText = it; resetApproval() })
+                            if (dialect == AiRequestDialect.OpenAiChat) {
+                                AiTokenLimitFieldPicker(chatTokenLimitField) { choice ->
+                                    chatTokenLimitField = choice
+                                    resetApproval()
+                                }
+                            }
                             AiProbeField(Strings.aiProbe.temperature(), temperatureText, { temperatureText = it; resetApproval() })
                             if (requestParameters.isFailure) BasicText(Strings.aiProbe.invalidParameters(), style = TextStyle(color = colors.danger))
                             AiProbeField(Strings.aiProbe.token(), token, {
@@ -281,7 +288,7 @@ internal fun AiUnderstandingDialog(
                                     AiServerProfile(
                                         endpoint,
                                         if (localHttp) AiServerLocation.Local else AiServerLocation.Remote,
-                                        AiRequestBodyProfile(dialect, model, requestParameters.getOrThrow().maxOutputTokens, requestParameters.getOrThrow().temperature),
+                                        AiRequestBodyProfile(dialect, model, requestParameters.getOrThrow().maxOutputTokens, requestParameters.getOrThrow().temperature, chatTokenLimitField),
                                         anthropicVersion = version.takeIf { dialect == AiRequestDialect.AnthropicMessages },
                                         allowInsecureLocalHttp = localHttp,
                                     )
@@ -430,8 +437,13 @@ internal fun aiProbeStageLabel(stage: AiProbeStage?): String =
         AiProbeStage.Failed -> Strings.aiProbe.debugFailed()
     }
 
+internal fun aiProbeDiagnosticLabel(event: AiProbeDiagnostic?): String =
+    if (event?.failure == AiProbeFailure.ConsentDenied) Strings.aiProbe.consentDeclined()
+    else aiProbeStageLabel(event?.stage)
+
 internal fun aiProbeDiagnosticHint(event: AiProbeDiagnostic): String =
     when (event.failure) {
+        AiProbeFailure.ConsentDenied -> Strings.aiProbe.consentDeclined()
         AiProbeFailure.Configuration, AiProbeFailure.Preparation -> {
             Strings.aiProbe.debugHintConfig()
         }

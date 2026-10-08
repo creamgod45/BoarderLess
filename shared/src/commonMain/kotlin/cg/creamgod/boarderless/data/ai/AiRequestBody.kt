@@ -6,12 +6,19 @@ import kotlinx.serialization.json.*
 /** Local servers must explicitly select one of these dialects; never auto-detect/fallback. */
 internal enum class AiRequestDialect { OpenAiChat, AnthropicMessages }
 
+/** Explicit Chat compatibility choice. Never retry a rejected request with another field. */
+internal enum class AiChatTokenLimitField(val wireName: String) {
+    MaxCompletionTokens("max_completion_tokens"),
+    MaxTokens("max_tokens"),
+}
+
 /** Not a credential/endpoint profile. Sampling parameters are optional and never assigned guessed defaults. */
 internal data class AiRequestBodyProfile(
     val dialect: AiRequestDialect,
     val model: String,
     val maxOutputTokens: Int? = null,
     val temperature: Double? = null,
+    val chatTokenLimitField: AiChatTokenLimitField = AiChatTokenLimitField.MaxCompletionTokens,
 )
 
 internal class AiRequestValidationException : IllegalArgumentException("AI request is invalid")

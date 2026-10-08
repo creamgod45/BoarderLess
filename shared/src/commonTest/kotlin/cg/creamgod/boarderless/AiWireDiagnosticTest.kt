@@ -19,7 +19,8 @@ class AiWireDiagnosticTest {
             assertEquals("Bearer secret-key", request.headers[HttpHeaders.Authorization])
             respond(
                 """{"error":{"type":"invalid_request_error","code":"unsupported_value","param":"reasoning_effort","message":"Function tools with reasoning_effort are not supported in /v1/chat/completions. secret-key secret-canvas https://private.invalid"}}""",
-                HttpStatusCode.BadRequest, headersOf(HttpHeaders.ContentType, "application/json"),
+                HttpStatusCode.BadRequest, headersOf(HttpHeaders.ContentType to listOf("application/json"),
+                    "x-request-id" to listOf("req_0123456789abcdef0123456789abcdef")),
             )
         }) { followRedirects = false; install(HttpTimeout) }
         assertFails {
@@ -36,6 +37,9 @@ class AiWireDiagnosticTest {
         assertEquals(4096, sent.maxCompletionTokens)
         assertEquals(AiWireReasoning.Default, sent.reasoning)
         val failure = events.last()
+        assertEquals("req_0123456789abcdef0123456789abcdef", failure.responseRequestId.toString())
+        assertNotNull(failure.responseHeadersMillis)
+        assertTrue(failure.responseHeadersMillis!! >= 0)
         assertEquals(400, failure.httpStatus)
         assertEquals(AiProbeFailure.HttpRejected, failure.failure)
         assertEquals(AiWireParameter.ReasoningEffort, failure.providerError?.parameter)
@@ -58,7 +62,8 @@ class AiWireDiagnosticTest {
     }
 
     @Test fun requestSummaryContainsOptionsAndCountsButNeverMessageOrSchemaText() {
-        val summary = aiWireRequestDiagnostic("""{"model":"private-model","messages":[{"content":"secret-canvas"}],"tools":[{"description":"secret-tool"}],"stream":true,"max_completion_tokens":4096,"reasoning_effort":"none","secret-key":"private-value"}""", "/private-path")!!
+        val summary = aiWireRequestDiagnostic("""{"model":"private-model","messages":[{"content":"secret-canvas"}],"tools":[{"description":"secret-tool"}],"stream":true,"temperature":0.7,"max_completion_tokens":4096,"reasoning_effort":"none","secret-key":"private-value"}""", "/private-path")!!
+        assertEquals(0.7, summary.temperature)
         assertEquals(1, summary.tools)
         assertEquals(1, summary.messages)
         assertEquals(AiWireReasoning.None, summary.reasoning)
@@ -89,4 +94,14 @@ class AiWireDiagnosticTest {
                 events.last().providerError?.body)
         }
     } }
+    @Test fun untrustedTraceHeadersAndTemperatureCannotEchoPrivateText() {
+        for (value in listOf("secret-key", "req_secret-canvas", "req_" + "a".repeat(32) + " secret", "req_" + "g".repeat(32))) {
+            assertNull(AiWireRequestId.fromHeaders(headersOf("x-request-id", value)))
+        }
+        assertNull(AiWireRequestId.fromHeaders(headersOf("x-request-id", listOf("req_" + "a".repeat(32), "req_" + "b".repeat(32)))))
+        val summary = aiWireRequestDiagnostic("""{"temperature":"secret-key"}""", "/v1/chat/completions")!!
+        assertNull(summary.temperature)
+        assertFalse("secret" in summary.report())
+    }
+
 }

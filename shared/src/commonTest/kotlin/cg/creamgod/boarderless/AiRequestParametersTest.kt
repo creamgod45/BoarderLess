@@ -14,6 +14,41 @@ class AiRequestParametersTest {
         listOf(AiDiagramToolCall("request", "session", "call", "read_approved_graph", "{}")),
         listOf(AiDiagramToolResult("call", AiDiagramToolStatus.Read, buildJsonObject { put("text", "approved graph") })))
 
+    @Test fun explicitChatTokenFieldReachesUnderstandingAndEveryReviewedToolRound() {
+        for (field in AiChatTokenLimitField.entries) {
+            val profile = AiRequestBodyProfile(AiRequestDialect.OpenAiChat, "router-model", 2048, chatTokenLimitField = field)
+            val bodies = listOf(aiRequestBody(profile, request),
+                aiDiagramToolRequestBody(profile, "request", "session", request.prompt, caps),
+                aiDiagramToolRequestBody(profile, "request", "session", request.prompt, caps, listOf(turn)))
+            for (wire in bodies) {
+                val body = Json.parseToJsonElement(wire).jsonObject
+                assertEquals(2048, body.getValue(field.wireName).jsonPrimitive.int)
+                val other = AiChatTokenLimitField.entries.single { it != field }
+                assertFalse(other.wireName in body)
+                val diagnostic = assertNotNull(aiWireRequestDiagnostic(wire, "/v1/chat/completions"))
+                assertEquals(if (field == AiChatTokenLimitField.MaxTokens) 2048 else null, diagnostic.maxTokens)
+                assertEquals(if (field == AiChatTokenLimitField.MaxCompletionTokens) 2048 else null, diagnostic.maxCompletionTokens)
+            }
+        }
+    }
+
+    @Test fun blankLimitOmitsBothKeysAndClaudeKeepsItsRequiredFieldRegardlessOfChatChoice() {
+        for (field in AiChatTokenLimitField.entries) {
+            val profile = AiRequestBodyProfile(AiRequestDialect.OpenAiChat, "router-model", chatTokenLimitField = field)
+            for (wire in listOf(aiRequestBody(profile, request), aiDiagramToolRequestBody(profile, "request", "session", request.prompt, caps))) {
+                val body = Json.parseToJsonElement(wire).jsonObject
+                assertFalse("max_tokens" in body)
+                assertFalse("max_completion_tokens" in body)
+            }
+            val claude = profile.copy(dialect = AiRequestDialect.AnthropicMessages, maxOutputTokens = 2048)
+            for (wire in listOf(aiRequestBody(claude, request), aiDiagramToolRequestBody(claude, "request", "session", request.prompt, caps, listOf(turn)))) {
+                val body = Json.parseToJsonElement(wire).jsonObject
+                assertEquals(2048, body.getValue("max_tokens").jsonPrimitive.int)
+                assertFalse("max_completion_tokens" in body)
+            }
+        }
+    }
+
     @Test fun blankAndExplicitFieldsReachBothProtocolsAndEveryToolRound() {
         for (dialect in AiRequestDialect.entries) {
             for ((tokens, temperature) in listOf("" to "", "  " to "\t", "65537" to "", "" to "0", "8192" to "0.7")) {

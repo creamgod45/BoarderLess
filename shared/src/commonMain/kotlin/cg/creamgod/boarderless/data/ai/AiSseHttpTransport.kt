@@ -16,6 +16,7 @@ import io.ktor.client.request.prepareRequest
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
+import kotlin.time.TimeSource
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
@@ -73,10 +74,12 @@ internal class AiSseHttpTransport(
             try {
                 channelFlow {
                     currentCoroutineContext().ensureActive()
+                    var sentAt = TimeSource.Monotonic.markNow()
                     var preparedAuth: AiPreparedAuthentication? = null
                     client
                         .prepareRequest {
                             buildRequest(request)
+                            sentAt = TimeSource.Monotonic.markNow()
                             preparedAuth = aiPreparedAuthentication(headers.build())
                             onDiagnostic(AiProbeDiagnostic(
                                 AiProbeStage.Connecting,
@@ -93,6 +96,8 @@ internal class AiSseHttpTransport(
                                 socketTimeoutMillis = 30_000
                             }
                         }.execute { response ->
+                            val responseHeadersMillis = sentAt.elapsedNow().inWholeMilliseconds
+                            val responseRequestId = AiWireRequestId.fromHeaders(response.headers)
                             val channel = response.bodyAsChannel()
                             try {
                                 currentCoroutineContext().ensureActive()
@@ -116,6 +121,8 @@ internal class AiSseHttpTransport(
                                         responseType = typeCategory,
                                         preparedAuthentication = preparedAuth,
                                         authenticationChallenge = aiAuthenticationChallenge(response.headers),
+                                        responseRequestId = responseRequestId,
+                                        responseHeadersMillis = responseHeadersMillis,
                                     ),
                                 )
                                 if (response.status.value != 200) {
@@ -130,6 +137,8 @@ internal class AiSseHttpTransport(
                                             typeCategory,
                                             preparedAuthentication = preparedAuth,
                                             authenticationChallenge = aiAuthenticationChallenge(response.headers),
+                                            responseRequestId = responseRequestId,
+                                            responseHeadersMillis = responseHeadersMillis,
                                             providerError = providerError,
                                         ),
                                     )

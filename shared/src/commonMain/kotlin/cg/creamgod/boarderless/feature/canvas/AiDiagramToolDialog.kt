@@ -39,6 +39,7 @@ import kotlin.math.sin
 internal fun AiDiagramToolDialog(
     workspace: Workspace,
     selectedIds: Set<CanvasObjectId>,
+    supportsRelationGeometry: Boolean,
     validateScope: suspend () -> Boolean,
     isSessionCurrent: () -> Boolean,
     onApply: suspend (AiProposal) -> AiDiagramApplyOutcome,
@@ -52,28 +53,15 @@ internal fun AiDiagramToolDialog(
     val apply by rememberUpdatedState(onApply)
     val selection = remember { selectedIds.toSet() }
     // This is the established APP wire subset, not an assertion of Router tool support.
-    val caps =
-        remember {
-            AiDiagramCapabilities(
-                setOf(
-                    NodeShape.RoundedRectangle,
-                    NodeShape.Rectangle,
-                    NodeShape.Ellipse,
-                    NodeShape.Diamond,
-                    NodeShape.Pill,
-                    NodeShape.Parallelogram,
-                    NodeShape.Hexagon,
-                ),
-                NodeColorPresetTokens.toSet(),
-                setOf("group"),
-                selfLoops = false,
-            )
-        }
+    val caps = remember(supportsRelationGeometry) { aiCanvasToolCapabilities(supportsRelationGeometry) }
     var whole by remember { mutableStateOf(false) }
     val approved = if (whole) workspace.objects.keys.toSet() else selection
+    val scopeReferences = remember(approved) { aiDiagramObjectReferences(approved) }
+    val scopeRelations = remember(workspace, approved) { aiDiagramRelationReferences(workspace, approved) }
     var endpoint by remember { mutableStateOf("") }
     var model by remember { mutableStateOf("") }
     var maxTokensText by remember { mutableStateOf("") }
+    var chatTokenLimitField by remember { mutableStateOf(AiChatTokenLimitField.MaxCompletionTokens) }
     var temperatureText by remember { mutableStateOf("") }
     val requestParameters = remember(maxTokensText, temperatureText) {
         runCatching { parseAiRequestParameters(maxTokensText, temperatureText) }
@@ -147,7 +135,7 @@ internal fun AiDiagramToolDialog(
                 Strings.aiProbe.debugHintWorkspace()
         }
     }
-    val scopeValid = approved.size <= 128 && approved.all { it in workspace.objects }
+    val scopeValid = approved.size <= 128 && scopeRelations.size <= 256 && approved.all { it in workspace.objects }
     val preview = remember(plan, workspace) { plan?.preview(workspace) }
     Dialog(onDismissRequest = { if (!applying) close() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).imePadding(), contentAlignment = Alignment.Center) {
@@ -156,7 +144,7 @@ internal fun AiDiagramToolDialog(
                     BasicText(Strings.aiTools.title(), style = TextStyle(color = colors.contentText, fontSize = 18.sp))
                     BasicText(Strings.aiTools.warning(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
                     BasicText(
-                        aiProbeStageLabel(diagnostics.lastOrNull()?.stage) +
+                        aiProbeDiagnosticLabel(diagnostics.lastOrNull()) +
                             (diagnostics.lastOrNull()?.httpStatus?.let { " · HTTP $it" } ?: ""),
                         style = TextStyle(color = colors.contentText),
                     )
@@ -210,15 +198,14 @@ internal fun AiDiagramToolDialog(
                                 Strings.aiTools.scope(approved.size),
                                 style = TextStyle(color = colors.contentMuted, fontSize = 12.sp),
                             )
+                            BasicText(Strings.aiTools.dataShared(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
                             // Let the user inspect every approved object before starting. No asset URLs.
                             SelectionContainer {
                                 BasicText(
-                                    approved
-                                        .filter {
-                                            it in workspace.objects
-                                        }.sortedBy { it.value }
-                                        .joinToString("\n") { id ->
-                                            when (val node = workspace.objects.getValue(id)) {
+                                    scopeReferences.entries
+                                        .filter { it.value in workspace.objects }
+                                        .joinToString("\n") { (ref, id) ->
+                                            ref + ": " + when (val node = workspace.objects.getValue(id)) {
                                                 is TextNode -> node.text
                                                 is GroupFrame -> node.title
                                                 is MediaNode -> node.altText
@@ -227,6 +214,20 @@ internal fun AiDiagramToolDialog(
                                     style = TextStyle(color = colors.contentText, fontSize = 12.sp),
                                 )
                             }
+                            if (scopeRelations.isNotEmpty()) SelectionContainer {
+                                val byId = scopeReferences.entries.associate { it.value to it.key }
+                                BasicText(scopeRelations.entries.joinToString("\n") { (ref, id) ->
+                                    val edge = workspace.relations.getValue(id)
+                                    val arrow = when (edge.direction) {
+                                        RelationDirection.Forward -> "→"
+                                        RelationDirection.Backward -> "←"
+                                        RelationDirection.Both -> "↔"
+                                        RelationDirection.None -> "—"
+                                    }
+                                    "$ref: ${byId.getValue(edge.sourceObjectId)} $arrow ${byId.getValue(edge.targetObjectId)}" +
+                                        (edge.label?.let { " · $it" } ?: "")
+                                }, style = TextStyle(color = colors.contentText, fontSize = 12.sp))
+                            }
                             if (!scopeValid) BasicText(Strings.aiTools.contextInvalid(), style = TextStyle(color = colors.danger))
                             AiProbeField(Strings.aiProbe.endpoint(), endpoint, { if (it.length <= 4096) endpoint = it })
                             AiProbeField(Strings.aiProbe.model(), model, { if (it.length <= 256) model = it })
@@ -234,6 +235,9 @@ internal fun AiDiagramToolDialog(
                                 BasicText(Strings.aiTools.chatReasoningNone(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
                             }
                             AiProbeField(Strings.aiProbe.maxTokens(), maxTokensText, { maxTokensText = it })
+                            if (dialect == AiRequestDialect.OpenAiChat) {
+                                AiTokenLimitFieldPicker(chatTokenLimitField) { chatTokenLimitField = it }
+                            }
                             AiProbeField(Strings.aiProbe.temperature(), temperatureText, { temperatureText = it })
                             if (requestParameters.isFailure) BasicText(Strings.aiProbe.invalidParameters(), style = TextStyle(color = colors.danger))
                             if (dialect ==
@@ -276,7 +280,7 @@ internal fun AiDiagramToolDialog(
                                         AiServerProfile(
                                             endpoint,
                                             if (localHttp) AiServerLocation.Local else AiServerLocation.Remote,
-                                            AiRequestBodyProfile(dialect, model, requestParameters.getOrThrow().maxOutputTokens, requestParameters.getOrThrow().temperature),
+                                            AiRequestBodyProfile(dialect, model, requestParameters.getOrThrow().maxOutputTokens, requestParameters.getOrThrow().temperature, chatTokenLimitField),
                                             version.takeIf {
                                                 dialect ==
                                                     AiRequestDialect.AnthropicMessages
@@ -388,7 +392,8 @@ internal fun AiDiagramToolDialog(
                                                         if (open) {
                                                             clearPlan()
                                                             message =
-                                                                Strings.aiTools.failed(result.code.name)
+                                                                if (result.code == AiDiagramLoopFailure.ConsentDenied) Strings.aiProbe.consentDeclined()
+                                                                else Strings.aiTools.failed(result.code.name)
                                                         }
                                                     }
                                                 }
@@ -458,6 +463,7 @@ internal fun AiDiagramToolDialog(
                                             "create_nodes" -> Strings.aiTools.createNodes()
                                             "create_groups" -> Strings.aiTools.createGroups()
                                             "create_relations" -> Strings.aiTools.createRelations()
+                                            "insert_node_on_relation" -> Strings.aiTools.insertRelationNode()
                                             "update_nodes" -> Strings.aiTools.updateNodes()
                                             "layout_nodes" -> Strings.aiTools.layoutNodes()
                                             else -> item.summary

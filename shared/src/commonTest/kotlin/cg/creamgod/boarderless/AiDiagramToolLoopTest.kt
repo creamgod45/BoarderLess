@@ -192,6 +192,40 @@ class AiDiagramToolLoopTest {
             frame("message_stop")
     }
 
+    @Test fun relationInsertionStreamsThroughBothDialectsWithApprovalForEachExactBody() = runTest {
+        val a = TextNode(CanvasObjectId("a"), transform = CanvasTransform(Vec2.Zero, CanvasSize(100f, 60f)), text = "A")
+        val b = a.copy(id = CanvasObjectId("b"), transform = a.transform.copy(position = Vec2(600f, 0f)), text = "B")
+        val edge = Relation(RelationId("edge"), sourceObjectId = a.id, targetObjectId = b.id, label = "條件🙂")
+        val baseline = workspace.copy(objects = mapOf(a.id to a, b.id to b), relations = mapOf(edge.id to edge))
+        val insertion = """{"relation":"E1","node":{"id":"M","text":"中繼🙂","x":300,"y":100,"width":120,"height":60,"shape":"rectangle","color":"blue"},"firstRelation":"R1","secondRelation":"R2"}"""
+        val insertionCaps = caps.copy(relationNodeInsertion = true)
+        for (dialect in AiRequestDialect.entries) {
+            var sent = 0
+            var approvedBody = ""
+            val approvedRounds = mutableListOf<Int>()
+            val http = client { outgoing ->
+                sent++
+                assertEquals(approvedBody, wire(outgoing.body))
+                assertEquals(sent, approvedRounds.last())
+                val body = Json.parseToJsonElement(approvedBody).jsonObject
+                assertEquals(9, body.getValue("tools").jsonArray.size)
+                if (sent == 2) assertContains(approvedBody, "proposed")
+                respond(reply(dialect, if (sent == 1) "insert" else null, "insert_node_on_relation", insertion), HttpStatusCode.OK, sseHeaders)
+            }
+            val result = runAiDiagramToolLoop(server(dialect), "request", "session", "Insert a node", baseline, setOf(a.id, b.id), insertionCaps,
+                approve = { review -> approvedRounds += review.round; approvedBody = review.body; true },
+                validateScope = { true }, isSessionCurrent = { true }, credentialHeaders = { headersOf(HttpHeaders.Authorization, "Bearer fixture") }, client = http)
+            val ready = assertIs<AiDiagramLoopResult.Ready>(result)
+            val preview = assertIs<AiProposalPreview.Ready>(assertNotNull(ready.proposal).preview(baseline))
+            assertEquals(3, preview.workspace.objects.size)
+            assertEquals(2, preview.workspace.relations.size)
+            assertEquals(listOf(1, 2), approvedRounds)
+            assertEquals(2, sent)
+            assertEquals(2, baseline.objects.size)
+            assertEquals(1, baseline.relations.size)
+        }
+    }
+
     @Test fun gpt56ChatToolsAvoidReasoningRejectionOnEveryIndividuallyApprovedRound() = runTest {
         var sent = 0
         var approvedBody = ""

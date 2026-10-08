@@ -13,6 +13,7 @@ internal data class AiDiagramCapabilities(
     val nodeColors: Set<String>,
     val groupColors: Set<String>,
     val selfLoops: Boolean = false,
+    val relationNodeInsertion: Boolean = false,
 )
 
 internal data class AiDiagramToolCall(
@@ -44,6 +45,13 @@ private class DraftRejected(
 
 @Serializable private data class NodesArgs(
     val nodes: List<NodeArgs>,
+)
+
+@Serializable private data class InsertRelationNodeArgs(
+    val relation: String,
+    val node: NodeArgs,
+    val firstRelation: String,
+    val secondRelation: String,
 )
 
 @Serializable private data class NodeArgs(
@@ -137,15 +145,10 @@ internal class AiDiagramDraft(
     private var baseline: Workspace? = freeze(workspace)
     private var working: Workspace? = baseline
     private var approved = approvedIds.toSet()
-    private var references = approved.sortedBy { it.value }.mapIndexed { i, id -> "N${i + 1}" to id }.toMap()
-    private var relationReferences =
-        baseline!!
-            .relations.values
-            .filter { it.sourceObjectId in approved && it.targetObjectId in approved }
-            .sortedBy { it.id.value }
-            .mapIndexed { i, edge -> "E${i + 1}" to edge.id }
-            .toMap()
+    private var references = aiDiagramObjectReferences(approved)
+    private var relationReferences = aiDiagramRelationReferences(baseline!!, approved)
     private val calls = mutableSetOf<String>()
+    private val reservedLogicalIds = (references.keys + relationReferences.keys).toMutableSet()
     private var items = emptyList<AiProposalItem>()
     private val proposalId = randomUuid()
     private var argumentBytes = 0L
@@ -249,7 +252,7 @@ internal class AiDiagramDraft(
     private fun newReferences(ids: List<String>): Map<String, CanvasObjectId> {
         requireTool(ids.isNotEmpty() && ids.size <= 128 && ids.distinct().size == ids.size)
         requireTool(references.size - approved.size + ids.size <= 128, AiDiagramToolFailure.Limit)
-        requireTool(ids.all { identifier(it) && it !in references && it !in relationReferences })
+        requireTool(ids.all { identifier(it) && it !in reservedLogicalIds })
         return references + ids.associateWith { CanvasObjectId(randomUuid()) }
     }
 
@@ -371,8 +374,9 @@ internal class AiDiagramDraft(
                                 put("nodeColors", JsonArray(capabilities.nodeColors.map(::JsonPrimitive)))
                                 put("groupColors", JsonArray(capabilities.groupColors.map(::JsonPrimitive)))
                                 put("selfLoops", capabilities.selfLoops)
+                                put("relationNodeInsertion", capabilities.relationNodeInsertion)
                                 put("sequenceDiagrams", false)
-                                put("tools", JsonArray(ToolNames.map(::JsonPrimitive)))
+                                put("tools", JsonArray(toolNames(capabilities).map(::JsonPrimitive)))
                             },
                         )
                     }
@@ -463,7 +467,8 @@ internal class AiDiagramDraft(
                         val relations = json.decodeFromString<RelationsArgs>(call.arguments).relations
                         batch(relations) { it.id }
                         requireTool(nextRelations.size + relations.size <= 256, AiDiagramToolFailure.Limit)
-                        requireTool(relations.all { identifier(it.id) && it.id !in relationReferences && it.id !in references })
+                        requireTool(relations.all { identifier(it.id) && it.id !in reservedLogicalIds })
+                        val loopCounts = mutableMapOf<CanvasObjectId, Int>()
                         val values =
                             relations.map {
                                 val source = objectFor(it.source)
@@ -483,10 +488,54 @@ internal class AiDiagramDraft(
                                     direction = direction,
                                     label = it.label,
                                     intent = it.intent,
+                                    // Explicit geometry is required for portable clipboard/schemes,
+                                    // even though the live canvas can draw an implicit default loop.
+                                    geometry = if (source.id == target.id) {
+                                        val count = loopCounts.getOrPut(source.id) {
+                                            working!!.relations.values.count { r -> r.sourceObjectId == source.id && r.targetObjectId == source.id }
+                                        }
+                                        loopCounts[source.id] = count + 1
+                                        RelationGeometry(route = RelationRoute.Loop(extent = (80f + count * 32f).coerceAtMost(4096f)))
+                                    } else null,
                                 )
                             }
                         nextRelations = nextRelations + relations.zip(values).associate { (args, edge) -> args.id to edge.id }
                         CreateRelationsOperation(randomUuid(), values)
+                    }
+
+                    "insert_node_on_relation" -> {
+                        requireTool(capabilities.relationNodeInsertion, AiDiagramToolFailure.Unsupported)
+                        val args = json.decodeFromString<InsertRelationNodeArgs>(call.arguments)
+                        val relationId = relationReferences[args.relation] ?: reject(AiDiagramToolFailure.Scope)
+                        val original = working!!.relations[relationId] ?: reject(AiDiagramToolFailure.Dependency)
+                        requireTool(original.version in 1..9_007_199_254_738_990L, AiDiagramToolFailure.Limit)
+                        requireTool(nextRelations.size + 1 <= 256, AiDiagramToolFailure.Limit)
+                        val source = working!!.objects[original.sourceObjectId] ?: reject(AiDiagramToolFailure.Dependency)
+                        val target = working!!.objects[original.targetObjectId] ?: reject(AiDiagramToolFailure.Dependency)
+                        editable(source)
+                        editable(target)
+                        for (endpoint in listOf(source, target)) {
+                            val t = endpoint.transform
+                            requireTool(kotlin.math.abs(t.position.x) <= 1_000_000 && kotlin.math.abs(t.position.y) <= 1_000_000 &&
+                                t.size.width in 1f..100_000f && t.size.height in 1f..100_000f, AiDiagramToolFailure.Limit)
+                        }
+                        val topLayer = working!!.objects.values.maxOfOrNull { it.zIndex } ?: 0
+                        requireTool(topLayer < 9_007_199_254_738_990L, AiDiagramToolFailure.Limit)
+                        requireTool(capabilities.selfLoops || source.id != target.id, AiDiagramToolFailure.Unsupported)
+                        val names = listOf(args.node.id, args.firstRelation, args.secondRelation)
+                        requireTool(names.distinct().size == 3 && names.all { identifier(it) && it !in reservedLogicalIds })
+                        nextReferences = newReferences(listOf(args.node.id))
+                        text(args.node.text)
+                        requireTool(args.node.text.isNotBlank())
+                        val shape = NodeShape.fromToken(args.node.shape) ?: reject(AiDiagramToolFailure.Unsupported)
+                        requireTool(shape in capabilities.shapes && args.node.color in capabilities.nodeColors, AiDiagramToolFailure.Unsupported)
+                        val node = TextNode(nextReferences.getValue(args.node.id),
+                            parentId = parent(args.node.parent, references),
+                            transform = transform(args.node.x, args.node.y, args.node.width, args.node.height),
+                            text = args.node.text, colorToken = args.node.color, shape = shape, zIndex = topLayer + 1)
+                        val split = relationNodeInsertion(original, node)
+                        nextRelations = nextRelations - args.relation + mapOf(args.firstRelation to split.first.id, args.secondRelation to split.second.id)
+                        split.operation
                     }
 
                     "update_nodes" -> {
@@ -568,6 +617,7 @@ internal class AiDiagramDraft(
             working = applied.workspace
             references = nextReferences
             relationReferences = nextRelations.toMap()
+            reservedLogicalIds.addAll(nextReferences.keys + nextRelations.keys)
             items = items + item
             AiDiagramToolResult(
                 safeId,
@@ -595,6 +645,7 @@ internal class AiDiagramDraft(
         when (operation) {
             is CreateObjectsOperation -> operation.objects.size
             is CreateRelationsOperation -> operation.relations.size
+            is DeleteRelationsOperation -> operation.relations.size
             is ReparentObjectsOperation -> operation.changes.size
             is EditTextOperation -> operation.changes.size
             is TransformObjectsOperation -> operation.changes.size
@@ -624,6 +675,7 @@ internal class AiDiagramDraft(
         items =
             emptyList()
         calls.clear()
+        reservedLogicalIds.clear()
     }
 
     /** Reject repeated keys, including escaped aliases, instead of parser last-value-wins. */
@@ -701,6 +753,8 @@ internal class AiDiagramDraft(
     }
 
     companion object {
+        fun toolNames(capabilities: AiDiagramCapabilities) = ToolNames +
+            if (capabilities.relationNodeInsertion) listOf("insert_node_on_relation") else emptyList()
         val ToolNames =
             listOf(
                 "list_diagram_capabilities",

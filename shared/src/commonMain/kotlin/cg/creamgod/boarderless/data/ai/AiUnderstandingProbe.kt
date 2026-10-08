@@ -34,6 +34,8 @@ internal suspend fun runAiUnderstandingProbe(
                     responseType = event.responseType ?: response?.responseType,
                     preparedAuthentication = event.preparedAuthentication ?: response?.preparedAuthentication,
                     authenticationChallenge = event.authenticationChallenge ?: response?.authenticationChallenge,
+                    responseRequestId = event.responseRequestId ?: response?.responseRequestId,
+                    responseHeadersMillis = event.responseHeadersMillis ?: response?.responseHeadersMillis,
                 )
             } else {
                 event

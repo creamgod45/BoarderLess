@@ -35,6 +35,8 @@ internal data class AiProbeDiagnostic(
     val authenticationChallenge: AiAuthenticationChallenge? = null,
     val request: AiWireRequestDiagnostic? = null,
     val providerError: AiWireErrorDiagnostic? = null,
+    val responseRequestId: AiWireRequestId? = null,
+    val responseHeadersMillis: Long? = null,
 ) {
     fun reportLine(): String =
         buildString {
@@ -45,6 +47,8 @@ internal data class AiProbeDiagnostic(
             preparedAuthentication?.let { append(" preparedAuth=").append(it.name) }
             authenticationChallenge?.let { append(" authChallenge=").append(it.name) }
             request?.let { append(" ").append(it.report()) }
+            responseRequestId?.let { append(" responseRequestId=").append(it) }
+            responseHeadersMillis?.let { append(" responseHeadersMs=").append(it.coerceAtLeast(0)) }
             providerError?.let { append(" ").append(it.report()) }
         }
 }

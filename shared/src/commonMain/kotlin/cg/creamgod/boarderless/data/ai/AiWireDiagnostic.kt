@@ -31,8 +31,9 @@ internal data class AiWireRequestDiagnostic(
     val maxCompletionTokens: Int?,
     val maxTokens: Int?,
     val parameters: List<AiWireParameter>,
+    val temperature: Double? = null,
 ) {
-    fun report() = "requestEndpoint=$endpoint requestModel=$model requestBytes=$bytes messages=$messages tools=$tools stream=${stream ?: "Unknown"} reasoning=$reasoning max_completion_tokens=${maxCompletionTokens ?: "Absent"} max_tokens=${maxTokens ?: "Absent"} parameters=${parameters.joinToString(",")}"
+    fun report() = "requestEndpoint=$endpoint requestModel=$model requestBytes=$bytes messages=$messages tools=$tools stream=${stream ?: "Unknown"} reasoning=$reasoning max_completion_tokens=${maxCompletionTokens ?: "Absent"} max_tokens=${maxTokens ?: "Absent"} temperature=${temperature ?: "Absent"} parameters=${parameters.joinToString(",")}"
 }
 internal data class AiWireErrorDiagnostic(
     val body: AiWireErrorBody,
@@ -97,6 +98,7 @@ internal fun aiWireRequestDiagnostic(body: String, path: String): AiWireRequestD
         (obj["max_completion_tokens"] as? JsonPrimitive)?.intOrNull,
         (obj["max_tokens"] as? JsonPrimitive)?.intOrNull,
         obj.keys.map(::parameter).distinct().sortedBy { it.ordinal },
+        (obj["temperature"] as? JsonPrimitive)?.takeIf { !it.isString }?.doubleOrNull?.takeIf { it.isFinite() },
     )
 } catch (_: Exception) { null }
 
@@ -160,4 +162,17 @@ internal suspend fun ByteReadChannel.aiWireErrorDiagnostic(): AiWireErrorDiagnos
         } ?: AiWireErrorDiagnostic(AiWireErrorBody.ReadFailed, size)
     } catch (cancelled: CancellationException) { throw cancelled }
       catch (_: Exception) { AiWireErrorDiagnostic(AiWireErrorBody.ReadFailed, size) }
+}
+
+/** Only the conventional OpenAI opaque ID form is allowed; arbitrary router headers are omitted. */
+internal class AiWireRequestId private constructor(private val value: String) {
+    override fun toString(): String = value
+    companion object {
+        fun fromHeaders(headers: io.ktor.http.Headers): AiWireRequestId? {
+            val values = headers.getAll("x-request-id") ?: return null
+            val value = values.singleOrNull() ?: return null
+            return value.takeIf { it.length == 36 && it.startsWith("req_") &&
+                it.drop(4).all { c -> c in '0'..'9' || c in 'a'..'f' } }?.let(::AiWireRequestId)
+        }
+    }
 }
