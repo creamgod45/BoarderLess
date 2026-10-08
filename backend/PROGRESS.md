@@ -20,7 +20,7 @@
 ### 專案基礎
 - ✅ `backend/` Bun + TypeScript 專案，Fastify 5 + TypeBox，MVC + Repository / Service 分層
 - ✅ 環境變數設定（`src/config/env.ts`）、`.env.example`
-- ✅ `docker-compose.yml` 啟動 PostgreSQL 17（port 5433）與 RustFS S3-compatible storage（port 9000）
+- ✅ `docker-compose.yml` 啟動 PostgreSQL 18.6（port 5433）與 RustFS S3-compatible storage（port 9000）
 - ✅ SQL migration runner（advisory lock + 單一 transaction，`bun run migrate`）
 - ✅ 統一 error envelope `{ error: { code, message, details }, requestId }`
 - ✅ OpenAPI / Swagger UI（`/docs`），request / response 皆有 JSON Schema
@@ -42,6 +42,11 @@
 - ✅ Operations：`POST …/operations`（§6.2 envelope）、`GET …/operations?afterSeq=&limit=`（catch-up）
 - ✅ State / Snapshots：`GET …/state`（一致讀取的目前 projection）、`POST …/snapshots`（checksum）、`GET …/snapshots/latest`
 - ✅ Assets（Media v1）：見下節
+
+### 容器與 CI
+- ✅ `Dockerfile`：`api`（預設，port 3000、HEALTHCHECK、啟動時自動 migration）與 `worker`（含 ffmpeg）兩個 target；以非 root `bun` 使用者執行；`/data` volume 供 local storage driver
+- ✅ `docker compose --profile app`：以容器跑 API + worker（`API_PORT`、`APP_DB_NAME`、`S3_PUBLIC_ENDPOINT` 可調）
+- ✅ GitHub Actions `backend-image.yml`：`backend/` 變更時型別檢查 + 測試（PostgreSQL、RustFS、ffmpeg）→ 映像啟動檢查 → 打包 amd64 / arm64 並推送 `ghcr.io/creamgod45/boarderless-backend`、`boarderless-worker`
 
 ### 素材系統 Media v1（BACKEND_MEDIA_API_SPEC）
 - ✅ `POST …/assets`：MIME 精確 allowlist（415）、1..200 MiB（413）、`sha256:` checksum 格式（400）→ 201 `{asset, upload}`；不再回傳 `uploadUrl`
@@ -157,7 +162,7 @@
 - [ ] Storage 孤兒物件回收：bucket lifecycle rule 清理 `uploads/` 前綴（ready 後仍以有效票券重傳、或 worker 在寫入縮圖與 DB commit 之間當機時會留下物件）
 - [ ] verify job 進入 dead-letter 時資產維持 pending：需要告警與人工重試工具
 - [ ] 驗證強度：目前解碼第一個影格；評估完整解碼 / 影片 codec allowlist / 音訊檢查
-- [ ] Worker container image（含 ffmpeg）與資源限制（CPU / 記憶體 / 同時 job 數）
+- [ ] Worker 部署的資源限制（CPU / 記憶體 / 同時 job 數）；worker 映像約 900 MB（Debian ffmpeg），可評估精簡版 ffmpeg
 - [ ] 正式環境 storage：bucket、CORS、lifecycle 由 IaC 管理（`S3_ENSURE_BUCKET` 只限開發），`STORAGE_SIGNING_SECRET` 必填
 - [ ] Snapshot compaction worker（依 operation 數量 / 時間自動觸發）
 - [ ] Workspace 刪除後 assets / snapshots / 衍生檔清理排程
@@ -175,7 +180,7 @@
 - [ ] OpenTelemetry traces、metrics（commit latency、lock wait、outbox backlog、event-loop lag）
 - [ ] Load scenario（大量 idle socket、熱點 Workspace、平行寫入）
 - [ ] 大型 snapshot 改存 object storage（`storage_key`）
-- [ ] CI：typecheck + test（含 PostgreSQL service）
+- [ ] 部署：映像已自動推送到 GHCR，但尚未設定部署目標（主機 / 平台、環境變數、secret、DB migration 策略）
 - [ ] Workspace 狀態 inspector page view（需先有正式 auth）
 
 ## 資料政策

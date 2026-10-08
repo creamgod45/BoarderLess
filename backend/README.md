@@ -41,6 +41,29 @@ bun run worker:dev        # 另一個 terminal：素材驗證 / 縮圖 / 清理
 | `bun run fixtures:canvas` | 重新錄製 canvas（型別 / 階層 / restore / receipt）fixtures |
 | `bun run typecheck` | `tsc --noEmit` |
 
+### Docker
+
+`Dockerfile` 有兩個 target：`api`（預設，listen 3000）與 `worker`（含 ffmpeg）。容器啟動時 API 會自動套用 migration（`MIGRATE_ON_START=true`；worker 預設不跑）。
+
+```bash
+# 以容器跑完整服務（DB / storage / API / worker）；API 對外 port 預設 3000，可用 API_PORT 調整
+docker compose --profile app up -d --build
+```
+
+```bash
+# 單獨執行 CI 打包好的映像
+docker run -p 3000:3000 -e DATABASE_URL=postgres://… -e STORAGE_DRIVER=s3 -e S3_ENDPOINT=… ghcr.io/creamgod45/boarderless-backend:main
+```
+
+GitHub Actions（[`.github/workflows/backend-image.yml`](../.github/workflows/backend-image.yml)）在 `backend/` 有變更時：型別檢查 + 測試（含 PostgreSQL、RustFS、ffmpeg）→ 映像啟動檢查 → 打包 amd64 / arm64 映像並推送到 GHCR：
+
+| 映像 | 內容 |
+|---|---|
+| `ghcr.io/creamgod45/boarderless-backend` | REST API（port 3000） |
+| `ghcr.io/creamgod45/boarderless-worker` | 背景 worker |
+
+Tag：分支名稱、`sha-<短 sha>`、預設分支另加 `latest`；推送 `backend-v1.2.3` tag 另加 `1.2.3`。Pull request 只測試與 build，不推送。
+
 ### 身分驗證（開發用）
 
 正式登入尚未實作。`AUTH_MODE=dev` 下以 `x-user-id` header 識別使用者：

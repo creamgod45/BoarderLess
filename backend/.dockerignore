@@ -1,0 +1,15 @@
+# 只把執行所需的檔案送進 build context
+node_modules
+.env
+.env.*
+!.env.example
+.storage
+coverage
+*.log
+tests
+scripts
+Dockerfile
+.dockerignore
+docker-compose.yml
+README.md
+PROGRESS.md

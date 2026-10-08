@@ -1,7 +1,7 @@
 # 本機開發用基礎設施。Redis 會在 B2 階段加入。
 services:
   postgres:
-    image: postgres:17-alpine
+    image: postgres:18.6-alpine
     environment:
       POSTGRES_USER: boarderless
       POSTGRES_PASSWORD: boarderless
@@ -9,7 +9,8 @@ services:
     ports:
       - "5433:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # PG18 映像的資料目錄改為 /var/lib/postgresql/<major>/docker，volume 需掛在上一層
+      - pgdata18:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U boarderless"]
       interval: 5s
@@ -27,6 +28,46 @@ services:
     volumes:
       - objectdata:/data
 
+  # ---- 應用服務容器（docker compose --profile app up -d --build）----
+  api:
+    profiles: ["app"]
+    build:
+      context: .
+      target: api
+    image: boarderless-backend:local
+    environment: &app-env
+      DATABASE_URL: postgres://boarderless:boarderless@postgres:5432/${APP_DB_NAME:-boarderless}
+      STORAGE_DRIVER: s3
+      # 容器內以 service name 存取 storage；簽發給 APP 的 URL 使用主機可連線的位址
+      S3_ENDPOINT: http://object-storage:9000
+      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:9000}
+      S3_REGION: us-east-1
+      S3_BUCKET: boarderless-assets
+      S3_ACCESS_KEY_ID: boarderless
+      S3_SECRET_ACCESS_KEY: boarderless-dev-secret
+      S3_ENSURE_BUCKET: "true"
+      CORS_ORIGINS: "*"
+    ports:
+      - "${API_PORT:-3000}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      object-storage:
+        condition: service_started
+
+  worker:
+    profiles: ["app"]
+    build:
+      context: .
+      target: worker
+    image: boarderless-worker:local
+    environment: *app-env
+    depends_on:
+      # API 啟動時負責 migration
+      api:
+        condition: service_healthy
+
 volumes:
-  pgdata:
+  # PG17 的舊 volume（backend_pgdata）格式不相容，未沿用
+  pgdata18:
   objectdata:
