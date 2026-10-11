@@ -295,6 +295,7 @@ export const OperationAckEvent = Type.Union([
     missingOperations: Type.Array(CommittedOperationSchema),
     code: ConflictResponse.properties.code,
     canvasStyle: ConflictResponse.properties.canvasStyle,
+    sequenceDiagrams: ConflictResponse.properties.sequenceDiagrams,
   }),
   Type.Object({
     ...ackBase,

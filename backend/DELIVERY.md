@@ -168,3 +168,42 @@
 ### 5. 尚待集中執行
 - GRAPH-01 / 02 / 03。證據：8 個整合測試、fixtures 契約測試（每條 projection geometry 與 vectorPath 重新驗證）。
 - 未涵蓋：APP renderer / hit test、端點改接、跨端拖曳 UI。
+
+---
+
+## 批次 E：時序圖（2026-10-11）
+
+### 1. 分支與 commit
+- 分支 `backend/media-v1`（基底 `89a85a3`），**尚未 commit**。狀態：源碼完成 ✅；服務已部署 ⬜；正式驗收 ⬜。
+
+### 2. 格式、operation 與 capability
+- `GET …/state` 與新 snapshot（**snapshot schema 3**）新增 `sequenceDiagrams`（依 containerId 排序的陣列）與 `sequenceDiagramsVersion`（初始 0）。
+- 元素格式：`boarderless.sequence-canvas.v1`，欄位與 APP `SequenceCanvasDiagram` 的 kotlinx 輸出相同（graph ID 為 `{"value": "<uuid>"}`）；server 寫入格式所有欄位必填（role / kind / dashed / blockId / branchIndex / blocks / schema）。graph ID 必須是小寫 UUID，semantic ID 是 `[A-Za-z_][A-Za-z0-9_]{0,63}` 且拒保留字。
+- **Wire 對應**：APP 的 `Map<CanvasObjectId, SequenceCanvasDiagram>` 在 wire 上是陣列，以每份的 `containerId` 為 key（順序無關，containerId 不可重複）。
+- Operation `update_sequence_diagrams`：payload `{expectedSequenceDiagramsVersion, before: [...], after: [...]}`（各 ≤ 64）。
+  - Workspace 鎖內：version CAS，且 before 必須與目前 metadata 完整一致（canonical 比較）；成功時 after 整份替換、version + 1。
+  - 正式 payload：`{expectedSequenceDiagramsVersion, before, after（canonical）, sequenceDiagramsVersion（新版本）}`。
+- **Graph bindings 在整個 transaction 結束時驗證**（APP `hasValidSequenceBindings` 規則）。只要 Workspace 有時序圖，每個 transaction 結束時都會檢查：
+  - container / block 是 active group，祖先鏈無循環。
+  - participant 是同 container 的 text，文字等於 label、沒有 vectorPath。
+  - message relation 的端點、方向（Signal → none，其他 → forward）、label 與自循環（loop route）一致。
+  - 跨 diagram 不共用物件或 relation；order 完整唯一、block 無循環、深度 ≤ 16、branch 非空、文字上限。
+  - 因此刪除 / 修改被引用的節點或 relation 而不同交易更新 metadata 時，整個 transaction 拒絕。
+- 錯誤：409 `code: "sequence_diagrams_conflict"` + `sequenceDiagrams: {expectedVersion, actualVersion, diagrams, sequenceDiagramsVersion}`；422 `invalid_sequence_binding`（details.containerId）、`invalid_sequence_diagram`（containerId 重複）、`sequence_diagrams_version_exhausted`；結構錯誤 `invalid_operation`。
+- Capability：`sequenceDiagrams {supported, schema, operationKinds: ["update_sequence_diagrams"], snapshotSchemaVersion: 3, limits}`。
+- Undo / Redo：新的 `update_sequence_diagrams`（版本單調），搭配 delete / restore_* 同交易還原 graph；只還原 metadata 而 graph 不存在時拒絕。
+
+### 3. Migration、部署與相容性
+- Migration `009_sequence_diagrams.sql`：`workspaces.sequence_diagrams`（`[]`）、`sequence_diagrams_version`（0）。
+- 相容性：state / 新 snapshot 多兩個欄位，snapshot schemaVersion 變為 3（schema 1 / 2 的舊 snapshot 原樣回傳）。有時序圖的 Workspace 每個 transaction 多一次 binding 驗證查詢。
+
+### 4. Fixtures
+- `tests/fixtures/contract/sequence-v1/`（14 個）：
+  - state 空、只送 metadata 422、graph + metadata 同交易建立、stale version 409、before 不一致 409。
+  - 刪訊息 relation 422、只改 participant 文字 422、改名 + metadata 同交易、Return 非 dashed 422、非 UUID graph ID 422。
+  - Undo 建立、Redo 建立（版本 4）、state、snapshot schema 3。
+- APP clipboard v7 的時序圖（originalId 版本）由 `src/domain/selection.ts` 驗證，與方案簿共用。
+
+### 5. 尚待集中執行
+- GRAPH-04。證據：5 個整合測試、fixtures。
+- 未涵蓋：APP 時序圖 wizard / 引導式編輯的 server 模式接線、雙端視覺。

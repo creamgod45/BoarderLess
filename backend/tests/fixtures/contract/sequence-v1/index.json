@@ -1,0 +1,76 @@
+{
+  "contract": "Sequence diagrams v1（batch E）",
+  "generatedBy": "scripts/generate-sequence-fixtures.ts",
+  "fixtures": [
+    {
+      "name": "00-state-empty",
+      "description": "初始：sequenceDiagrams = []、version 0",
+      "status": 200
+    },
+    {
+      "name": "01-metadata-without-graph-422",
+      "description": "只送 metadata、graph 不存在：invalid_sequence_binding（全交易拒絕）",
+      "status": 422
+    },
+    {
+      "name": "02-create-graph-and-metadata",
+      "description": "container / participants / block / message relations + update_sequence_diagrams 同一 transaction",
+      "status": 200
+    },
+    {
+      "name": "03-stale-version-409",
+      "description": "expectedSequenceDiagramsVersion 過期：409 sequence_diagrams_conflict + 權威 metadata",
+      "status": 409
+    },
+    {
+      "name": "04-before-mismatch-409",
+      "description": "before 與目前不完全一致：409",
+      "status": 409
+    },
+    {
+      "name": "05-delete-message-relation-422",
+      "description": "刪除訊息 relation 而不更新 metadata：拒絕（不留懸空引用）",
+      "status": 422
+    },
+    {
+      "name": "06-rename-participant-alone-422",
+      "description": "只改 participant 節點文字：label 不一致，拒絕",
+      "status": 422
+    },
+    {
+      "name": "07-rename-with-metadata",
+      "description": "節點改名 + metadata 同交易：accepted，version 2",
+      "status": 200
+    },
+    {
+      "name": "08-return-not-dashed-422",
+      "description": "Return 必須 dashed（APP SequenceMessage 規則）",
+      "status": 422
+    },
+    {
+      "name": "09-graph-id-not-uuid-422",
+      "description": "server 路徑的 graph ID 必須是 UUID（semantic ID 才是受限 ASCII）",
+      "status": 422
+    },
+    {
+      "name": "10-undo-create",
+      "description": "Undo：metadata 清空 + 刪 graph（同交易），version 3",
+      "status": 200
+    },
+    {
+      "name": "11-redo-create",
+      "description": "Redo：restore graph + relations + metadata，version 4（單調，不退回）",
+      "status": 200
+    },
+    {
+      "name": "12-state",
+      "description": "state：sequenceDiagrams 與 graph 同一 throughServerSeq",
+      "status": 200
+    },
+    {
+      "name": "13-snapshot-schema-3",
+      "description": "snapshot schema 3：含 sequenceDiagrams / version",
+      "status": 201
+    }
+  ]
+}

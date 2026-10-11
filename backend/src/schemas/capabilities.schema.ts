@@ -50,7 +50,13 @@ export const CapabilitiesSchema = Type.Object({
     limits: Type.Record(Type.String(), Type.Number()),
   }),
   textPlacement: Type.Object({ supported: Type.Literal(true), objectType: Type.String(), property: Type.String() }),
-  sequenceDiagrams: Unsupported,
+  sequenceDiagrams: Type.Object({
+    supported: Type.Literal(true),
+    schema: Type.String(),
+    operationKinds: Type.Array(Type.String()),
+    snapshotSchemaVersion: Type.Integer(),
+    limits: Type.Record(Type.String(), Type.Integer()),
+  }),
   mediaReferenceRestore: Unsupported,
 })
 

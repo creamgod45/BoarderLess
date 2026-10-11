@@ -9,7 +9,7 @@
     "body": {
       "workspaceId": "22222222-2222-4222-8222-222222222222",
       "throughServerSeq": 4,
-      "schemaVersion": 2,
+      "schemaVersion": 3,
       "snapshot": {
         "workspaceId": "22222222-2222-4222-8222-222222222222",
         "workspaceVersion": 3,
@@ -45,10 +45,12 @@
             "colorToken": "auto"
           }
         },
-        "canvasStyleVersion": 3
+        "canvasStyleVersion": 3,
+        "sequenceDiagrams": [],
+        "sequenceDiagramsVersion": 0
       },
       "storageKey": null,
-      "checksum": "sha256:51b364a53a32802156c1d455e04bc54c72f5890daa00d335b371cb5d8044bb97",
+      "checksum": "sha256:7d41b39c9bb7c8a5296ad729c31b5477e6df3f2b50d71ff494cab955a546c98b",
       "createdAt": "2026-10-02T00:00:00.000Z"
     }
   }

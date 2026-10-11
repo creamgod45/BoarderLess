@@ -22,7 +22,8 @@
     "fixtures:quick-scheme": "bun scripts/generate-quick-scheme-fixtures.ts",
     "fixtures:canvas-style": "bun scripts/generate-canvas-style-fixtures.ts",
     "fixtures:graph": "bun scripts/generate-graph-fixtures.ts",
-    "fixtures:all": "bun run fixtures:contract && bun run fixtures:canvas && bun run fixtures:preparation && bun run fixtures:realtime && bun run fixtures:quick-scheme && bun run fixtures:canvas-style && bun run fixtures:graph",
+    "fixtures:sequence": "bun scripts/generate-sequence-fixtures.ts",
+    "fixtures:all": "bun run fixtures:contract && bun run fixtures:canvas && bun run fixtures:preparation && bun run fixtures:realtime && bun run fixtures:quick-scheme && bun run fixtures:canvas-style && bun run fixtures:graph && bun run fixtures:sequence",
     "acceptance:db-restart": "bun scripts/acceptance/db-restart.ts",
     "acceptance:multi-process": "bun scripts/acceptance/multi-process.ts"
   },

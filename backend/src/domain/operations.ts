@@ -2,6 +2,7 @@ import { Type, type Static, type TSchema } from 'typebox'
 import { Value } from 'typebox/value'
 import { RELATION_DIRECTIONS } from '../models/canvas.ts'
 import { CanvasStyleSchema } from './canvas-style.ts'
+import { SequenceDiagramListSchema } from './sequence-diagrams.ts'
 
 /**
  * WorkspaceOperation 種類與 payload schema。
@@ -120,6 +121,19 @@ export const UpdateCanvasStylePayload = Type.Object(
   { additionalProperties: false },
 )
 
+/**
+ * 時序圖 metadata（批次 E）：before 必須與目前完整一致 + version CAS；after 整份替換。
+ * graph bindings 在整個 transaction 結束時驗證（同交易可一起建立 / 刪除 participant 節點與訊息 relation）。
+ */
+export const UpdateSequenceDiagramsPayload = Type.Object(
+  {
+    expectedSequenceDiagramsVersion: Type.Integer({ minimum: 0, maximum: 9007199254740991 }),
+    before: SequenceDiagramListSchema,
+    after: SequenceDiagramListSchema,
+  },
+  { additionalProperties: false },
+)
+
 export const OPERATION_PAYLOADS = {
   create_object: CreateObjectPayload,
   update_object: UpdateObjectPayload,
@@ -131,6 +145,7 @@ export const OPERATION_PAYLOADS = {
   restore_objects: RestoreObjectsPayload,
   restore_relations: RestoreRelationsPayload,
   update_canvas_style: UpdateCanvasStylePayload,
+  update_sequence_diagrams: UpdateSequenceDiagramsPayload,
 } satisfies Record<string, TSchema>
 
 export type OperationKind = keyof typeof OPERATION_PAYLOADS
@@ -195,6 +210,7 @@ export function touchedObjectIds(op: TypedOperation): string[] {
     case 'restore_relations':
       return op.payload.relationIds
     case 'update_canvas_style':
+    case 'update_sequence_diagrams':
       return []
   }
 }

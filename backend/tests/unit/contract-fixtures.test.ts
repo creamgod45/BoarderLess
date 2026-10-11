@@ -284,3 +284,29 @@ describe('Graph v2 contract fixtures', () => {
     })
   }
 })
+
+// ---- Sequence diagrams v1（batch E）----
+const SEQ_DIR = join(import.meta.dirname, '../fixtures/contract/sequence-v1')
+const seqFiles = (await readdir(SEQ_DIR)).filter((f) => /^\d+-.*\.json$/.test(f))
+
+describe('Sequence diagrams v1 contract fixtures', () => {
+  for (const file of seqFiles) {
+    test(file, async () => {
+      const doc = JSON.parse(await readFile(join(SEQ_DIR, file), 'utf8'))
+      const { status, body } = doc.response
+      const path: string = doc.request.path
+      const schema =
+        status === 409 && body.status === 'conflict' ? ConflictResponse
+        : status >= 400 ? ErrorEnvelope
+        : path.endsWith('/state') ? SnapshotContentSchema
+        : path.endsWith('/snapshots') ? SnapshotSchema
+        : CommittedResponse
+      expect([...Value.Errors(schema, body)].map((e) => `${e.instancePath} ${e.message}`)).toEqual([])
+      const expected = /-(\d{3})$/.exec(file.replace('.json', ''))?.[1]
+      if (expected) expect(String(status)).toBe(expected)
+      for (const op of body?.operations ?? []) {
+        if (op.operationType === 'update_sequence_diagrams') expect(op.payload.sequenceDiagramsVersion).toBe(op.payload.expectedSequenceDiagramsVersion + 1)
+      }
+    })
+  }
+})

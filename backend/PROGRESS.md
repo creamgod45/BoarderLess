@@ -1,7 +1,7 @@
 # Backend 開發進度
 
 對照：[`docs/BACKEND_ARCHITECTURE.md`](../docs/BACKEND_ARCHITECTURE.md) §11 交付階段、[`docs/BACKEND_MEDIA_API_SPEC.md`](../docs/BACKEND_MEDIA_API_SPEC.md)（Media v1）、[`docs/BACKEND_ASSET_PREPARATION_V2_SPEC.md`](../docs/BACKEND_ASSET_PREPARATION_V2_SPEC.md)（preparation v2）
-最後更新：2026-10-11（批次 A–D 源碼）
+最後更新：2026-10-11（批次 A–E 源碼）
 
 圖例：✅ 完成 · 🟡 部分完成／暫定 · ⬜ 未開始
 
@@ -76,6 +76,11 @@
 - ✅ 插入節點單一 transaction recipe（含 Undo / Redo、CAS race）
 - ✅ TextNode `vectorPath` / `textPlacement`（null 清除）；`src/domain/{relation-geometry,vector-path,node-shapes}.ts`
 - ✅ 8 個整合測試、56 個 fixtures；`bun run fixtures:all` 一次重錄全部 contract fixtures
+
+### 時序圖（批次 E，MISSING_IMPLEMENTATION_SPEC §7）
+- ✅ Migration `009`：`workspaces.sequence_diagrams` / `sequence_diagrams_version`
+- ✅ `update_sequence_diagrams`：before 完整一致 + CAS、409 `sequence_diagrams_conflict`；transaction 結束時驗證全部 graph bindings
+- ✅ state / snapshot schema 3；5 個整合測試、14 個 fixtures
 
 ### 容器與 CI
 - ✅ `Dockerfile`：`api`（預設，port 3000、HEALTHCHECK、啟動時自動 migration）與 `worker`（含 ffmpeg）兩個 target；以非 root `bun` 使用者執行；`/data` volume 供 local storage driver
@@ -152,7 +157,7 @@
 - ✅ locked 物件只能切換 `locked`，不可移動 / 修改 / 刪除
 - ✅ operation、projection、outbox 在同一 transaction 提交
 
-### 測試（`bun test`，428 個）
+### 測試（`bun test`，447 個）
 - ✅ 單元：operation payload 驗證、touched ids、角色權限矩陣、HTML 跳脫、MIME sniff、本機簽名 URL、contract fixtures schema
 - ✅ 整合（真實 PostgreSQL）：create/move/delete + 冪等重送、20 個並行寫入的 `serverSeq` 連續性、版本衝突、transaction rollback、relation cascade、角色與撤銷、outbox、snapshot
 - ✅ 素材整合（真實 ffmpeg）：六種 MIME 完整流程、驗證失敗分類、complete 冪等 / 衝突、abandon 競爭、GC、lease 過期重領、重複縮圖 job、多 worker、不可覆寫、missing、ACL、MediaNode 引用、storage 503
@@ -193,7 +198,7 @@
 - [x] B 雲端快速方案簿（materialization 未交付）
 - [x] C 共用背景
 - [x] D 連線 geometry 與 vectorPath（端點改接未交付）
-- [ ] E 時序圖
+- [x] E 時序圖
 - [ ] F 素材引用歷史還原
 
 ### 素材 preparation v2——後端已完成，待 APP 對接

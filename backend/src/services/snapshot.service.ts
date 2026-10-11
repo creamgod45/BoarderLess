@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { canonicalCanvasStyle } from '../domain/canvas-style.ts'
+import { canonicalDiagrams } from '../domain/sequence-diagrams.ts'
 import type { SnapshotContent, WorkspaceSnapshot } from '../models/snapshot.ts'
 import type { Workspace } from '../models/workspace.ts'
 import type { WorkspaceAction } from '../domain/permissions.ts'
@@ -7,8 +8,8 @@ import type { Database } from '../repositories/index.ts'
 import { notFound } from '../utils/errors.ts'
 import { requireWorkspaceAccess } from './access.service.ts'
 
-/** 1：objects / relations；2：加上 canvasStyle / canvasStyleVersion（批次 C） */
-export const SNAPSHOT_SCHEMA_VERSION = 2
+/** 1：objects / relations；2：加上 canvasStyle / canvasStyleVersion（批次 C）；3：加上 sequenceDiagrams（批次 E） */
+export const SNAPSHOT_SCHEMA_VERSION = 3
 
 export class SnapshotService {
   constructor(private readonly db: Database) {}
@@ -56,6 +57,8 @@ export class SnapshotService {
         relations: await repos.canvas.listActiveRelations(workspaceId),
         canvasStyle: canonicalCanvasStyle(workspace.canvasStyle),
         canvasStyleVersion: workspace.canvasStyleVersion,
+        sequenceDiagrams: canonicalDiagrams(workspace.sequenceDiagrams),
+        sequenceDiagramsVersion: workspace.sequenceDiagramsVersion,
       }
       return { workspace, content }
     })

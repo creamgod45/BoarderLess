@@ -535,10 +535,10 @@
           "updatedAt": "2026-10-02T00:00:00.000Z"
         },
         {
-          "relationId": "00000000-0000-4000-8000-000000000131",
+          "relationId": "00000000-0000-4000-8000-000000000129",
           "relationVersion": 3,
-          "sourceObjectId": "00000000-0000-4000-8000-000000000127",
-          "targetObjectId": "66666666-6666-4666-8666-666666666666",
+          "sourceObjectId": "88888888-8888-4888-8888-888888888888",
+          "targetObjectId": "00000000-0000-4000-8000-000000000127",
           "direction": "forward",
           "intent": null,
           "label": null,
@@ -547,10 +547,10 @@
           "updatedAt": "2026-10-02T00:00:00.000Z"
         },
         {
-          "relationId": "00000000-0000-4000-8000-000000000129",
+          "relationId": "00000000-0000-4000-8000-000000000131",
           "relationVersion": 3,
-          "sourceObjectId": "88888888-8888-4888-8888-888888888888",
-          "targetObjectId": "00000000-0000-4000-8000-000000000127",
+          "sourceObjectId": "00000000-0000-4000-8000-000000000127",
+          "targetObjectId": "66666666-6666-4666-8666-666666666666",
           "direction": "forward",
           "intent": null,
           "label": null,
@@ -583,18 +583,6 @@
           "updatedAt": "2026-10-02T00:00:00.000Z"
         },
         {
-          "relationId": "00000000-0000-4000-8000-000000000177",
-          "relationVersion": 3,
-          "sourceObjectId": "00000000-0000-4000-8000-000000000173",
-          "targetObjectId": "88888888-8888-4888-8888-888888888888",
-          "direction": "none",
-          "intent": null,
-          "label": null,
-          "style": {},
-          "createdAt": "2026-10-02T00:00:00.000Z",
-          "updatedAt": "2026-10-02T00:00:00.000Z"
-        },
-        {
           "relationId": "00000000-0000-4000-8000-000000000175",
           "relationVersion": 3,
           "sourceObjectId": "66666666-6666-4666-8666-666666666666",
@@ -607,11 +595,11 @@
           "updatedAt": "2026-10-02T00:00:00.000Z"
         },
         {
-          "relationId": "00000000-0000-4000-8000-000000000200",
+          "relationId": "00000000-0000-4000-8000-000000000177",
           "relationVersion": 3,
-          "sourceObjectId": "00000000-0000-4000-8000-000000000196",
-          "targetObjectId": "66666666-6666-4666-8666-666666666666",
-          "direction": "forward",
+          "sourceObjectId": "00000000-0000-4000-8000-000000000173",
+          "targetObjectId": "88888888-8888-4888-8888-888888888888",
+          "direction": "none",
           "intent": null,
           "label": null,
           "style": {},
@@ -623,6 +611,18 @@
           "relationVersion": 3,
           "sourceObjectId": "66666666-6666-4666-8666-666666666666",
           "targetObjectId": "00000000-0000-4000-8000-000000000196",
+          "direction": "forward",
+          "intent": null,
+          "label": null,
+          "style": {},
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "relationId": "00000000-0000-4000-8000-000000000200",
+          "relationVersion": 3,
+          "sourceObjectId": "00000000-0000-4000-8000-000000000196",
+          "targetObjectId": "66666666-6666-4666-8666-666666666666",
           "direction": "forward",
           "intent": null,
           "label": null,
@@ -675,7 +675,9 @@
           "colorToken": "auto"
         }
       },
-      "canvasStyleVersion": 0
+      "canvasStyleVersion": 0,
+      "sequenceDiagrams": [],
+      "sequenceDiagramsVersion": 0
     }
   }
 }

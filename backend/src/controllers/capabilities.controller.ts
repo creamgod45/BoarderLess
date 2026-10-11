@@ -3,7 +3,8 @@ import { ASSET_MEDIA_TYPES, MAX_ASSET_BYTES } from '../models/asset.ts'
 import { PREPARATION_RESPONSE_SCHEMA, PREPARE_REQUEST_SCHEMA } from '../models/asset-preparation.ts'
 import { REALTIME_PROTOCOL_VERSION, REALTIME_SUBPROTOCOL } from '../realtime/messages.ts'
 import type { CapabilitiesSchema } from '../schemas/capabilities.schema.ts'
-import { RELATION_GEOMETRY_SCHEMA, SELECTION_SCHEMA_VERSIONS } from '../domain/selection.ts'
+import { RELATION_GEOMETRY_SCHEMA, SELECTION_SCHEMA_VERSIONS, SEQUENCE_CANVAS_SCHEMA } from '../domain/selection.ts'
+import { MAX_SEQUENCE_DIAGRAMS } from '../domain/sequence-diagrams.ts'
 import { VECTOR_PATH_LIMITS } from '../domain/vector-path.ts'
 import { CANVAS_STYLE_SCHEMA_VERSIONS, DEFAULT_CANVAS_STYLE } from '../domain/canvas-style.ts'
 import { SNAPSHOT_SCHEMA_VERSION } from '../services/snapshot.service.ts'
@@ -69,7 +70,22 @@ export class CapabilitiesController {
       limits: { ...VECTOR_PATH_LIMITS },
     },
     textPlacement: { supported: true as const, objectType: 'text', property: 'textPlacement' },
-    sequenceDiagrams: { supported: false },
+    sequenceDiagrams: {
+      supported: true as const,
+      schema: SEQUENCE_CANVAS_SCHEMA,
+      operationKinds: ['update_sequence_diagrams'],
+      snapshotSchemaVersion: SNAPSHOT_SCHEMA_VERSION,
+      limits: {
+        maxDiagrams: MAX_SEQUENCE_DIAGRAMS,
+        maxParticipants: 32,
+        maxMessages: 512,
+        maxBlocks: 128,
+        maxNesting: 16,
+        maxBranches: 16,
+        maxLabelBytes: 4096,
+        maxTextBytes: 262144,
+      },
+    },
     mediaReferenceRestore: { supported: false },
   })
 }

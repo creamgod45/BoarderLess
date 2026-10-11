@@ -54,7 +54,7 @@
         "styleSchemaVersions": [
           1
         ],
-        "snapshotSchemaVersion": 2,
+        "snapshotSchemaVersion": 3,
         "defaultStyle": {
           "schemaVersion": 1,
           "backgroundToken": "default",
@@ -109,7 +109,22 @@
         "property": "textPlacement"
       },
       "sequenceDiagrams": {
-        "supported": false
+        "supported": true,
+        "schema": "boarderless.sequence-canvas.v1",
+        "operationKinds": [
+          "update_sequence_diagrams"
+        ],
+        "snapshotSchemaVersion": 3,
+        "limits": {
+          "maxDiagrams": 64,
+          "maxParticipants": 32,
+          "maxMessages": 512,
+          "maxBlocks": 128,
+          "maxNesting": 16,
+          "maxBranches": 16,
+          "maxLabelBytes": 4096,
+          "maxTextBytes": 262144
+        }
       },
       "mediaReferenceRestore": {
         "supported": false

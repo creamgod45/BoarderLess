@@ -34,7 +34,7 @@ describe.skipIf(!sql)('canvas style (batch C)', () => {
     const ws = await newWorkspace()
     expect(await state(ws)).toMatchObject({ canvasStyle: DEFAULT, canvasStyleVersion: 0 })
     const caps = (await client(env.app).get('/capabilities')).body.canvasStyle
-    expect(caps).toEqual({ supported: true, operationKinds: ['update_canvas_style'], styleSchemaVersions: [1], snapshotSchemaVersion: 2, defaultStyle: DEFAULT })
+    expect(caps).toEqual({ supported: true, operationKinds: ['update_canvas_style'], styleSchemaVersions: [1], snapshotSchemaVersion: 3, defaultStyle: DEFAULT })
   })
 
   test('accepted update: CAS +1, committed payload carries the authoritative version; state / snapshot agree', async () => {
@@ -47,7 +47,7 @@ describe.skipIf(!sql)('canvas style (batch C)', () => {
     })
     expect(await state(ws)).toMatchObject({ canvasStyle: WARM_DOTS, canvasStyleVersion: 1, throughServerSeq: 1, workspaceVersion: 1 })
     const snap = await api.post(`/workspaces/${ws}/snapshots`)
-    expect(snap.body).toMatchObject({ schemaVersion: 2, throughServerSeq: 1, snapshot: { canvasStyle: WARM_DOTS, canvasStyleVersion: 1 } })
+    expect(snap.body).toMatchObject({ schemaVersion: 3, throughServerSeq: 1, snapshot: { canvasStyle: WARM_DOTS, canvasStyleVersion: 1 } })
   })
 
   test('stale expected version → 409 canvas_style_version_conflict with the authoritative style and checkpoint', async () => {

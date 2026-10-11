@@ -1,0 +1,140 @@
+{
+  "description": "只送 metadata、graph 不存在：invalid_sequence_binding（全交易拒絕）",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "33333333-3333-4333-8333-333333333333",
+      "transactionId": "44444444-4444-4444-8444-444444444444",
+      "baseVersion": 0,
+      "operations": [
+        {
+          "operationId": "55555555-5555-4555-8555-555555555555",
+          "clientSeq": 1,
+          "kind": "update_sequence_diagrams",
+          "payload": {
+            "expectedSequenceDiagramsVersion": 0,
+            "before": [],
+            "after": [
+              {
+                "containerId": {
+                  "value": "66666666-6666-4666-8666-666666666666"
+                },
+                "participants": [
+                  {
+                    "participant": {
+                      "id": "client",
+                      "label": "Client",
+                      "role": "Actor"
+                    },
+                    "objectId": {
+                      "value": "77777777-7777-4777-8777-777777777777"
+                    }
+                  },
+                  {
+                    "participant": {
+                      "id": "server",
+                      "label": "Server",
+                      "role": "Participant"
+                    },
+                    "objectId": {
+                      "value": "88888888-8888-4888-8888-888888888888"
+                    }
+                  }
+                ],
+                "messages": [
+                  {
+                    "message": {
+                      "id": "m1",
+                      "sourceId": "client",
+                      "targetId": "server",
+                      "text": "request",
+                      "kind": "Call",
+                      "dashed": false
+                    },
+                    "relationId": {
+                      "value": "99999999-9999-4999-8999-999999999999"
+                    },
+                    "position": {
+                      "blockId": null,
+                      "branchIndex": 0,
+                      "order": 0
+                    }
+                  },
+                  {
+                    "message": {
+                      "id": "m2",
+                      "sourceId": "server",
+                      "targetId": "client",
+                      "text": "response",
+                      "kind": "Return",
+                      "dashed": true
+                    },
+                    "relationId": {
+                      "value": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+                    },
+                    "position": {
+                      "blockId": null,
+                      "branchIndex": 0,
+                      "order": 1
+                    }
+                  },
+                  {
+                    "message": {
+                      "id": "m3",
+                      "sourceId": "client",
+                      "targetId": "client",
+                      "text": "retry",
+                      "kind": "Async",
+                      "dashed": false
+                    },
+                    "relationId": {
+                      "value": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+                    },
+                    "position": {
+                      "blockId": "retryLoop",
+                      "branchIndex": 0,
+                      "order": 0
+                    }
+                  }
+                ],
+                "blocks": [
+                  {
+                    "id": "retryLoop",
+                    "kind": "Loop",
+                    "branchLabels": [
+                      "until ok"
+                    ],
+                    "objectId": {
+                      "value": "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+                    },
+                    "position": {
+                      "blockId": null,
+                      "branchIndex": 0,
+                      "order": 2
+                    }
+                  }
+                ],
+                "schema": "boarderless.sequence-canvas.v1"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 422,
+    "body": {
+      "error": {
+        "code": "invalid_sequence_binding",
+        "message": "Sequence diagram metadata does not match the graph after this transaction",
+        "details": {
+          "containerId": "66666666-6666-4666-8666-666666666666"
+        }
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

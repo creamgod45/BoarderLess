@@ -1,4 +1,5 @@
 import type { CanvasStyle } from '../domain/canvas-style.ts'
+import type { SequenceDiagram } from '../domain/sequence-diagrams.ts'
 import type { CanvasObject, Relation } from './canvas.ts'
 
 export interface WorkspaceSnapshot {
@@ -19,4 +20,6 @@ export interface SnapshotContent {
   relations: Relation[]
   canvasStyle: CanvasStyle
   canvasStyleVersion: number
+  sequenceDiagrams: SequenceDiagram[]
+  sequenceDiagramsVersion: number
 }

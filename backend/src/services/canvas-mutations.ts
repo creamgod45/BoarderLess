@@ -1,3 +1,4 @@
+import { canonicalDiagrams, diagramListErrors, firstInvalidDiagram, sameDiagrams } from '../domain/sequence-diagrams.ts'
 import { relationGeometryIssue } from '../domain/relation-geometry.ts'
 import { canonicalCanvasStyle, canvasStyleIssue } from '../domain/canvas-style.ts'
 import {
@@ -31,6 +32,16 @@ export interface VersionConflict {
 }
 
 /** 偵測到版本衝突時丟出，使整個 transaction rollback */
+/** update_sequence_diagrams 的 CAS / before 不一致 */
+export class SequenceDiagramsConflictSignal extends Error {
+  constructor(
+    readonly expectedVersion: number,
+    readonly actualVersion: number,
+  ) {
+    super('sequence diagrams conflict')
+  }
+}
+
 /** update_canvas_style 的 CAS 失敗（不放進 expectedObjectVersions 的 conflicts） */
 export class CanvasStyleConflictSignal extends Error {
   constructor(
@@ -318,6 +329,81 @@ export async function applyOperation(
       // 正式 payload 帶權威的新版本：replay / fan-out 依此設定，不由 client 自行推算
       return { expectedCanvasStyleVersion: p.expectedCanvasStyleVersion, canvasStyle, canvasStyleVersion }
     }
+
+    case 'update_sequence_diagrams': {
+      const p = op.payload
+      const workspace = (await repos.workspaces.findById(workspaceId))!
+      // before 必須與目前完整一致 + version CAS；graph bindings 在整個 transaction 結束時驗證
+      if (workspace.sequenceDiagramsVersion !== p.expectedSequenceDiagramsVersion || !sameDiagrams(p.before, workspace.sequenceDiagrams)) {
+        throw new SequenceDiagramsConflictSignal(p.expectedSequenceDiagramsVersion, workspace.sequenceDiagramsVersion)
+      }
+      const errors = diagramListErrors(p.after)
+      if (errors.length > 0) throw rejected('invalid_sequence_diagram', 'after is not a valid sequence diagram list', errors)
+      if (workspace.sequenceDiagramsVersion >= Number.MAX_SAFE_INTEGER) {
+        throw rejected('sequence_diagrams_version_exhausted', 'sequenceDiagramsVersion reached the safe integer limit')
+      }
+      const after = canonicalDiagrams(p.after)
+      const sequenceDiagramsVersion = workspace.sequenceDiagramsVersion + 1
+      await repos.workspaces.updateSequenceDiagrams(workspaceId, after, sequenceDiagramsVersion)
+      return {
+        expectedSequenceDiagramsVersion: p.expectedSequenceDiagramsVersion,
+        before: canonicalDiagrams(p.before),
+        after,
+        sequenceDiagramsVersion,
+      }
+    }
+  }
+}
+
+/**
+ * Transaction 結束時驗證全部時序圖 bindings（APP hasValidSequenceBindings）：
+ * 刪除 / 修改 participant 節點或訊息 relation 而沒有同交易更新 metadata 時，整個 transaction 拒絕。
+ */
+export async function assertSequenceBindings(repos: Repositories, workspaceId: string): Promise<void> {
+  const workspace = (await repos.workspaces.findById(workspaceId))!
+  const diagrams = workspace.sequenceDiagrams
+  if (diagrams.length === 0) return
+  const objectIds = diagrams.flatMap((d) => [d.containerId.value, ...d.participants.map((x) => x.objectId.value), ...d.blocks.map((x) => x.objectId.value)])
+  const relationIds = diagrams.flatMap((d) => d.messages.map((m) => m.relationId.value))
+  const objects = new Map((await repos.canvas.findObjects(workspaceId, objectIds)).filter((o) => !o.deletedAt).map((o) => [o.objectId, o]))
+  const relations = new Map((await repos.canvas.findRelations(workspaceId, relationIds)).filter((r) => !r.deletedAt).map((r) => [r.relationId, r]))
+  const groupCache = new Map(objects)
+  const loadGroup = async (id: string) => {
+    if (!groupCache.has(id)) {
+      const [o] = await repos.canvas.findObjects(workspaceId, [id])
+      if (o && !o.deletedAt) groupCache.set(id, o)
+    }
+  }
+  // container 的祖先鏈（parent 必須都是 active group）
+  for (const d of diagrams) {
+    const seen = new Set<string>()
+    for (let id: string | null = d.containerId.value; id !== null && !seen.has(id); ) {
+      seen.add(id)
+      await loadGroup(id)
+      id = (groupCache.get(id)?.parentId as string | null | undefined) ?? null
+    }
+  }
+  const size = (o: { transform: JsonObject }) => ({ width: Number(o.transform.width), height: Number(o.transform.height) })
+  const capital = (d: string) => d.charAt(0).toUpperCase() + d.slice(1)
+  const invalid = firstInvalidDiagram(diagrams, {
+    group: (id) => {
+      const o = groupCache.get(id)
+      return o && o.objectType === GROUP ? { parentId: o.parentId, ...size(o) } : null
+    },
+    text: (id) => {
+      const o = objects.get(id)
+      return o && o.objectType === 'text'
+        ? { parentId: o.parentId, text: String(o.properties.text ?? ''), hasVectorPath: o.properties.vectorPath != null, ...size(o) }
+        : null
+    },
+    relation: (id) => {
+      const r = relations.get(id)
+      const route = (r?.style.geometry as { route?: { mode?: string } } | undefined)?.route?.mode ?? null
+      return r ? { sourceId: r.sourceObjectId, targetId: r.targetObjectId, direction: capital(r.direction), label: r.label, routeMode: route } : null
+    },
+  })
+  if (invalid) {
+    throw rejected('invalid_sequence_binding', 'Sequence diagram metadata does not match the graph after this transaction', { containerId: invalid })
   }
 }
 

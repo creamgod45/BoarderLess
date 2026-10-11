@@ -20,7 +20,9 @@
           "colorToken": "auto"
         }
       },
-      "canvasStyleVersion": 1
+      "canvasStyleVersion": 1,
+      "sequenceDiagrams": [],
+      "sequenceDiagramsVersion": 0
     }
   }
 }

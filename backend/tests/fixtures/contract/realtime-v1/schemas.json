@@ -1408,8 +1408,16 @@
               }
             },
             "code": {
-              "type": "string",
-              "const": "canvas_style_version_conflict"
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "canvas_style_version_conflict"
+                },
+                {
+                  "type": "string",
+                  "const": "sequence_diagrams_conflict"
+                }
+              ]
             },
             "canvasStyle": {
               "type": "object",
@@ -1463,6 +1471,303 @@
                   "additionalProperties": false
                 },
                 "canvasStyleVersion": {
+                  "type": "integer"
+                }
+              }
+            },
+            "sequenceDiagrams": {
+              "type": "object",
+              "required": [
+                "expectedVersion",
+                "actualVersion",
+                "diagrams",
+                "sequenceDiagramsVersion"
+              ],
+              "properties": {
+                "expectedVersion": {
+                  "type": "integer"
+                },
+                "actualVersion": {
+                  "type": "integer"
+                },
+                "diagrams": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "containerId",
+                      "participants",
+                      "messages",
+                      "blocks",
+                      "schema"
+                    ],
+                    "properties": {
+                      "containerId": {
+                        "type": "object",
+                        "required": [
+                          "value"
+                        ],
+                        "properties": {
+                          "value": {
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "participants": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "participant",
+                            "objectId"
+                          ],
+                          "properties": {
+                            "participant": {
+                              "type": "object",
+                              "required": [
+                                "id",
+                                "label",
+                                "role"
+                              ],
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "role": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "const": "Participant"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "Actor"
+                                    }
+                                  ]
+                                }
+                              },
+                              "additionalProperties": false
+                            },
+                            "objectId": {
+                              "type": "object",
+                              "required": [
+                                "value"
+                              ],
+                              "properties": {
+                                "value": {
+                                  "type": "string",
+                                  "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                                }
+                              },
+                              "additionalProperties": false
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        "maxItems": 32
+                      },
+                      "messages": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "message",
+                            "relationId",
+                            "position"
+                          ],
+                          "properties": {
+                            "message": {
+                              "type": "object",
+                              "required": [
+                                "id",
+                                "sourceId",
+                                "targetId",
+                                "text",
+                                "kind",
+                                "dashed"
+                              ],
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "sourceId": {
+                                  "type": "string"
+                                },
+                                "targetId": {
+                                  "type": "string"
+                                },
+                                "text": {
+                                  "type": "string"
+                                },
+                                "kind": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "const": "Call"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "Return"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "Async"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "Signal"
+                                    }
+                                  ]
+                                },
+                                "dashed": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "additionalProperties": false
+                            },
+                            "relationId": {
+                              "type": "object",
+                              "required": [
+                                "value"
+                              ],
+                              "properties": {
+                                "value": {
+                                  "type": "string",
+                                  "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                                }
+                              },
+                              "additionalProperties": false
+                            },
+                            "position": {
+                              "type": "object",
+                              "required": [
+                                "blockId",
+                                "branchIndex",
+                                "order"
+                              ],
+                              "properties": {
+                                "blockId": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "branchIndex": {
+                                  "type": "integer"
+                                },
+                                "order": {
+                                  "type": "integer"
+                                }
+                              },
+                              "additionalProperties": false
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        "maxItems": 512
+                      },
+                      "blocks": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "id",
+                            "kind",
+                            "branchLabels",
+                            "objectId",
+                            "position"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "kind": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "const": "Alt"
+                                },
+                                {
+                                  "type": "string",
+                                  "const": "Loop"
+                                },
+                                {
+                                  "type": "string",
+                                  "const": "Parallel"
+                                }
+                              ]
+                            },
+                            "branchLabels": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              },
+                              "maxItems": 16
+                            },
+                            "objectId": {
+                              "type": "object",
+                              "required": [
+                                "value"
+                              ],
+                              "properties": {
+                                "value": {
+                                  "type": "string",
+                                  "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                                }
+                              },
+                              "additionalProperties": false
+                            },
+                            "position": {
+                              "type": "object",
+                              "required": [
+                                "blockId",
+                                "branchIndex",
+                                "order"
+                              ],
+                              "properties": {
+                                "blockId": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "branchIndex": {
+                                  "type": "integer"
+                                },
+                                "order": {
+                                  "type": "integer"
+                                }
+                              },
+                              "additionalProperties": false
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        "maxItems": 128
+                      },
+                      "schema": {
+                        "type": "string",
+                        "const": "boarderless.sequence-canvas.v1"
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "maxItems": 64
+                },
+                "sequenceDiagramsVersion": {
                   "type": "integer"
                 }
               }

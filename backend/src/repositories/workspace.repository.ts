@@ -59,6 +59,13 @@ export class WorkspaceRepository {
     `
   }
 
+  async updateSequenceDiagrams(id: string, diagrams: unknown[], version: number): Promise<void> {
+    await this.db`
+      UPDATE workspaces SET sequence_diagrams = ${json(this.db, diagrams)}, sequence_diagrams_version = ${version}, updated_at = now()
+      WHERE id = ${id}
+    `
+  }
+
   /** metadata（title / membership / 角色）變更：revision +1；含已 soft delete 的 Workspace */
   async bumpMetadataRevision(id: string): Promise<{ metadataRevision: number; lastServerSeq: number }> {
     const [row] = await this.db<{ metadataRevision: number; lastServerSeq: number }[]>`

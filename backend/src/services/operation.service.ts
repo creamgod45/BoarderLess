@@ -4,7 +4,8 @@ import type { Database, Repositories } from '../repositories/index.ts'
 import { conflict, unprocessable } from '../utils/errors.ts'
 import { requireWorkspaceAccess } from './access.service.ts'
 import type { CanvasStyle } from '../domain/canvas-style.ts'
-import { applyOperation, CanvasStyleConflictSignal, checkExpectedVersions, VersionConflictSignal, type VersionConflict } from './canvas-mutations.ts'
+import type { SequenceDiagram } from '../domain/sequence-diagrams.ts'
+import { applyOperation, assertSequenceBindings, CanvasStyleConflictSignal, checkExpectedVersions, SequenceDiagramsConflictSignal, VersionConflictSignal, type VersionConflict } from './canvas-mutations.ts'
 
 export type { VersionConflict } from './canvas-mutations.ts'
 
@@ -45,8 +46,9 @@ export interface ConflictResult {
   /** baseVersion 之後的正式 operations，供 client rebase */
   missingOperations: CommittedOperation[]
   /** 只有 update_canvas_style 的 CAS 失敗才有；物件版本衝突維持原有形狀 */
-  code?: 'canvas_style_version_conflict'
+  code?: 'canvas_style_version_conflict' | 'sequence_diagrams_conflict'
   canvasStyle?: { expectedVersion: number; actualVersion: number; canvasStyle: CanvasStyle; canvasStyleVersion: number }
+  sequenceDiagrams?: { expectedVersion: number; actualVersion: number; diagrams: SequenceDiagram[]; sequenceDiagramsVersion: number }
 }
 
 export type SubmitResult = CommittedResult | ConflictResult
@@ -65,7 +67,9 @@ export class OperationService {
     try {
       return await this.db.transaction((repos) => this.commit(repos, actorId, input, operations))
     } catch (error) {
-      if (error instanceof CanvasStyleConflictSignal) return this.buildConflict(input.workspaceId, input.baseVersion, [], error)
+      if (error instanceof CanvasStyleConflictSignal || error instanceof SequenceDiagramsConflictSignal) {
+        return this.buildConflict(input.workspaceId, input.baseVersion, [], error)
+      }
       if (!(error instanceof VersionConflictSignal)) throw error
       return this.buildConflict(input.workspaceId, input.baseVersion, error.conflicts)
     }
@@ -160,6 +164,8 @@ export class OperationService {
       )
     }
 
+    // 時序圖 bindings 在全部 operation 套用後驗證（metadata 與 graph 必須同交易一致）
+    await assertSequenceBindings(repos, workspace.id)
     await repos.workspaces.advance(workspace.id, workspaceVersion, serverSeq)
     const result = toResult('accepted', committed)
     await repos.outbox.enqueue(workspace.id, serverSeq, 'operations_committed', {
@@ -178,7 +184,7 @@ export class OperationService {
     workspaceId: string,
     baseVersion: number,
     conflicts: VersionConflict[],
-    style?: CanvasStyleConflictSignal,
+    signal?: CanvasStyleConflictSignal | SequenceDiagramsConflictSignal,
   ): Promise<ConflictResult> {
     return this.db.readConsistent(async (repos) => {
       const workspace = await repos.workspaces.findById(workspaceId)
@@ -190,14 +196,25 @@ export class OperationService {
         lastServerSeq: workspace?.lastServerSeq ?? 0,
         missingOperations,
         // 權威 style 與 checkpoint 來自同一個一致讀取點
-        ...(style && workspace
+        ...(signal instanceof CanvasStyleConflictSignal && workspace
           ? {
               code: 'canvas_style_version_conflict' as const,
               canvasStyle: {
-                expectedVersion: style.expectedVersion,
+                expectedVersion: signal.expectedVersion,
                 actualVersion: workspace.canvasStyleVersion,
                 canvasStyle: workspace.canvasStyle,
                 canvasStyleVersion: workspace.canvasStyleVersion,
+              },
+            }
+          : {}),
+        ...(signal instanceof SequenceDiagramsConflictSignal && workspace
+          ? {
+              code: 'sequence_diagrams_conflict' as const,
+              sequenceDiagrams: {
+                expectedVersion: signal.expectedVersion,
+                actualVersion: workspace.sequenceDiagramsVersion,
+                diagrams: workspace.sequenceDiagrams,
+                sequenceDiagramsVersion: workspace.sequenceDiagramsVersion,
               },
             }
           : {}),
