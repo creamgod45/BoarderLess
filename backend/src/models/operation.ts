@@ -14,6 +14,8 @@ export interface CommittedOperation {
   operationType: string
   payload: JsonObject
   schemaVersion: number
+  /** 原 envelope 的 request digest（不對外公開；冪等比對用） */
+  requestDigest: string | null
   committedAt: Date
 }
 

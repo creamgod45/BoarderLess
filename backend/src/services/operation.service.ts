@@ -1,7 +1,9 @@
+import { createHash } from 'node:crypto'
 import { validateOperationPayload, type PayloadValidationError, type TypedOperation } from '../domain/operations.ts'
 import type { CommittedOperation } from '../models/operation.ts'
 import type { Database, Repositories } from '../repositories/index.ts'
 import { conflict, unprocessable } from '../utils/errors.ts'
+import { stableStringify } from '../utils/stable-json.ts'
 import { requireWorkspaceAccess } from './access.service.ts'
 import type { CanvasStyle } from '../domain/canvas-style.ts'
 import type { SequenceDiagram } from '../domain/sequence-diagrams.ts'
@@ -117,10 +119,25 @@ export class OperationService {
       lock: true,
     })
 
-    // 3. idempotency：依 operation ID（不是連線 ID）去重
+    // 3. idempotency：依 operation / transaction ID（不是連線 ID）去重，且內容必須與原請求相同
     const operationIds = operations.map((o) => o.input.operationId)
+    const digest = requestDigest(input)
     const existing = await repos.operations.findByOperationIds(workspace.id, actorId, operationIds)
-    if (existing.length === operations.length) return toResult('duplicate', existing)
+    const sameTransaction = await repos.operations.findByTransaction(workspace.id, actorId, input.transactionId)
+    if (existing.length === operations.length) {
+      const original = existing.every((o) => o.transactionId === input.transactionId) && sameTransaction.length === existing.length
+      if (original && existing.every((o) => o.requestDigest === digest)) return toResult('duplicate', existing)
+      throw conflict('idempotency_mismatch', 'These operation IDs were already committed with different content', {
+        reason: !original ? 'transaction_mismatch' : existing.some((o) => o.requestDigest === null) ? 'original_digest_unavailable' : 'content_mismatch',
+        transactionId: existing[0]!.transactionId,
+      })
+    }
+    if (existing.length === 0 && sameTransaction.length > 0) {
+      throw conflict('idempotency_mismatch', 'This transaction ID was already committed with different operations', {
+        reason: 'transaction_reused',
+        transactionId: input.transactionId,
+      })
+    }
     if (existing.length > 0) {
       throw rejected('partial_duplicate', 'Some operations in this transaction were already committed', {
         committedOperationIds: existing.map((o) => o.operationId),
@@ -163,6 +180,7 @@ export class OperationService {
           operationType: op.kind,
           payload: storedPayload,
           schemaVersion: OPERATION_SCHEMA_VERSION,
+          requestDigest: digest,
         }),
       )
     }
@@ -224,6 +242,31 @@ export class OperationService {
       }
     })
   }
+}
+
+/**
+ * 原 envelope 的 digest：transaction / client / baseVersion 與每個 operation 的 ID、clientSeq、kind、
+ * expectedObjectVersions（空物件視同未提供）、payload；key 順序無關。
+ */
+export function requestDigest(input: SubmitOperationsInput): string {
+  return createHash('sha256')
+    .update(
+      stableStringify({
+        protocolVersion: input.protocolVersion,
+        transactionId: input.transactionId,
+        clientId: input.clientId,
+        baseVersion: input.baseVersion,
+        operations: input.operations.map((o) => ({
+          operationId: o.operationId,
+          clientSeq: o.clientSeq,
+          kind: o.kind,
+          expectedObjectVersions: o.expectedObjectVersions && Object.keys(o.expectedObjectVersions).length > 0 ? o.expectedObjectVersions : null,
+          payload: o.payload ?? null,
+        })),
+      }),
+      'utf8',
+    )
+    .digest('hex')
 }
 
 function toResult(status: CommittedResult['status'], operations: CommittedOperation[]): CommittedResult {

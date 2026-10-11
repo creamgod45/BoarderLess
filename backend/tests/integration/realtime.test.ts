@@ -353,6 +353,10 @@ describe.skipIf(!sql)('realtime collaboration (batch A)', () => {
     s.socket.send({ type: 'submit_operations', ...s.env(tx) })
     const duplicate = await s.socket.next('operation_ack')
     expect(duplicate).toMatchObject({ status: 'duplicate', fromServerSeq: accepted.fromServerSeq, toServerSeq: accepted.toServerSeq })
+    // 同 ID 不同內容：明確拒絕，不回 duplicate
+    s.socket.send({ type: 'submit_operations', ...s.env({ ...tx, operations: [{ ...tx.operations[0], payload: { objectId, objectType: 'text', properties: { text: 'other' } } }] }) })
+    const mismatch = await s.socket.next('operation_ack')
+    expect(mismatch).toMatchObject({ status: 'rejected', code: 'idempotency_mismatch', details: { reason: 'content_mismatch' } })
 
     const stale = envelope(0, [{ kind: 'update_object', payload: { objectId, properties: { text: 'x' } }, expectedObjectVersions: { [objectId]: 9 } }], s.clientId)
     s.socket.send({ type: 'submit_operations', ...s.env(stale) })

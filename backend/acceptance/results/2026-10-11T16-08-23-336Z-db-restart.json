@@ -1,0 +1,125 @@
+{
+  "cases": [
+    "CORE-08",
+    "ASSET-03"
+  ],
+  "kind": "真 DB 重啟（一次性容器；同一 app 與連線池）",
+  "startedAt": "2026-10-11T16:08:23.336Z",
+  "finishedAt": "2026-10-11T16:08:28.215Z",
+  "environment": {
+    "backendCommit": "89a85a34b2c237f1488d6c157e1cc819e1a3f47c",
+    "uncommittedChanges": 114,
+    "postgresImage": "postgres:18.6-alpine",
+    "postgresVersion": "PostgreSQL 18.6 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit",
+    "migrations": [
+      "001_init.sql",
+      "002_media_lifecycle.sql",
+      "003_integrity_receipts.sql",
+      "004_asset_preparations.sql",
+      "005_preparation_verified.sql",
+      "006_realtime.sql",
+      "007_quick_schemes.sql",
+      "008_canvas_style.sql",
+      "009_sequence_diagrams.sql",
+      "010_media_reference_provenance.sql",
+      "011_operation_request_digest.sql"
+    ],
+    "bun": "1.4.2"
+  },
+  "rounds": [
+    {
+      "mode": "restart",
+      "recoveryMs": 296,
+      "checks": [
+        {
+          "name": "projection（state）與重啟前一致",
+          "pass": true
+        },
+        {
+          "name": "原提交 receipt（tx1、tx2）完整保留",
+          "pass": true
+        },
+        {
+          "name": "operation log replay 一致",
+          "pass": true
+        },
+        {
+          "name": "fence 保留：晚到原請求 409 transaction_fenced",
+          "pass": true,
+          "detail": 409
+        },
+        {
+          "name": "fence receipt 查詢為 fenced",
+          "pass": true
+        },
+        {
+          "name": "tombstone 保留：同 ID create 回 422 並提示 restore_objects",
+          "pass": true
+        },
+        {
+          "name": "preparation identity（accepted）不變",
+          "pass": true
+        },
+        {
+          "name": "preparation reservation（prepared）不變",
+          "pass": true
+        },
+        {
+          "name": "同 requestId 重送回 200 同一 asset",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "mode": "kill",
+      "recoveryMs": 291,
+      "checks": [
+        {
+          "name": "projection（state）與重啟前一致",
+          "pass": true
+        },
+        {
+          "name": "原提交 receipt（tx1、tx2）完整保留",
+          "pass": true
+        },
+        {
+          "name": "operation log replay 一致",
+          "pass": true
+        },
+        {
+          "name": "fence 保留：晚到原請求 409 transaction_fenced",
+          "pass": true,
+          "detail": 409
+        },
+        {
+          "name": "fence receipt 查詢為 fenced",
+          "pass": true
+        },
+        {
+          "name": "tombstone 保留：同 ID create 回 422 並提示 restore_objects",
+          "pass": true
+        },
+        {
+          "name": "preparation identity（accepted）不變",
+          "pass": true
+        },
+        {
+          "name": "preparation reservation（prepared）不變",
+          "pass": true
+        },
+        {
+          "name": "同 requestId 重送回 200 同一 asset",
+          "pass": true
+        }
+      ]
+    }
+  ],
+  "final": [
+    {
+      "name": "complete 時寫入的 verify job 重啟後仍執行：phase=ready",
+      "pass": true,
+      "detail": "ready"
+    }
+  ],
+  "status": "passed"
+}

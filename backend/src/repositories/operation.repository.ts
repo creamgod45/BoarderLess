@@ -12,15 +12,24 @@ export class OperationRepository {
     const [row] = await this.db<CommittedOperation[]>`
       INSERT INTO workspace_operations (
         workspace_id, server_seq, operation_id, transaction_id, actor_id, client_id, client_seq,
-        base_version, workspace_version, operation_type, payload, schema_version
+        base_version, workspace_version, operation_type, payload, schema_version, request_digest
       ) VALUES (
         ${op.workspaceId}, ${op.serverSeq}, ${op.operationId}, ${op.transactionId}, ${op.actorId},
         ${op.clientId}, ${op.clientSeq}, ${op.baseVersion}, ${op.workspaceVersion}, ${op.operationType},
-        ${json(this.db, op.payload)}, ${op.schemaVersion}
+        ${json(this.db, op.payload)}, ${op.schemaVersion}, ${op.requestDigest}
       )
       RETURNING *
     `
     return row!
+  }
+
+  /** 同一 actor、同一 transaction ID 的已提交 operations */
+  async findByTransaction(workspaceId: string, actorId: string, transactionId: string): Promise<CommittedOperation[]> {
+    return this.db<CommittedOperation[]>`
+      SELECT * FROM workspace_operations
+      WHERE workspace_id = ${workspaceId} AND actor_id = ${actorId} AND transaction_id = ${transactionId}
+      ORDER BY server_seq
+    `
   }
 
   async findByOperationIds(workspaceId: string, actorId: string, operationIds: string[]): Promise<CommittedOperation[]> {

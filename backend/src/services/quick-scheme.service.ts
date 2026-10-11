@@ -19,6 +19,7 @@ import {
 } from '../models/quick-scheme.ts'
 import type { Database, Repositories } from '../repositories/index.ts'
 import { AppError } from '../utils/errors.ts'
+import { stableStringify } from '../utils/stable-json.ts'
 
 export const QUICK_SCHEME_LIMITS = {
   maxRequestBytes: 1_048_576,
@@ -73,17 +74,6 @@ export interface MutationResult {
   replayed: boolean
 }
 
-/** 遞迴排序 key 的 JSON（fingerprint 用；與 key 順序無關） */
-function stableStringify(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`
-  if (value && typeof value === 'object') {
-    return `{${Object.keys(value)
-      .sort()
-      .map((k) => `${JSON.stringify(k)}:${stableStringify((value as Record<string, unknown>)[k])}`)
-      .join(',')}}`
-  }
-  return JSON.stringify(value)
-}
 const sha256 = (s: string) => createHash('sha256').update(s, 'utf8').digest('base64url')
 const newEtag = () => `"${sha256(randomUUID()).slice(0, 27)}"`
 const scalarCount = (s: string) => [...s].length

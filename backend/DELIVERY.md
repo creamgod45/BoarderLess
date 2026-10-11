@@ -3,6 +3,18 @@
 依 [`docs/BACKEND_MISSING_IMPLEMENTATION_SPEC.md`](../docs/BACKEND_MISSING_IMPLEMENTATION_SPEC.md) §9 模板，每批一節。
 狀態分三種，彼此獨立：**源碼完成**（本 repo）／**服務已部署**／**正式驗收通過**。本文件只記錄源碼與預檢，部署與正式驗收另行標示。
 
+## 整體狀態：**未完成**
+
+A–F 各批次的源碼已交付，但以下能力仍未完成，**不宣告整體交付完成**：
+
+| 未完成項目 | 影響 | 目前狀態 |
+| --- | --- | --- |
+| 正式認證（HTTP auth / production session） | REST、realtime ticket、方案簿都依賴認證 actor | 只有 `x-user-id` 開發替身（`AUTH_MODE=dev`），不是正式安全能力 |
+| 429 限流（`rate_limited` + `Retry-After`） | 方案簿 mutation、REST 寫入 | 未實作；realtime 只有 presence 的 per-connection 限流 |
+| 跨 workspace 素材搬移（materialization） | 方案簿引用其他 workspace 素材時的插入 | 未實作；`quickSchemes.materializationEnabled: false`，APP 須阻擋插入 |
+
+其他未交付：relation 端點改接（`endpointRewire: false`）。服務部署與正式驗收（[`ACCEPTANCE.md`](ACCEPTANCE.md)）皆未執行。
+
 ---
 
 ## 批次 A：即時協作（2026-10-11）
@@ -27,7 +39,7 @@
 - 錯誤碼：`authentication_required`、`ticket_expired`、`ticket_used`、`scope_mismatch`、`unsupported_protocol_version`、`unsupported_schema_version`、`access_revoked`、`invalid_message`、`message_too_large`、`rate_limited`、`sequence_gap`、`resync_required`，另加 `not_live`、`heartbeat_timeout`。
 - Close codes：4400 invalid、4401 ticket / auth、4403 撤權、4408 驗證逾時、4409 resync、4413 過大、4426 不支援版本、4000 heartbeat 逾時、4429 未驗證連線過多、1001 關機。
 - Snapshot reasons：`checkpoint_not_at_transaction_boundary`、`checkpoint_ahead_of_server`、`catch_up_too_large`。Resync reasons：`too_many_pending_transactions`、`transaction_too_large`、`slow_consumer`、`sequence_gap`。
-- 待確認語意（已採用）：同 ID 但內容不同的重送沿現有 service，以 operationId 去重回 `duplicate`（原結果），不比對 payload；部分重複回 `rejected partial_duplicate`。
+- 冪等語意（2026-10-12 修正）：同 transaction / operation ID 且內容完全相同才回 `duplicate`（原結果）；內容不同、transaction ID 不同、或 transaction ID 被換成其他 operations，一律 `rejected idempotency_mismatch`（REST 409），不回 duplicate 冒充原請求成功；部分重複回 `rejected partial_duplicate`。見文末「冪等修正」。
 
 ### 3. Migration、部署與相容性
 - Migration `006_realtime.sql`：`workspaces.metadata_revision`、`realtime_tickets`、UNLOGGED `presence_rooms` / `presence_peers`、outbox 索引。
@@ -45,7 +57,7 @@
 ### 5. 尚待集中執行
 - RT-01 – RT-05（見 [`ACCEPTANCE.md`](ACCEPTANCE.md)）。目前證據：
   - 整合測試（15 個；同一 OS process 內兩個 gateway、各自連線池與 LISTEN）。
-  - **真多 process 預檢**：`bun run acceptance:multi-process`，兩個 `src/server.ts` process、kill -9、checkpoint 重新 join，11 項通過。
+  - **真多 process 預檢**：`bun run acceptance:multi-process`，兩個 `src/server.ts` process、kill -9、checkpoint 重新 join，11 項通過（最新：`acceptance/results/2026-10-11T16-08-28-381Z-multi-process.json`）。
 - 未涵蓋：正式 auth / Origin / proxy 實際部署、外部日誌 redaction 驗證、APP 雙端（文字 / Group / 媒體 / relation 收斂）、視覺 overlay 簽核、負載與背壓數字（效能最後）。
 
 ---
@@ -236,3 +248,22 @@
 
 ### 5. 尚待集中執行
 - 對應 ASSET-07 的 Undo 情境與 UNDO_RESTORE_ACCEPTANCE。證據：3 個整合測試（含成對縮圖還原）、fixtures。
+
+---
+
+## 冪等修正：同 ID 不同內容明確拒絕（2026-10-12）
+
+- 問題：原本只要 operation ID 都已提交就回 `duplicate`，即使 payload 不同，等於用原結果冒充新請求成功。
+- 修正：
+  - commit 時保存原 envelope 的 request digest（SHA-256；涵蓋 protocolVersion、transactionId、clientId、baseVersion，以及每個 operation 的 ID、clientSeq、kind、expectedObjectVersions、payload；key 順序無關，空 expectedObjectVersions 視同未提供）。
+  - 只有在全部 operation ID 已提交、屬於同一原 transaction、且 digest 相同時，才回 `duplicate`。
+  - 其餘情況回 409 `idempotency_mismatch`，`details.reason` 為下列之一：
+    - `content_mismatch`：內容不同。
+    - `transaction_mismatch`：operation ID 屬於其他 transaction。
+    - `transaction_reused`：transaction ID 已提交、但這次換成其他 operations。
+    - `original_digest_unavailable`：migration 011 之前提交的資料，無法證明內容相同，不回推。
+  - WebSocket `operation_ack` 為 `rejected` + 相同 code / details。
+- Migration `011_operation_request_digest.sql`（`workspace_operations.request_digest`）。
+- 相容性：原本內容不同仍回 200 duplicate 的重送，現在回 409；只重送原 envelope 的 client 不受影響。
+- 測試：`tests/integration/idempotency.test.ts`（3 個，含 6 種不一致情境）、realtime ack 案例。
+

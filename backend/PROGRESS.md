@@ -1,7 +1,7 @@
 # Backend 開發進度
 
 對照：[`docs/BACKEND_ARCHITECTURE.md`](../docs/BACKEND_ARCHITECTURE.md) §11 交付階段、[`docs/BACKEND_MEDIA_API_SPEC.md`](../docs/BACKEND_MEDIA_API_SPEC.md)（Media v1）、[`docs/BACKEND_ASSET_PREPARATION_V2_SPEC.md`](../docs/BACKEND_ASSET_PREPARATION_V2_SPEC.md)（preparation v2）
-最後更新：2026-10-11（批次 A–F 源碼）
+最後更新：2026-10-12（批次 A–F 源碼；冪等修正；整體仍未完成）
 
 圖例：✅ 完成 · 🟡 部分完成／暫定 · ⬜ 未開始
 
@@ -162,7 +162,7 @@
 - ✅ locked 物件只能切換 `locked`，不可移動 / 修改 / 刪除
 - ✅ operation、projection、outbox 在同一 transaction 提交
 
-### 測試（`bun test`，461 個）
+### 測試（`bun test`，464 個）
 - ✅ 單元：operation payload 驗證、touched ids、角色權限矩陣、HTML 跳脫、MIME sniff、本機簽名 URL、contract fixtures schema
 - ✅ 整合（真實 PostgreSQL）：create/move/delete + 冪等重送、20 個並行寫入的 `serverSeq` 連續性、版本衝突、transaction rollback、relation cascade、角色與撤銷、outbox、snapshot
 - ✅ 素材整合（真實 ffmpeg）：六種 MIME 完整流程、驗證失敗分類、complete 冪等 / 衝突、abandon 競爭、GC、lease 過期重領、重複縮圖 job、多 worker、不可覆寫、missing、ACL、MediaNode 引用、storage 503
@@ -197,6 +197,13 @@
 - [x] CORE-04 多 process 競爭：`acceptance:multi-process` 預檢通過（正式驗收待集中執行）
 - [ ] CORE-08 正式上線前的資料檢查與處置計畫（見「資料政策」）
 - [ ] APP 依更新後 schema / fixtures 對接，並評估「相容性影響」（[`ACCEPTANCE.md`](ACCEPTANCE.md)）
+
+### 尚未完成（不宣告整體交付完成）
+- [ ] 正式認證（目前只有 `x-user-id` 開發替身）
+- [ ] 429 限流（`rate_limited` / `Retry-After`）
+- [ ] 跨 workspace 素材搬移（materialization）
+- [ ] relation 端點改接
+- [ ] 服務部署、正式集中驗收
 
 ### 缺少功能實作（[`docs/BACKEND_MISSING_IMPLEMENTATION_SPEC.md`](../docs/BACKEND_MISSING_IMPLEMENTATION_SPEC.md)，交付紀錄見 [`DELIVERY.md`](DELIVERY.md)）
 - [x] A 即時協作（正式 HTTP auth 仍未交付）

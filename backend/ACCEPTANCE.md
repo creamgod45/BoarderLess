@@ -1,7 +1,9 @@
 # Backend 驗收追蹤
 
 對照：[`docs/BACKEND_ACCEPTANCE_SPEC.md`](../docs/BACKEND_ACCEPTANCE_SPEC.md)（案例 ID 與通過條件以該文件為準）
-最後更新：2026-10-11（批次 A–F 預檢）
+最後更新：2026-10-12（冪等修正；批次 A–F 預檢）
+
+> **整體交付未完成**：正式認證、429 限流、跨 workspace 素材搬移仍未實作（見 [`DELIVERY.md`](DELIVERY.md)）。
 
 依規格，正式驗收要等所有業務功能完成、驗收版本封存後才集中執行。下表的**正式狀態**只用規格的六種值；**後端預檢**是目前未封存版本上的自動化證據，不能代替正式驗收，也不代表 APP 對接或雙端通過。
 
@@ -19,7 +21,7 @@
 | --- | --- | --- | --- |
 | CORE-01 | 待執行 | 整合：`protocolVersion` 不符回 `unsupported_protocol_version`；`GET /capabilities` 宣告 `assetPreparation`；所有 body 拒絕未知欄位 | capability 目前只涵蓋 preparation v2；即時協作等草案 endpoint 不存在（回 404 `route_not_found`） |
 | CORE-02 | 待執行 | 整合 `request-validation.test.ts`、`asset-preparation.test.ts`；fixtures canvas-v1 / preparation-v2 | 2026-10-11 起全域 body 嚴格驗證（不做型別轉換）；querystring / params 仍依 schema 轉型 |
-| CORE-03 | 待執行 | 整合：operationId 冪等重送、preparation 同 key 200 / 不同 metadata 409；方案簿 Idempotency-Key | — |
+| CORE-03 | 待執行 | 整合：相同內容重送回原結果；同 transaction / operation ID 不同內容（payload、clientSeq、baseVersion、expectedObjectVersions、換 transaction、transaction ID 重用）409 `idempotency_mismatch`（REST 與 WS）；preparation 同 key 200 / 不同 metadata 409；方案簿 Idempotency-Key | — |
 | CORE-04 | 待執行 | 整合：20 個並行寫入 serverSeq 連續、版本衝突、rollback；**真多 process**預檢（`acceptance:multi-process`）：兩個 `src/server.ts` process 同時提交 40 筆，serverSeq / version 連續無重複 | 多 process 預檢已通過；正式驗收待集中執行 |
 | CORE-05 | 待執行 | 整合：非成員 404、viewer 403、撤權後 404（REST）；WS：viewer submit rejected forbidden、撤權 access_revoked + 4403、撤權後不再送內容 | — |
 | CORE-06 | 待執行 | 整合 + fixtures：receipt partial / 跨 actor、fence 晚到原請求、fence 並行競爭；真 DB 重啟後 fence 仍成立 | — |
@@ -57,6 +59,7 @@
 | 所有 request body 嚴格驗證（不做型別轉換） | 全部 v1 寫入 API（operations、workspaces、members、assets） | 以字串送數字（如 `"baseVersion": "0"`）原本被轉型接受，現在回 400 `validation_error`；錯誤訊息改為列出全部錯誤 |
 | 寬高改為顯示尺寸 | Media v1 `asset.width/height`、preparation v2 `verified` | 帶 EXIF orientation 5–8 的影像、旋轉 ±90° 的影片，寬高與先前相反 |
 | 寬高上限 2147483647、duration 上限 JSON safe integer | Media v1 prepare | 超過上限原本回 500，現在回 400 |
+| 同 ID 不同內容的重送改為 409（冪等修正） | `POST …/operations`、WS `submit_operations` | 原本回 200 `duplicate`；現在 409 / rejected `idempotency_mismatch`。migration 011 之前提交的 operation 重送一律 `original_digest_unavailable` |
 | `validation_error` details 改為 TypeBox 格式（CORE-02） | 所有 400 `validation_error` | details 陣列的欄位（`schemaPath`、順序）與 Ajv 不同；只比對 `error.code` 的 client 不受影響 |
 | 自循環在帶 geometry 時被接受（批次 D） | `create_relation` | 原本 source = target 一律 422；現在帶 auto / loop geometry 時接受 |
 | state / snapshot 新增 sequenceDiagrams（批次 E） | `GET …/state`、新 snapshot（schema 3） | 嚴格 decoder 需接受新欄位；有時序圖的 Workspace 中，破壞 binding 的 graph 變更會被拒絕 |
@@ -70,7 +73,7 @@
 | --- | --- | --- | --- |
 | RT-01 | 待執行 | 整合：ticket 一次性 / 過期 / 重用 / 跨 scope、3 秒未驗證關閉、Origin 與 subprotocol 於 upgrade 前拒絕 | **正式 HTTP auth 未交付**（目前 `x-user-id` dev 替身）；WSS 需由部署（TLS 反向代理 + `REALTIME_PUBLIC_URL`）提供 |
 | RT-02 | 待執行 | 整合：先註冊訂閱再讀 head、完整 transaction catch-up、snapshot ahead of barrier、非邊界 checkpoint → snapshot_required / sequence_gap | — |
-| RT-03 | 待執行 | 整合：duplicate ack、原 cursor 去重、REST 與 WS 提交走同一 service；client 端 gap / 亂序 / 同 ID 不同內容案例見 fixture 70 | APP reducer 對接後雙端驗證 |
+| RT-03 | 待執行 | 整合：相同內容重送回 duplicate ack、同 ID 不同內容回 rejected `idempotency_mismatch`、原 cursor 去重、REST 與 WS 提交走同一 service；client 端 gap / 亂序 / 同 ID 不同內容案例見 fixture 70 | APP reducer 對接後雙端驗證 |
 | RT-04 | 待執行 | 同 process 兩 gateway 整合測試；**真多 process**預檢：跨 process fan-out、kill -9 後以 checkpoint 重新 join 補齊、outbox 由存活 process 補發；slow consumer / 過大 transaction → resync | broker 為 PostgreSQL LISTEN/NOTIFY（無 Redis）；負載與背壓數字留待效能驗收 |
 | RT-05 | 待執行 | 整合：presence snapshot / delta、world 座標、未知 selection 丟棄、rate limit、heartbeat TTL 移除、roomEpoch 重建、撤權移除 | 視覺 overlay 由 QA 人工簽核 |
 | SCHEME-01 | 待執行 | 整合：owner 由認證注入、他人 ID 一律 404、UUID 資源 / revision / opaque ETag、selection v1–v9 round-trip；fixtures | APP 雙裝置讀寫待對接 |
@@ -87,4 +90,7 @@
 
 | 日期 | 項目 | 版本 | 結果 | 證據 |
 | --- | --- | --- | --- | --- |
-| 2026-10-12 | `bun test` | `89a85a3` + 本 commit | 預檢通過（461 tests） | 本機執行 |
+| 2026-10-11 | 真 DB 重啟（CORE-08、ASSET-03） | `89a85a3` + 未提交變更 | 預檢通過（restart 296ms、kill 291ms 恢復） | `acceptance/results/2026-10-11T16-08-23-336Z-db-restart.json`（批次 A–F 與冪等修正後重跑） |
+| 2026-10-11 | `bun test` | 同上 | 預檢通過（224 tests） | 本機執行 |
+| 2026-10-11 | 真多 process（CORE-04、RT-04） | 同上 | 預檢通過（11 項） | `acceptance/results/2026-10-11T16-08-28-381Z-multi-process.json`（批次 A–F 與冪等修正後重跑） |
+| 2026-10-12 | `bun test`（含批次 A–F 與冪等修正） | 同上 | 預檢通過（464 tests） | 本機執行 |
