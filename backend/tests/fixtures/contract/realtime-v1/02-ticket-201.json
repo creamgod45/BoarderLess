@@ -10,6 +10,7 @@
   },
   "response": {
     "status": 201,
+    "headers": {},
     "body": {
       "ticket": "fixture-only-not-a-real-ticket",
       "expiresAt": "2026-10-02T00:15:00.000Z",

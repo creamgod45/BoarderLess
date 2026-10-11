@@ -1,0 +1,54 @@
+{
+  "description": "If-Match: * 不能取代具體 ETag：428",
+  "request": {
+    "method": "PUT",
+    "path": "/api/v1/users/me/quick-schemes/00000000-0000-4000-8000-000000000025",
+    "headers": {
+      "if-match": "*",
+      "idempotency-key": "00000000-0000-4000-8000-000000000032"
+    },
+    "body": {
+      "resourceVersion": 2,
+      "name": "Planning card",
+      "schemaVersion": 1,
+      "payload": {
+        "format": "boarderless/selection",
+        "version": 1,
+        "nodes": [
+          {
+            "originalId": "n1",
+            "x": 0,
+            "y": 0,
+            "width": 240,
+            "height": 120,
+            "rotationDegrees": 0,
+            "text": "Plan",
+            "colorToken": "paper",
+            "shapeToken": "rounded",
+            "parentOriginalId": null,
+            "locked": false,
+            "zOffset": 0,
+            "vectorPath": null
+          }
+        ],
+        "groups": [],
+        "media": [],
+        "relations": []
+      },
+      "assetBindings": []
+    }
+  },
+  "response": {
+    "status": 428,
+    "headers": {
+      "cache-control": "private, no-store"
+    },
+    "body": {
+      "error": {
+        "code": "precondition_required",
+        "message": "Update requires If-Match with the latest strong ETag"
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

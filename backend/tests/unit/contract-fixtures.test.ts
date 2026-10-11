@@ -7,6 +7,8 @@ import { preparationDigest } from '../../src/domain/asset-preparation.ts'
 import { PreparationEnvelopeSchema } from '../../src/schemas/asset-preparation.schema.ts'
 import { capabilitiesSchema } from '../../src/schemas/capabilities.schema.ts'
 import { RealtimeCapabilitiesSchema, RealtimeTicketSchema } from '../../src/schemas/realtime.schema.ts'
+import { QuickSchemeCapabilitiesSchema, QuickSchemeListSchema, QuickSchemeResourceSchema } from '../../src/schemas/quick-scheme.schema.ts'
+import { validateSelectionPayload } from '../../src/domain/selection.ts'
 import { CLIENT_MESSAGE_SCHEMAS, SERVER_EVENT_SCHEMAS } from '../../src/realtime/messages.ts'
 import { AssetSchema, TransferDirectiveSchema } from '../../src/schemas/asset.schema.ts'
 import { validateObjectState } from '../../src/domain/canvas-objects.ts'
@@ -191,4 +193,33 @@ describe('Realtime v1 contract fixtures', () => {
       expect(o.transactionId).toBe(tx.transactionId)
     })
   })
+})
+
+// ---- Quick scheme v2（batch B）----
+const QS_DIR = join(import.meta.dirname, '../fixtures/contract/quick-scheme-v2')
+const qsFiles = (await readdir(QS_DIR)).filter((f) => /^\d+-.*\.json$/.test(f))
+
+describe('Quick scheme v2 contract fixtures', () => {
+  test('fixtures exist', () => {
+    expect(qsFiles.length).toBeGreaterThanOrEqual(40)
+  })
+
+  for (const file of qsFiles) {
+    test(file, async () => {
+      const doc = JSON.parse(await readFile(join(QS_DIR, file), 'utf8'))
+      const { status, body } = doc.response
+      const expected = /-(\d{3})$/.exec(file.replace('.json', ''))?.[1]
+      if (expected) expect(String(status)).toBe(expected)
+      if (status === 204 || status === 304) return expect(body).toBeUndefined()
+      const schema = status >= 400 ? ErrorEnvelope : doc.request.path.includes('capabilities') ? QuickSchemeCapabilitiesSchema : doc.request.method === 'GET' && !/quick-schemes\/[0-9a-f-]{36}$/.test(doc.request.path) ? QuickSchemeListSchema : QuickSchemeResourceSchema
+      expect([...Value.Errors(schema, body)].map((e) => `${e.instancePath} ${e.message}`)).toEqual([])
+      // 成功保存的 payload 都是合法 selection，ETag header 與 body 一致
+      if (status < 300 && body.payload) {
+        expect(validateSelectionPayload(body.payload)).toEqual({ ok: true })
+        expect(doc.response.headers.etag).toBe(body.etag)
+      }
+      // 請求的 payload 原樣回傳（round-trip 不丟欄位）
+      if ((status === 201 || status === 200) && doc.request.body?.payload) expect(body.payload).toEqual(doc.request.body.payload)
+    })
+  }
 })

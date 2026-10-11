@@ -19,6 +19,7 @@
     "fixtures:canvas": "bun scripts/generate-canvas-fixtures.ts",
     "fixtures:preparation": "bun scripts/generate-preparation-fixtures.ts",
     "fixtures:realtime": "bun scripts/generate-realtime-fixtures.ts",
+    "fixtures:quick-scheme": "bun scripts/generate-quick-scheme-fixtures.ts",
     "acceptance:db-restart": "bun scripts/acceptance/db-restart.ts",
     "acceptance:multi-process": "bun scripts/acceptance/multi-process.ts"
   },

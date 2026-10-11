@@ -131,7 +131,7 @@ describe.skipIf(!sql)('realtime collaboration (batch A)', () => {
     const global = await http(a.baseUrl).get('/capabilities')
     expect(global.body.realtime).toEqual({ supported: true, protocolVersions: [1], subprotocol: 'boarderless.v1' })
     expect(global.body.assetPreparation).toBeDefined()
-    expect(global.body.quickSchemes).toEqual({ supported: false })
+    expect(global.body.canvasStyle).toEqual({ supported: false })
   })
 
   test('join on an empty workspace → live, presence snapshot includes self', async () => {

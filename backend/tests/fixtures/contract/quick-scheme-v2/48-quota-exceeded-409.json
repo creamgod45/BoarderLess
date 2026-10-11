@@ -1,0 +1,54 @@
+{
+  "description": "每使用者 1000 方案：409 quota_exceeded",
+  "request": {
+    "method": "PUT",
+    "path": "/api/v1/users/me/quick-schemes/00000000-0000-4000-8000-000000000053",
+    "headers": {
+      "if-none-match": "*",
+      "idempotency-key": "00000000-0000-4000-8000-000000000054"
+    },
+    "body": {
+      "resourceVersion": 2,
+      "name": "Planning card",
+      "schemaVersion": 1,
+      "payload": {
+        "format": "boarderless/selection",
+        "version": 1,
+        "nodes": [
+          {
+            "originalId": "n1",
+            "x": 0,
+            "y": 0,
+            "width": 240,
+            "height": 120,
+            "rotationDegrees": 0,
+            "text": "Plan",
+            "colorToken": "paper",
+            "shapeToken": "rounded",
+            "parentOriginalId": null,
+            "locked": false,
+            "zOffset": 0,
+            "vectorPath": null
+          }
+        ],
+        "groups": [],
+        "media": [],
+        "relations": []
+      },
+      "assetBindings": []
+    }
+  },
+  "response": {
+    "status": 409,
+    "headers": {
+      "cache-control": "private, no-store"
+    },
+    "body": {
+      "error": {
+        "code": "quota_exceeded",
+        "message": "At most 1000 quick schemes per user"
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

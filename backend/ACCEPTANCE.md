@@ -1,7 +1,7 @@
 # Backend 驗收追蹤
 
 對照：[`docs/BACKEND_ACCEPTANCE_SPEC.md`](../docs/BACKEND_ACCEPTANCE_SPEC.md)（案例 ID 與通過條件以該文件為準）
-最後更新：2026-10-11（批次 A 預檢）
+最後更新：2026-10-11（批次 A–B 預檢）
 
 依規格，正式驗收要等所有業務功能完成、驗收版本封存後才集中執行。下表的**正式狀態**只用規格的六種值；**後端預檢**是目前未封存版本上的自動化證據，不能代替正式驗收，也不代表 APP 對接或雙端通過。
 
@@ -68,7 +68,9 @@
 | RT-03 | 待執行 | 整合：duplicate ack、原 cursor 去重、REST 與 WS 提交走同一 service；client 端 gap / 亂序 / 同 ID 不同內容案例見 fixture 70 | APP reducer 對接後雙端驗證 |
 | RT-04 | 待執行 | 同 process 兩 gateway 整合測試；**真多 process**預檢：跨 process fan-out、kill -9 後以 checkpoint 重新 join 補齊、outbox 由存活 process 補發；slow consumer / 過大 transaction → resync | broker 為 PostgreSQL LISTEN/NOTIFY（無 Redis）；負載與背壓數字留待效能驗收 |
 | RT-05 | 待執行 | 整合：presence snapshot / delta、world 座標、未知 selection 丟棄、rate limit、heartbeat TTL 移除、roomEpoch 重建、撤權移除 | 視覺 overlay 由 QA 人工簽核 |
-| SCHEME-01 – 03 | 待實作 | — | — |
+| SCHEME-01 | 待執行 | 整合：owner 由認證注入、他人 ID 一律 404、UUID 資源 / revision / opaque ETag、selection v1–v9 round-trip；fixtures | APP 雙裝置讀寫待對接 |
+| SCHEME-02 | 待執行 | 整合：Idempotency-Key replay（含之後 ETag 已變）/ mismatch 409 / 並行同 key 只建立一次、同 ETag 並行更新只一個成功、tombstone 防復活、快照 cursor 變更 410 | receipt 保留 30 天，到期後的恢復規則見 DELIVERY.md |
+| SCHEME-03 | 待執行 | 整合：assetBindings 精確覆蓋、來源 workspace ACL 403、非 ready 409、假縮圖 / 錯 kind 422、撤權後 availability=access_denied、讀取不插入畫布 | 跨畫布 materialization 未交付（capability false） |
 | STYLE-01 – 02 | 待實作 | — | — |
 | GRAPH-01、03、04 | 待實作 | — | relation v2 geometry、vectorPath、sequence 語意尚未實作 |
 | GRAPH-02 | 待實作 | — | 現有 operation 已可在單一 transaction 內「刪線 + 建節點 + 兩條新線」原子提交；正式契約待 Diagram／Relation v2 定案 |
@@ -77,4 +79,4 @@
 
 | 日期 | 項目 | 版本 | 結果 | 證據 |
 | --- | --- | --- | --- | --- |
-| 2026-10-12 | `bun test` | `89a85a3` + 本 commit | 預檢通過（274 tests） | 本機執行 |
+| 2026-10-12 | `bun test` | `89a85a3` + 本 commit | 預檢通過（342 tests） | 本機執行 |

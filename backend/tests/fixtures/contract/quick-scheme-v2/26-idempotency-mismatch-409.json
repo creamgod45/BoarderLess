@@ -1,0 +1,54 @@
+{
+  "description": "同 key 不同內容：409 idempotency_mismatch",
+  "request": {
+    "method": "PUT",
+    "path": "/api/v1/users/me/quick-schemes/00000000-0000-4000-8000-000000000025",
+    "headers": {
+      "if-none-match": "*",
+      "idempotency-key": "00000000-0000-4000-8000-000000000026"
+    },
+    "body": {
+      "resourceVersion": 2,
+      "name": "Other",
+      "schemaVersion": 1,
+      "payload": {
+        "format": "boarderless/selection",
+        "version": 1,
+        "nodes": [
+          {
+            "originalId": "n1",
+            "x": 0,
+            "y": 0,
+            "width": 240,
+            "height": 120,
+            "rotationDegrees": 0,
+            "text": "Plan",
+            "colorToken": "paper",
+            "shapeToken": "rounded",
+            "parentOriginalId": null,
+            "locked": false,
+            "zOffset": 0,
+            "vectorPath": null
+          }
+        ],
+        "groups": [],
+        "media": [],
+        "relations": []
+      },
+      "assetBindings": []
+    }
+  },
+  "response": {
+    "status": 409,
+    "headers": {
+      "cache-control": "private, no-store"
+    },
+    "body": {
+      "error": {
+        "code": "idempotency_mismatch",
+        "message": "Idempotency-Key was already used for a different request"
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

@@ -1,0 +1,94 @@
+{
+  "description": "列表：穩定快照 cursor（綁定 owner / collectionRevision / 期限）",
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/users/me/quick-schemes?limit=2"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "etag": "\"fixture-etag-17\"",
+      "cache-control": "private, no-store"
+    },
+    "body": {
+      "items": [
+        {
+          "id": "00000000-0000-4000-8000-000000000055",
+          "ownerId": "00000000-0000-4000-8000-000000000057",
+          "resourceVersion": 2,
+          "name": "Item 0",
+          "schemaVersion": 1,
+          "payload": {
+            "media": [],
+            "nodes": [
+              {
+                "x": 0,
+                "y": 0,
+                "text": "Plan",
+                "width": 240,
+                "height": 120,
+                "locked": false,
+                "zOffset": 0,
+                "colorToken": "paper",
+                "originalId": "n1",
+                "shapeToken": "rounded",
+                "vectorPath": null,
+                "rotationDegrees": 0,
+                "parentOriginalId": null
+              }
+            ],
+            "format": "boarderless/selection",
+            "groups": [],
+            "version": 1,
+            "relations": []
+          },
+          "assetBindings": [],
+          "revision": 1,
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z",
+          "etag": "\"fixture-etag-14\"",
+          "assetAvailability": []
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000060",
+          "ownerId": "00000000-0000-4000-8000-000000000057",
+          "resourceVersion": 2,
+          "name": "Item 2",
+          "schemaVersion": 1,
+          "payload": {
+            "media": [],
+            "nodes": [
+              {
+                "x": 0,
+                "y": 0,
+                "text": "Plan",
+                "width": 240,
+                "height": 120,
+                "locked": false,
+                "zOffset": 0,
+                "colorToken": "paper",
+                "originalId": "n1",
+                "shapeToken": "rounded",
+                "vectorPath": null,
+                "rotationDegrees": 0,
+                "parentOriginalId": null
+              }
+            ],
+            "format": "boarderless/selection",
+            "groups": [],
+            "version": 1,
+            "relations": []
+          },
+          "assetBindings": [],
+          "revision": 1,
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z",
+          "etag": "\"fixture-etag-16\"",
+          "assetAvailability": []
+        }
+      ],
+      "nextCursor": "fixture-cursor-1",
+      "collectionRevision": 3
+    }
+  }
+}

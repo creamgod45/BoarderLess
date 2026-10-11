@@ -15,13 +15,19 @@ const placeholder = (n: number) => {
 export interface RecordedRequest {
   method: string
   path: string
+  /** 只記錄契約相關的 header（If-Match、Idempotency-Key…）；不記錄 x-user-id 等身分 */
+  headers?: Record<string, string>
   body?: unknown
 }
 
 export interface RecordedResponse {
   status: number
   body: unknown
+  headers?: Record<string, string>
 }
+
+const ETAG_KEYS = new Set(['etag', 'if-match', 'if-none-match'])
+const CURSOR_KEYS = new Set(['nextCursor', 'cursor'])
 
 /**
  * 錄製 request / response fixtures：UUID 依出現順序換成固定 placeholder、時間固定、
@@ -29,6 +35,8 @@ export interface RecordedResponse {
  */
 export class FixtureRecorder {
   private readonly ids = new Map<string, string>()
+  private readonly etags = new Map<string, string>()
+  private readonly cursors = new Map<string, string>()
   private readonly written: { name: string; description: string; status: number }[] = []
 
   constructor(private readonly outDir: string) {}
@@ -36,6 +44,18 @@ export class FixtureRecorder {
   async reset(): Promise<void> {
     await rm(this.outDir, { recursive: true, force: true })
     await mkdir(this.outDir, { recursive: true })
+  }
+
+  /** opaque ETag / cursor 依出現順序換成固定值（`*` 保留） */
+  private normEtag(value: string): string {
+    if (value === '*') return value
+    if (!this.etags.has(value)) this.etags.set(value, `"fixture-etag-${this.etags.size + 1}"`)
+    return this.etags.get(value)!
+  }
+
+  private normCursor(value: string): string {
+    if (!this.cursors.has(value)) this.cursors.set(value, `fixture-cursor-${this.cursors.size + 1}`)
+    return this.cursors.get(value)!
   }
 
   normId(id: string): string {
@@ -51,6 +71,8 @@ export class FixtureRecorder {
           : 'https://storage.example.invalid/signed-download'
       }
       if (key === 'expiresAt') return '2026-10-02T00:15:00.000Z'
+      if (ETAG_KEYS.has(key.toLowerCase())) return this.normEtag(value)
+      if (CURSOR_KEYS.has(key)) return this.normCursor(value)
       if (key === 'ticket') return 'fixture-only-not-a-real-ticket'
       if (key === 'webSocketUrl') return 'wss://qa.example.invalid/api/v1/realtime'
       return value.replace(UUID_RE, (id) => this.normId(id)).replace(ISO_RE, '2026-10-02T00:00:00.000Z')
@@ -83,10 +105,15 @@ export class FixtureRecorder {
       description,
       request: {
         method: request.method,
-        path: this.normalize(request.path),
-        ...(request.body ? { body: this.normalize(request.body) } : {}),
+        path: this.normalize(request.path.replace(/([?&]cursor=)([^&]+)/, (_m, p: string, c: string) => `${p}${this.normCursor(decodeURIComponent(c))}`)),
+        ...(request.headers ? { headers: this.normalize(request.headers) } : {}),
+        ...(request.body !== undefined ? { body: this.normalize(request.body) } : {}),
       },
-      response: { status: response.status, ...(response.body == null ? {} : { body: this.normalizeBody(response.body) }) },
+      response: {
+        status: response.status,
+        ...(response.headers ? { headers: this.normalize(response.headers) } : {}),
+        ...(response.body == null ? {} : { body: this.normalizeBody(response.body) }),
+      },
     }
     await this.writeJson(`${name}.json`, doc)
     this.written.push({ name, description, status: response.status })

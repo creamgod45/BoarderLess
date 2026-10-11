@@ -6,6 +6,7 @@
   },
   "response": {
     "status": 404,
+    "headers": {},
     "body": {
       "error": {
         "code": "not_found",

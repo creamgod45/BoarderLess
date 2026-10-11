@@ -47,3 +47,49 @@
   - 整合測試（15 個；同一 OS process 內兩個 gateway、各自連線池與 LISTEN）。
   - **真多 process 預檢**：`bun run acceptance:multi-process`，兩個 `src/server.ts` process、kill -9、checkpoint 重新 join，11 項通過。
 - 未涵蓋：正式 auth / Origin / proxy 實際部署、外部日誌 redaction 驗證、APP 雙端（文字 / Group / 媒體 / relation 收斂）、視覺 overlay 簽核、負載與背壓數字（效能最後）。
+
+---
+
+## 批次 B：雲端快速方案簿（2026-10-11）
+
+### 1. 分支與 commit
+- 分支 `backend/media-v1`（基底 `89a85a3`），**尚未 commit**（與批次 A 同一批未提交變更）。
+- 狀態：源碼完成 ✅；服務已部署 ⬜；正式驗收 ⬜。
+- 未完成：跨 workspace 素材 materialization（`materializationEnabled: false`，引用其他 workspace 素材的方案由 APP 阻擋插入）；`rate_limited`（429 / Retry-After）尚未實作。
+
+### 2. 路由與 capability
+| 介面 | 說明 |
+| --- | --- |
+| `GET /api/v1/users/me/quick-scheme-capabilities` | `resourceVersions [2]`、`selectionSchemaVersions [1..9]`、limits、`idempotencyKeyTtlSeconds`（30 天）、`cursorTtlSeconds`（600）、`materializationEnabled: false` |
+| `GET /api/v1/users/me/quick-schemes?cursor&limit` | `{items, nextCursor, collectionRevision}` + collection ETag；首頁 If-None-Match 命中 304；limit 1..100（預設 50）；單頁 ≤ 4 MiB |
+| `GET /api/v1/users/me/quick-schemes/:id` | resource + ETag；If-None-Match 命中 304 |
+| `PUT /api/v1/users/me/quick-schemes/:id` | create：`If-None-Match: *`；update：`If-Match: <最新強 ETag>`；必填 `Idempotency-Key`（小寫 UUID） |
+| `DELETE /api/v1/users/me/quick-schemes/:id` | `If-Match` + `Idempotency-Key`；204；保留 tombstone |
+| `GET /api/v1/capabilities` | `quickSchemes.supported: true`、版本、`materializationEnabled: false` |
+
+- 可寫 body：`resourceVersion`（2）、`name`（trim 後 1..80 Unicode scalar，保存 trim 後的值）、`schemaVersion`、`payload`（JSON object，`payload.version` 必須明示且等於 schemaVersion）、`assetBindings`。其他欄位（ownerId、revision、etag…）一律 422。
+- 回應另含讀取時計算的 `assetAvailability[]`（`available` / `unavailable` / `access_denied`），不是授權、不含 URL。
+- 錯誤碼（HTTP）：`precondition_required`（428）、`invalid_idempotency_key`（400）、`revision_conflict`（412，details `revision` / `exists` / `deleted`）、`idempotency_mismatch`（409）、`quota_exceeded`（409）、`asset_unavailable`（409）、`asset_access_denied`（403）、`invalid_asset_binding`（422）、`invalid_payload`（422，details `issue` 沿用 APP `ClipboardPayloadIssue` 名稱，另有 `Malformed`、`InvalidVectorPath`、`InvalidTextPlacement`）、`unsupported_resource_version`（422）、`unsupported_selection_schema`（422）、`invalid_json`（400，details `reason`: duplicate_key / invalid_unicode / depth / syntax）、`payload_too_large`（413）、`cursor_expired`（410）、`invalid_cursor`（400）、`not_found`（404，含他人的方案 ID）。
+- 規則：
+  - 所有 mutation 在 owner 的 collection row lock 內完成 receipt → precondition → 驗證 → quota → 素材 ACL → 保存資源 / revision / collectionRevision / pin / receipt（同一 transaction）；同 ETag 並行更新只有一個成功。
+  - Receipt：同 owner + key + 相同 fingerprint（method、資源、precondition、body）回原結果（原 status / body / ETag，header `Idempotent-Replayed: true`），即使之後 ETag 已改變；不同內容 409。只保存成功結果；保留 30 天。**到期規則**：到期後同 key 重送視為新請求，create 會因資源已存在得到 412、update / delete 會因 ETag 已變得到 412，client 依衝突流程先 GET，不會重複建立或盲目覆蓋。
+  - 分頁快照：cursor 綁定 owner、collectionRevision 與期限；快照期間任何 create / update / delete 都讓下一頁回 410 `cursor_expired`（不會靜默漏資料）。
+  - 嚴格 JSON：parse 前限制 1 MiB；重複 key、孤立 surrogate、深度 > 64、非有限數字一律 400。
+  - assetBindings 精確覆蓋 payload 的原檔 / 縮圖引用；以 authenticated user 重新檢查來源 workspace membership；素材必須 ready、mediaKind 相符；縮圖必須由原檔 metadata（`thumbnailAssetId` / `sourceAssetId`）證明是其 derivative。
+  - Pin：create / update 依 bindings 重建、delete 移除；目前沒有會刪除 ready 素材的 GC，pin 為日後 GC 的保留依據。
+  - Header：`Cache-Control: private, no-store`；CORS 允許 `If-Match` / `If-None-Match` / `Idempotency-Key`，expose `ETag` / `Retry-After` / `Idempotent-Replayed`。
+
+### 3. Migration、部署與相容性
+- Migration `007_quick_schemes.sql`：`quick_scheme_collections`、`quick_schemes`（tombstone）、`quick_scheme_receipts`、`quick_scheme_asset_pins`。
+- 無新外部依賴。TypeScript lib 提升到 ES2024（`String.prototype.isWellFormed`；Bun 1.4 / Node 20+ 皆支援）。
+- 相容性：純新增路由；CORS 允許 / expose 的 header 增加。
+
+### 4. Fixtures 與 schema 版本
+- `tests/fixtures/contract/quick-scheme-v2/`（44 個）：resourceVersion 2、selection v1–v9（含 legacy 最小 v1、v4 真實素材 + 縮圖）。
+- 涵蓋：capabilities、各版本 round-trip、create / get / 304 / update / stale 412 / replay / idempotency mismatch / existing 412 / 428 ×2 / 他人 404 / delete / delete replay / 刪除後 404 / tombstone 防復活、422 ×4、重複 key 400、缺 binding 422、非成員 403、quota 409、分頁兩頁 / 304 / 列舉途中變更 410。
+- 樣本 payload：`tests/support/selection-samples.ts`，**依 APP `ClipboardPayload.kt` 原始碼手寫的 kotlinx 形狀**（encodeDefaults、explicitNulls、`type` / `mode` discriminator、`{value}` ID），不是 Kotlin serializer 實際輸出；APP 端需以 decode → validate → re-encode 核對，若有差異以 APP serializer 為準修正樣本。
+- 後端 selection validator：`src/domain/selection.ts`（`validateClipboardPayload` 與各型別 init 規則的移植，8 個單元測試、涵蓋 APP 各 issue code）。
+
+### 5. 尚待集中執行
+- SCHEME-01 – 03（見 [`ACCEPTANCE.md`](ACCEPTANCE.md)）。目前證據：15 個整合測試（同一 process）、selection 單元測試、fixtures。
+- 未涵蓋：APP 雙裝置 CRUD / 衝突 UI、APP 端以 Kotlin serializer 對 fixtures 的雙向驗證、跨畫布 materialization（未交付）、正式 auth。

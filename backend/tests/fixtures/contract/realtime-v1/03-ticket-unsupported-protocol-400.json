@@ -10,6 +10,7 @@
   },
   "response": {
     "status": 400,
+    "headers": {},
     "body": {
       "error": {
         "code": "unsupported_protocol_version",

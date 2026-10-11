@@ -1,7 +1,7 @@
 # Backend 開發進度
 
 對照：[`docs/BACKEND_ARCHITECTURE.md`](../docs/BACKEND_ARCHITECTURE.md) §11 交付階段、[`docs/BACKEND_MEDIA_API_SPEC.md`](../docs/BACKEND_MEDIA_API_SPEC.md)（Media v1）、[`docs/BACKEND_ASSET_PREPARATION_V2_SPEC.md`](../docs/BACKEND_ASSET_PREPARATION_V2_SPEC.md)（preparation v2）
-最後更新：2026-10-11（批次 A 源碼）
+最後更新：2026-10-11（批次 A–B 源碼）
 
 圖例：✅ 完成 · 🟡 部分完成／暫定 · ⬜ 未開始
 
@@ -55,6 +55,15 @@
 - ✅ metadataRevision：改名 / 成員 / 角色 / 刪除同交易 +1 並寫 outbox；`workspace_metadata`、`access_revoked`
 - ✅ Presence：world 座標 cursor、selection（過濾不存在物件）、rate limit、heartbeat TTL、roomEpoch / roomRevision、撤權與離線移除
 - ✅ 15 個整合測試（兩個 gateway、各自連線池）、33 個 fixtures + `schemas.json`；真多 process 預檢 `acceptance:multi-process`
+
+### 雲端快速方案簿（批次 B，MISSING_IMPLEMENTATION_SPEC §4）
+- ✅ Migration `007`：collections（collectionRevision / quota）、quick_schemes（tombstone）、receipts、asset pins
+- ✅ `/users/me/quick-schemes` CRUD：If-None-Match / If-Match（強 ETag）、Idempotency-Key receipt（30 天）、412 / 428 / 409、刪除 tombstone
+- ✅ 穩定快照分頁（collectionRevision 綁定、變更即 410）、collection ETag 304、單頁 bytes 上限
+- ✅ 嚴格 JSON（重複 key / 孤立 surrogate / 深度 / 1 MiB）、selection v1–v9 validator（`src/domain/selection.ts`）
+- ✅ assetBindings 精確覆蓋 + 來源 ACL / ready / derivative 檢查、availability、pins
+- ✅ 15 個整合測試、8 個 selection 單元測試、44 個 fixtures
+- ⬜ 跨 workspace materialization、429 rate limit
 
 ### 容器與 CI
 - ✅ `Dockerfile`：`api`（預設，port 3000、HEALTHCHECK、啟動時自動 migration）與 `worker`（含 ffmpeg）兩個 target；以非 root `bun` 使用者執行；`/data` volume 供 local storage driver
@@ -131,7 +140,7 @@
 - ✅ locked 物件只能切換 `locked`，不可移動 / 修改 / 刪除
 - ✅ operation、projection、outbox 在同一 transaction 提交
 
-### 測試（`bun test`，274 個）
+### 測試（`bun test`，342 個）
 - ✅ 單元：operation payload 驗證、touched ids、角色權限矩陣、HTML 跳脫、MIME sniff、本機簽名 URL、contract fixtures schema
 - ✅ 整合（真實 PostgreSQL）：create/move/delete + 冪等重送、20 個並行寫入的 `serverSeq` 連續性、版本衝突、transaction rollback、relation cascade、角色與撤銷、outbox、snapshot
 - ✅ 素材整合（真實 ffmpeg）：六種 MIME 完整流程、驗證失敗分類、complete 冪等 / 衝突、abandon 競爭、GC、lease 過期重領、重複縮圖 job、多 worker、不可覆寫、missing、ACL、MediaNode 引用、storage 503
@@ -169,7 +178,7 @@
 
 ### 缺少功能實作（[`docs/BACKEND_MISSING_IMPLEMENTATION_SPEC.md`](../docs/BACKEND_MISSING_IMPLEMENTATION_SPEC.md)，交付紀錄見 [`DELIVERY.md`](DELIVERY.md)）
 - [x] A 即時協作（正式 HTTP auth 仍未交付）
-- [ ] B 雲端快速方案簿
+- [x] B 雲端快速方案簿（materialization 未交付）
 - [ ] C 共用背景
 - [ ] D 連線 geometry 與 vectorPath
 - [ ] E 時序圖

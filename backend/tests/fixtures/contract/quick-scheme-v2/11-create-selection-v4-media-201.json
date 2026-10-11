@@ -1,0 +1,216 @@
+{
+  "description": "v4 媒體方案：assetBindings 精確覆蓋原檔 / 縮圖；assetAvailability 為讀取時狀態",
+  "request": {
+    "method": "PUT",
+    "path": "/api/v1/users/me/quick-schemes/00000000-0000-4000-8000-000000000020",
+    "headers": {
+      "if-none-match": "*",
+      "idempotency-key": "00000000-0000-4000-8000-000000000021"
+    },
+    "body": {
+      "resourceVersion": 2,
+      "name": "Media plan",
+      "schemaVersion": 4,
+      "payload": {
+        "format": "boarderless/selection",
+        "version": 4,
+        "nodes": [
+          {
+            "originalId": "n1",
+            "x": 0,
+            "y": 0,
+            "width": 240,
+            "height": 120,
+            "rotationDegrees": 0,
+            "text": "Plan",
+            "colorToken": "paper",
+            "shapeToken": "rounded",
+            "parentOriginalId": null,
+            "locked": false,
+            "zOffset": 0,
+            "vectorPath": null
+          }
+        ],
+        "groups": [],
+        "media": [
+          {
+            "originalId": "m1",
+            "x": 0,
+            "y": 200,
+            "width": 320,
+            "height": 180,
+            "rotationDegrees": 0,
+            "assetId": "00000000-0000-4000-8000-000000000022",
+            "mediaKind": "image",
+            "altText": "diagram",
+            "thumbnailAssetId": null,
+            "parentOriginalId": null,
+            "locked": false,
+            "zOffset": 1
+          },
+          {
+            "originalId": "m2",
+            "x": 400,
+            "y": 200,
+            "width": 320,
+            "height": 180,
+            "rotationDegrees": 0,
+            "assetId": "00000000-0000-4000-8000-000000000023",
+            "mediaKind": "video",
+            "altText": "",
+            "thumbnailAssetId": "00000000-0000-4000-8000-000000000024",
+            "parentOriginalId": null,
+            "locked": false,
+            "zOffset": 2
+          }
+        ],
+        "relations": [
+          {
+            "sourceId": "n1",
+            "targetId": "m1",
+            "direction": "Forward",
+            "intent": null,
+            "label": null,
+            "geometry": null
+          }
+        ]
+      },
+      "assetBindings": [
+        {
+          "assetId": "00000000-0000-4000-8000-000000000022",
+          "sourceWorkspaceId": "00000000-0000-4000-8000-000000000019",
+          "kind": "original"
+        },
+        {
+          "assetId": "00000000-0000-4000-8000-000000000023",
+          "sourceWorkspaceId": "00000000-0000-4000-8000-000000000019",
+          "kind": "original"
+        },
+        {
+          "assetId": "00000000-0000-4000-8000-000000000024",
+          "sourceWorkspaceId": "00000000-0000-4000-8000-000000000019",
+          "kind": "thumbnail"
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 201,
+    "headers": {
+      "etag": "\"fixture-etag-10\"",
+      "cache-control": "private, no-store"
+    },
+    "body": {
+      "id": "00000000-0000-4000-8000-000000000020",
+      "ownerId": "11111111-1111-4111-8111-111111111111",
+      "resourceVersion": 2,
+      "name": "Media plan",
+      "schemaVersion": 4,
+      "payload": {
+        "media": [
+          {
+            "x": 0,
+            "y": 200,
+            "width": 320,
+            "height": 180,
+            "locked": false,
+            "altText": "diagram",
+            "assetId": "00000000-0000-4000-8000-000000000022",
+            "zOffset": 1,
+            "mediaKind": "image",
+            "originalId": "m1",
+            "rotationDegrees": 0,
+            "parentOriginalId": null,
+            "thumbnailAssetId": null
+          },
+          {
+            "x": 400,
+            "y": 200,
+            "width": 320,
+            "height": 180,
+            "locked": false,
+            "altText": "",
+            "assetId": "00000000-0000-4000-8000-000000000023",
+            "zOffset": 2,
+            "mediaKind": "video",
+            "originalId": "m2",
+            "rotationDegrees": 0,
+            "parentOriginalId": null,
+            "thumbnailAssetId": "00000000-0000-4000-8000-000000000024"
+          }
+        ],
+        "nodes": [
+          {
+            "x": 0,
+            "y": 0,
+            "text": "Plan",
+            "width": 240,
+            "height": 120,
+            "locked": false,
+            "zOffset": 0,
+            "colorToken": "paper",
+            "originalId": "n1",
+            "shapeToken": "rounded",
+            "vectorPath": null,
+            "rotationDegrees": 0,
+            "parentOriginalId": null
+          }
+        ],
+        "format": "boarderless/selection",
+        "groups": [],
+        "version": 4,
+        "relations": [
+          {
+            "label": null,
+            "intent": null,
+            "geometry": null,
+            "sourceId": "n1",
+            "targetId": "m1",
+            "direction": "Forward"
+          }
+        ]
+      },
+      "assetBindings": [
+        {
+          "assetId": "00000000-0000-4000-8000-000000000022",
+          "sourceWorkspaceId": "00000000-0000-4000-8000-000000000019",
+          "kind": "original"
+        },
+        {
+          "assetId": "00000000-0000-4000-8000-000000000023",
+          "sourceWorkspaceId": "00000000-0000-4000-8000-000000000019",
+          "kind": "original"
+        },
+        {
+          "assetId": "00000000-0000-4000-8000-000000000024",
+          "sourceWorkspaceId": "00000000-0000-4000-8000-000000000019",
+          "kind": "thumbnail"
+        }
+      ],
+      "revision": 1,
+      "createdAt": "2026-10-02T00:00:00.000Z",
+      "updatedAt": "2026-10-02T00:00:00.000Z",
+      "etag": "\"fixture-etag-10\"",
+      "assetAvailability": [
+        {
+          "assetId": "00000000-0000-4000-8000-000000000022",
+          "sourceWorkspaceId": "00000000-0000-4000-8000-000000000019",
+          "kind": "original",
+          "status": "available"
+        },
+        {
+          "assetId": "00000000-0000-4000-8000-000000000023",
+          "sourceWorkspaceId": "00000000-0000-4000-8000-000000000019",
+          "kind": "original",
+          "status": "available"
+        },
+        {
+          "assetId": "00000000-0000-4000-8000-000000000024",
+          "sourceWorkspaceId": "00000000-0000-4000-8000-000000000019",
+          "kind": "thumbnail",
+          "status": "available"
+        }
+      ]
+    }
+  }
+}

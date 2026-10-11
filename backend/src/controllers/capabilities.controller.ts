@@ -3,6 +3,8 @@ import { ASSET_MEDIA_TYPES, MAX_ASSET_BYTES } from '../models/asset.ts'
 import { PREPARATION_RESPONSE_SCHEMA, PREPARE_REQUEST_SCHEMA } from '../models/asset-preparation.ts'
 import { REALTIME_PROTOCOL_VERSION, REALTIME_SUBPROTOCOL } from '../realtime/messages.ts'
 import type { CapabilitiesSchema } from '../schemas/capabilities.schema.ts'
+import { SELECTION_SCHEMA_VERSIONS } from '../domain/selection.ts'
+import { QUICK_SCHEME_RESOURCE_VERSION } from '../models/quick-scheme.ts'
 import { OPERATION_SCHEMA_VERSION, PROTOCOL_VERSION } from '../services/operation.service.ts'
 
 export interface CapabilityFlags {
@@ -32,7 +34,12 @@ export class CapabilitiesController {
     realtime: this.flags.realtime
       ? { supported: true as const, protocolVersions: [REALTIME_PROTOCOL_VERSION], subprotocol: REALTIME_SUBPROTOCOL }
       : { supported: false as const },
-    quickSchemes: { supported: false },
+    quickSchemes: {
+      supported: true as const,
+      resourceVersions: [QUICK_SCHEME_RESOURCE_VERSION],
+      selectionSchemaVersions: [...SELECTION_SCHEMA_VERSIONS],
+      materializationEnabled: false,
+    },
     canvasStyle: { supported: false },
     relationGeometry: { supported: false },
     vectorPath: { supported: false },

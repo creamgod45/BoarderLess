@@ -8,6 +8,7 @@ import { MemberRepository } from './member.repository.ts'
 import { OperationRepository } from './operation.repository.ts'
 import { OutboxRepository } from './outbox.repository.ts'
 import { PreparationRepository } from './preparation.repository.ts'
+import { QuickSchemeRepository } from './quick-scheme.repository.ts'
 import { RealtimeRepository } from './realtime.repository.ts'
 import { SnapshotRepository } from './snapshot.repository.ts'
 import { UserRepository } from './user.repository.ts'
@@ -26,6 +27,7 @@ export interface Repositories {
   fences: FenceRepository
   preparations: PreparationRepository
   realtime: RealtimeRepository
+  quickSchemes: QuickSchemeRepository
 }
 
 export function createRepositories(db: Db): Repositories {
@@ -42,6 +44,7 @@ export function createRepositories(db: Db): Repositories {
     fences: new FenceRepository(db),
     preparations: new PreparationRepository(db),
     realtime: new RealtimeRepository(db),
+    quickSchemes: new QuickSchemeRepository(db),
   }
 }
 

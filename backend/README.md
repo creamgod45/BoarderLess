@@ -205,3 +205,12 @@ APP ══ WS   /api/v1/realtime（subprotocol boarderless.v1）
 - 反向代理需支援 WebSocket upgrade 並轉送 `Sec-WebSocket-Protocol`；TLS 由代理終結。
 - **認證**：ticket endpoint 使用與 REST 相同的 auth middleware；目前只有 `x-user-id` 開發替身，正式 HTTP auth 尚未交付，不能視為正式安全能力。
 - Bun 的 `ws` 相容層不強制 `maxPayload`，gateway 在收到 frame 後自行檢查大小並以 4413 關閉。
+
+## 雲端快速方案簿（批次 B）
+
+合約：[`docs/BACKEND_QUICK_SCHEME_API_SPEC.md`](../docs/BACKEND_QUICK_SCHEME_API_SPEC.md)；fixtures：[`tests/fixtures/contract/quick-scheme-v2/`](tests/fixtures/contract/quick-scheme-v2/)；交付細節：[`DELIVERY.md`](DELIVERY.md)。
+
+- `/api/v1/users/me/quick-schemes`：owner 由認證注入；資源 ID 是 client 先保存的 UUID。
+- 建立 `PUT /:id` + `If-None-Match: *`；更新 / 刪除帶 `If-Match: <ETag>`；每個 mutation 都要 `Idempotency-Key`。
+- payload 是 `boarderless/selection` v1–v9 物件，伺服器以 `src/domain/selection.ts`（APP validator 移植）嚴格驗證。
+- 列表 cursor 是穩定快照；列舉途中有變更回 410 `cursor_expired`，從第一頁重來。

@@ -1,0 +1,17 @@
+{
+  "description": "DELETE（If-Match + Idempotency-Key）：204；保留 tombstone、移除自己的 pin、不刪素材",
+  "request": {
+    "method": "DELETE",
+    "path": "/api/v1/users/me/quick-schemes/00000000-0000-4000-8000-000000000025",
+    "headers": {
+      "if-match": "\"fixture-etag-12\"",
+      "idempotency-key": "00000000-0000-4000-8000-000000000033"
+    }
+  },
+  "response": {
+    "status": 204,
+    "headers": {
+      "cache-control": "private, no-store"
+    }
+  }
+}

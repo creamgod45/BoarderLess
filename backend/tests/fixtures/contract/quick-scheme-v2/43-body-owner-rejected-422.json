@@ -1,0 +1,67 @@
+{
+  "description": "body 不接受 ownerId / revision 等 server 欄位：422",
+  "request": {
+    "method": "PUT",
+    "path": "/api/v1/users/me/quick-schemes/00000000-0000-4000-8000-000000000041",
+    "headers": {
+      "if-none-match": "*",
+      "idempotency-key": "00000000-0000-4000-8000-000000000042"
+    },
+    "body": {
+      "resourceVersion": 2,
+      "name": "Planning card",
+      "schemaVersion": 1,
+      "payload": {
+        "format": "boarderless/selection",
+        "version": 1,
+        "nodes": [
+          {
+            "originalId": "n1",
+            "x": 0,
+            "y": 0,
+            "width": 240,
+            "height": 120,
+            "rotationDegrees": 0,
+            "text": "Plan",
+            "colorToken": "paper",
+            "shapeToken": "rounded",
+            "parentOriginalId": null,
+            "locked": false,
+            "zOffset": 0,
+            "vectorPath": null
+          }
+        ],
+        "groups": [],
+        "media": [],
+        "relations": []
+      },
+      "assetBindings": [],
+      "ownerId": "00000000-0000-4000-8000-000000000043"
+    }
+  },
+  "response": {
+    "status": 422,
+    "headers": {
+      "cache-control": "private, no-store"
+    },
+    "body": {
+      "error": {
+        "code": "invalid_payload",
+        "message": "Request body does not match the quick scheme schema",
+        "details": {
+          "errors": [
+            {
+              "path": "/ownerId",
+              "message": "schema is false"
+            },
+            {
+              "path": "",
+              "message": "must not have additional properties"
+            }
+          ]
+        }
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

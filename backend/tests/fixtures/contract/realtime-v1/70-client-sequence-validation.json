@@ -8,25 +8,25 @@
         {
           "type": "catch_up_transaction",
           "protocolVersion": 1,
-          "workspaceId": "018283ef-dc0c-4515-adf1-28d49e9de6ec",
-          "connectionEpoch": "75fbbfc1-498b-4872-a73b-1af64d0a81a9",
-          "transactionId": "45e347c2-02e4-4cc1-87a9-f9a23cfad5b9",
+          "workspaceId": "8926d2c1-dcee-485d-8216-d946fe08ddbf",
+          "connectionEpoch": "d8b0f167-2686-4f34-9600-cfb4d8b2e49b",
+          "transactionId": "68f50d22-f5d7-4a64-8965-a78274d2f1ef",
           "fromServerSeq": 1,
           "toServerSeq": 1,
           "workspaceVersion": 1,
           "operations": [
             {
               "serverSeq": 1,
-              "operationId": "71a7ef0c-6f44-45b3-8205-cf6244e7fb57",
-              "transactionId": "45e347c2-02e4-4cc1-87a9-f9a23cfad5b9",
-              "actorId": "5456f0d5-ad2a-4525-bf52-4c4df96d9996",
-              "clientId": "15c1a455-4ec4-4597-9f7c-8abe59845320",
+              "operationId": "23fd30af-ed03-4dc6-a470-b0b24f45ae44",
+              "transactionId": "68f50d22-f5d7-4a64-8965-a78274d2f1ef",
+              "actorId": "2c56336c-224f-4c1c-a6f4-ccdaaaabb71e",
+              "clientId": "4744b995-4fa2-4b4c-96dc-302414e36664",
               "clientSeq": 1,
               "baseVersion": 0,
               "workspaceVersion": 1,
               "operationType": "create_object",
               "payload": {
-                "objectId": "b9f809d7-c17c-4cd5-b0c3-ded2dd85acdc",
+                "objectId": "986fc6d7-ee7a-4c89-9d2f-37e2c2afe399",
                 "transform": {
                   "x": 0,
                   "y": 0,
@@ -40,32 +40,32 @@
                 }
               },
               "schemaVersion": 1,
-              "committedAt": "2026-10-11T16:27:16.687Z"
+              "committedAt": "2026-10-11T16:27:30.321Z"
             }
           ]
         },
         {
           "type": "catch_up_transaction",
           "protocolVersion": 1,
-          "workspaceId": "018283ef-dc0c-4515-adf1-28d49e9de6ec",
-          "connectionEpoch": "75fbbfc1-498b-4872-a73b-1af64d0a81a9",
-          "transactionId": "3372c63c-5691-44f0-afb5-c28ce1c22406",
+          "workspaceId": "8926d2c1-dcee-485d-8216-d946fe08ddbf",
+          "connectionEpoch": "d8b0f167-2686-4f34-9600-cfb4d8b2e49b",
+          "transactionId": "d6611bcd-ffbd-456c-a3b3-d60e866fe474",
           "fromServerSeq": 2,
           "toServerSeq": 3,
           "workspaceVersion": 2,
           "operations": [
             {
               "serverSeq": 2,
-              "operationId": "a59c6254-9c8e-4596-a231-7e70bcbf9e94",
-              "transactionId": "3372c63c-5691-44f0-afb5-c28ce1c22406",
-              "actorId": "5456f0d5-ad2a-4525-bf52-4c4df96d9996",
-              "clientId": "a3a4bf16-94a8-4c08-aedd-317ca668d350",
+              "operationId": "22bc96a3-8422-457e-8aaf-83d0eaca2aea",
+              "transactionId": "d6611bcd-ffbd-456c-a3b3-d60e866fe474",
+              "actorId": "2c56336c-224f-4c1c-a6f4-ccdaaaabb71e",
+              "clientId": "99d77bb5-8354-47ec-af75-828f2a1eed1a",
               "clientSeq": 1,
               "baseVersion": 1,
               "workspaceVersion": 2,
               "operationType": "create_object",
               "payload": {
-                "objectId": "c79652ee-bad6-4e3d-87f9-586a5c4fc87d",
+                "objectId": "87a5fc83-6a34-4455-afd4-2b65393cd4cd",
                 "transform": {
                   "x": 0,
                   "y": 0,
@@ -79,20 +79,20 @@
                 }
               },
               "schemaVersion": 1,
-              "committedAt": "2026-10-11T16:27:16.702Z"
+              "committedAt": "2026-10-11T16:27:30.334Z"
             },
             {
               "serverSeq": 3,
-              "operationId": "45aa8ad8-8ca4-4b3f-b547-f1fbedccd89a",
-              "transactionId": "3372c63c-5691-44f0-afb5-c28ce1c22406",
-              "actorId": "5456f0d5-ad2a-4525-bf52-4c4df96d9996",
-              "clientId": "a3a4bf16-94a8-4c08-aedd-317ca668d350",
+              "operationId": "6f950e82-83a9-4a35-9a0d-a257c669f7ac",
+              "transactionId": "d6611bcd-ffbd-456c-a3b3-d60e866fe474",
+              "actorId": "2c56336c-224f-4c1c-a6f4-ccdaaaabb71e",
+              "clientId": "99d77bb5-8354-47ec-af75-828f2a1eed1a",
               "clientSeq": 2,
               "baseVersion": 1,
               "workspaceVersion": 2,
               "operationType": "create_object",
               "payload": {
-                "objectId": "43c55835-8466-45ff-9ba3-892d857b1a08",
+                "objectId": "fd27a2d4-57dc-4626-9a6e-ba1377bb6222",
                 "transform": {
                   "x": 0,
                   "y": 0,
@@ -106,7 +106,7 @@
                 }
               },
               "schemaVersion": 1,
-              "committedAt": "2026-10-11T16:27:16.702Z"
+              "committedAt": "2026-10-11T16:27:30.334Z"
             }
           ]
         }
@@ -120,25 +120,25 @@
         {
           "type": "catch_up_transaction",
           "protocolVersion": 1,
-          "workspaceId": "018283ef-dc0c-4515-adf1-28d49e9de6ec",
-          "connectionEpoch": "75fbbfc1-498b-4872-a73b-1af64d0a81a9",
-          "transactionId": "45e347c2-02e4-4cc1-87a9-f9a23cfad5b9",
+          "workspaceId": "8926d2c1-dcee-485d-8216-d946fe08ddbf",
+          "connectionEpoch": "d8b0f167-2686-4f34-9600-cfb4d8b2e49b",
+          "transactionId": "68f50d22-f5d7-4a64-8965-a78274d2f1ef",
           "fromServerSeq": 1,
           "toServerSeq": 1,
           "workspaceVersion": 1,
           "operations": [
             {
               "serverSeq": 1,
-              "operationId": "71a7ef0c-6f44-45b3-8205-cf6244e7fb57",
-              "transactionId": "45e347c2-02e4-4cc1-87a9-f9a23cfad5b9",
-              "actorId": "5456f0d5-ad2a-4525-bf52-4c4df96d9996",
-              "clientId": "15c1a455-4ec4-4597-9f7c-8abe59845320",
+              "operationId": "23fd30af-ed03-4dc6-a470-b0b24f45ae44",
+              "transactionId": "68f50d22-f5d7-4a64-8965-a78274d2f1ef",
+              "actorId": "2c56336c-224f-4c1c-a6f4-ccdaaaabb71e",
+              "clientId": "4744b995-4fa2-4b4c-96dc-302414e36664",
               "clientSeq": 1,
               "baseVersion": 0,
               "workspaceVersion": 1,
               "operationType": "create_object",
               "payload": {
-                "objectId": "b9f809d7-c17c-4cd5-b0c3-ded2dd85acdc",
+                "objectId": "986fc6d7-ee7a-4c89-9d2f-37e2c2afe399",
                 "transform": {
                   "x": 0,
                   "y": 0,
@@ -152,32 +152,32 @@
                 }
               },
               "schemaVersion": 1,
-              "committedAt": "2026-10-11T16:27:16.687Z"
+              "committedAt": "2026-10-11T16:27:30.321Z"
             }
           ]
         },
         {
           "type": "catch_up_transaction",
           "protocolVersion": 1,
-          "workspaceId": "018283ef-dc0c-4515-adf1-28d49e9de6ec",
-          "connectionEpoch": "75fbbfc1-498b-4872-a73b-1af64d0a81a9",
-          "transactionId": "45e347c2-02e4-4cc1-87a9-f9a23cfad5b9",
+          "workspaceId": "8926d2c1-dcee-485d-8216-d946fe08ddbf",
+          "connectionEpoch": "d8b0f167-2686-4f34-9600-cfb4d8b2e49b",
+          "transactionId": "68f50d22-f5d7-4a64-8965-a78274d2f1ef",
           "fromServerSeq": 1,
           "toServerSeq": 1,
           "workspaceVersion": 1,
           "operations": [
             {
               "serverSeq": 1,
-              "operationId": "71a7ef0c-6f44-45b3-8205-cf6244e7fb57",
-              "transactionId": "45e347c2-02e4-4cc1-87a9-f9a23cfad5b9",
-              "actorId": "5456f0d5-ad2a-4525-bf52-4c4df96d9996",
-              "clientId": "15c1a455-4ec4-4597-9f7c-8abe59845320",
+              "operationId": "23fd30af-ed03-4dc6-a470-b0b24f45ae44",
+              "transactionId": "68f50d22-f5d7-4a64-8965-a78274d2f1ef",
+              "actorId": "2c56336c-224f-4c1c-a6f4-ccdaaaabb71e",
+              "clientId": "4744b995-4fa2-4b4c-96dc-302414e36664",
               "clientSeq": 1,
               "baseVersion": 0,
               "workspaceVersion": 1,
               "operationType": "create_object",
               "payload": {
-                "objectId": "b9f809d7-c17c-4cd5-b0c3-ded2dd85acdc",
+                "objectId": "986fc6d7-ee7a-4c89-9d2f-37e2c2afe399",
                 "transform": {
                   "x": 0,
                   "y": 0,
@@ -191,7 +191,7 @@
                 }
               },
               "schemaVersion": 1,
-              "committedAt": "2026-10-11T16:27:16.687Z"
+              "committedAt": "2026-10-11T16:27:30.321Z"
             }
           ]
         }
@@ -205,25 +205,25 @@
         {
           "type": "catch_up_transaction",
           "protocolVersion": 1,
-          "workspaceId": "018283ef-dc0c-4515-adf1-28d49e9de6ec",
-          "connectionEpoch": "75fbbfc1-498b-4872-a73b-1af64d0a81a9",
-          "transactionId": "45e347c2-02e4-4cc1-87a9-f9a23cfad5b9",
+          "workspaceId": "8926d2c1-dcee-485d-8216-d946fe08ddbf",
+          "connectionEpoch": "d8b0f167-2686-4f34-9600-cfb4d8b2e49b",
+          "transactionId": "68f50d22-f5d7-4a64-8965-a78274d2f1ef",
           "fromServerSeq": 1,
           "toServerSeq": 1,
           "workspaceVersion": 1,
           "operations": [
             {
               "serverSeq": 1,
-              "operationId": "71a7ef0c-6f44-45b3-8205-cf6244e7fb57",
-              "transactionId": "45e347c2-02e4-4cc1-87a9-f9a23cfad5b9",
-              "actorId": "5456f0d5-ad2a-4525-bf52-4c4df96d9996",
-              "clientId": "15c1a455-4ec4-4597-9f7c-8abe59845320",
+              "operationId": "23fd30af-ed03-4dc6-a470-b0b24f45ae44",
+              "transactionId": "68f50d22-f5d7-4a64-8965-a78274d2f1ef",
+              "actorId": "2c56336c-224f-4c1c-a6f4-ccdaaaabb71e",
+              "clientId": "4744b995-4fa2-4b4c-96dc-302414e36664",
               "clientSeq": 1,
               "baseVersion": 0,
               "workspaceVersion": 1,
               "operationType": "create_object",
               "payload": {
-                "objectId": "b9f809d7-c17c-4cd5-b0c3-ded2dd85acdc",
+                "objectId": "986fc6d7-ee7a-4c89-9d2f-37e2c2afe399",
                 "transform": {
                   "x": 0,
                   "y": 0,
@@ -237,32 +237,32 @@
                 }
               },
               "schemaVersion": 1,
-              "committedAt": "2026-10-11T16:27:16.687Z"
+              "committedAt": "2026-10-11T16:27:30.321Z"
             }
           ]
         },
         {
           "type": "catch_up_transaction",
           "protocolVersion": 1,
-          "workspaceId": "018283ef-dc0c-4515-adf1-28d49e9de6ec",
-          "connectionEpoch": "75fbbfc1-498b-4872-a73b-1af64d0a81a9",
-          "transactionId": "3372c63c-5691-44f0-afb5-c28ce1c22406",
+          "workspaceId": "8926d2c1-dcee-485d-8216-d946fe08ddbf",
+          "connectionEpoch": "d8b0f167-2686-4f34-9600-cfb4d8b2e49b",
+          "transactionId": "d6611bcd-ffbd-456c-a3b3-d60e866fe474",
           "fromServerSeq": 7,
           "toServerSeq": 8,
           "workspaceVersion": 2,
           "operations": [
             {
               "serverSeq": 7,
-              "operationId": "a59c6254-9c8e-4596-a231-7e70bcbf9e94",
-              "transactionId": "3372c63c-5691-44f0-afb5-c28ce1c22406",
-              "actorId": "5456f0d5-ad2a-4525-bf52-4c4df96d9996",
-              "clientId": "a3a4bf16-94a8-4c08-aedd-317ca668d350",
+              "operationId": "22bc96a3-8422-457e-8aaf-83d0eaca2aea",
+              "transactionId": "d6611bcd-ffbd-456c-a3b3-d60e866fe474",
+              "actorId": "2c56336c-224f-4c1c-a6f4-ccdaaaabb71e",
+              "clientId": "99d77bb5-8354-47ec-af75-828f2a1eed1a",
               "clientSeq": 1,
               "baseVersion": 1,
               "workspaceVersion": 2,
               "operationType": "create_object",
               "payload": {
-                "objectId": "c79652ee-bad6-4e3d-87f9-586a5c4fc87d",
+                "objectId": "87a5fc83-6a34-4455-afd4-2b65393cd4cd",
                 "transform": {
                   "x": 0,
                   "y": 0,
@@ -276,20 +276,20 @@
                 }
               },
               "schemaVersion": 1,
-              "committedAt": "2026-10-11T16:27:16.702Z"
+              "committedAt": "2026-10-11T16:27:30.334Z"
             },
             {
               "serverSeq": 8,
-              "operationId": "45aa8ad8-8ca4-4b3f-b547-f1fbedccd89a",
-              "transactionId": "3372c63c-5691-44f0-afb5-c28ce1c22406",
-              "actorId": "5456f0d5-ad2a-4525-bf52-4c4df96d9996",
-              "clientId": "a3a4bf16-94a8-4c08-aedd-317ca668d350",
+              "operationId": "6f950e82-83a9-4a35-9a0d-a257c669f7ac",
+              "transactionId": "d6611bcd-ffbd-456c-a3b3-d60e866fe474",
+              "actorId": "2c56336c-224f-4c1c-a6f4-ccdaaaabb71e",
+              "clientId": "99d77bb5-8354-47ec-af75-828f2a1eed1a",
               "clientSeq": 2,
               "baseVersion": 1,
               "workspaceVersion": 2,
               "operationType": "create_object",
               "payload": {
-                "objectId": "43c55835-8466-45ff-9ba3-892d857b1a08",
+                "objectId": "fd27a2d4-57dc-4626-9a6e-ba1377bb6222",
                 "transform": {
                   "x": 0,
                   "y": 0,
@@ -303,7 +303,7 @@
                 }
               },
               "schemaVersion": 1,
-              "committedAt": "2026-10-11T16:27:16.702Z"
+              "committedAt": "2026-10-11T16:27:30.334Z"
             }
           ]
         }
@@ -317,25 +317,25 @@
         {
           "type": "catch_up_transaction",
           "protocolVersion": 1,
-          "workspaceId": "018283ef-dc0c-4515-adf1-28d49e9de6ec",
-          "connectionEpoch": "75fbbfc1-498b-4872-a73b-1af64d0a81a9",
-          "transactionId": "3372c63c-5691-44f0-afb5-c28ce1c22406",
+          "workspaceId": "8926d2c1-dcee-485d-8216-d946fe08ddbf",
+          "connectionEpoch": "d8b0f167-2686-4f34-9600-cfb4d8b2e49b",
+          "transactionId": "d6611bcd-ffbd-456c-a3b3-d60e866fe474",
           "fromServerSeq": 2,
           "toServerSeq": 3,
           "workspaceVersion": 2,
           "operations": [
             {
               "serverSeq": 2,
-              "operationId": "a59c6254-9c8e-4596-a231-7e70bcbf9e94",
-              "transactionId": "3372c63c-5691-44f0-afb5-c28ce1c22406",
-              "actorId": "5456f0d5-ad2a-4525-bf52-4c4df96d9996",
-              "clientId": "a3a4bf16-94a8-4c08-aedd-317ca668d350",
+              "operationId": "22bc96a3-8422-457e-8aaf-83d0eaca2aea",
+              "transactionId": "d6611bcd-ffbd-456c-a3b3-d60e866fe474",
+              "actorId": "2c56336c-224f-4c1c-a6f4-ccdaaaabb71e",
+              "clientId": "99d77bb5-8354-47ec-af75-828f2a1eed1a",
               "clientSeq": 1,
               "baseVersion": 1,
               "workspaceVersion": 2,
               "operationType": "create_object",
               "payload": {
-                "objectId": "c79652ee-bad6-4e3d-87f9-586a5c4fc87d",
+                "objectId": "87a5fc83-6a34-4455-afd4-2b65393cd4cd",
                 "transform": {
                   "x": 0,
                   "y": 0,
@@ -349,20 +349,20 @@
                 }
               },
               "schemaVersion": 1,
-              "committedAt": "2026-10-11T16:27:16.702Z"
+              "committedAt": "2026-10-11T16:27:30.334Z"
             },
             {
               "serverSeq": 3,
-              "operationId": "45aa8ad8-8ca4-4b3f-b547-f1fbedccd89a",
-              "transactionId": "3372c63c-5691-44f0-afb5-c28ce1c22406",
-              "actorId": "5456f0d5-ad2a-4525-bf52-4c4df96d9996",
-              "clientId": "a3a4bf16-94a8-4c08-aedd-317ca668d350",
+              "operationId": "6f950e82-83a9-4a35-9a0d-a257c669f7ac",
+              "transactionId": "d6611bcd-ffbd-456c-a3b3-d60e866fe474",
+              "actorId": "2c56336c-224f-4c1c-a6f4-ccdaaaabb71e",
+              "clientId": "99d77bb5-8354-47ec-af75-828f2a1eed1a",
               "clientSeq": 2,
               "baseVersion": 1,
               "workspaceVersion": 2,
               "operationType": "create_object",
               "payload": {
-                "objectId": "43c55835-8466-45ff-9ba3-892d857b1a08",
+                "objectId": "fd27a2d4-57dc-4626-9a6e-ba1377bb6222",
                 "transform": {
                   "x": 0,
                   "y": 0,
@@ -376,32 +376,32 @@
                 }
               },
               "schemaVersion": 1,
-              "committedAt": "2026-10-11T16:27:16.702Z"
+              "committedAt": "2026-10-11T16:27:30.334Z"
             }
           ]
         },
         {
           "type": "catch_up_transaction",
           "protocolVersion": 1,
-          "workspaceId": "018283ef-dc0c-4515-adf1-28d49e9de6ec",
-          "connectionEpoch": "75fbbfc1-498b-4872-a73b-1af64d0a81a9",
-          "transactionId": "45e347c2-02e4-4cc1-87a9-f9a23cfad5b9",
+          "workspaceId": "8926d2c1-dcee-485d-8216-d946fe08ddbf",
+          "connectionEpoch": "d8b0f167-2686-4f34-9600-cfb4d8b2e49b",
+          "transactionId": "68f50d22-f5d7-4a64-8965-a78274d2f1ef",
           "fromServerSeq": 1,
           "toServerSeq": 1,
           "workspaceVersion": 1,
           "operations": [
             {
               "serverSeq": 1,
-              "operationId": "71a7ef0c-6f44-45b3-8205-cf6244e7fb57",
-              "transactionId": "45e347c2-02e4-4cc1-87a9-f9a23cfad5b9",
-              "actorId": "5456f0d5-ad2a-4525-bf52-4c4df96d9996",
-              "clientId": "15c1a455-4ec4-4597-9f7c-8abe59845320",
+              "operationId": "23fd30af-ed03-4dc6-a470-b0b24f45ae44",
+              "transactionId": "68f50d22-f5d7-4a64-8965-a78274d2f1ef",
+              "actorId": "2c56336c-224f-4c1c-a6f4-ccdaaaabb71e",
+              "clientId": "4744b995-4fa2-4b4c-96dc-302414e36664",
               "clientSeq": 1,
               "baseVersion": 0,
               "workspaceVersion": 1,
               "operationType": "create_object",
               "payload": {
-                "objectId": "b9f809d7-c17c-4cd5-b0c3-ded2dd85acdc",
+                "objectId": "986fc6d7-ee7a-4c89-9d2f-37e2c2afe399",
                 "transform": {
                   "x": 0,
                   "y": 0,
@@ -415,7 +415,7 @@
                 }
               },
               "schemaVersion": 1,
-              "committedAt": "2026-10-11T16:27:16.687Z"
+              "committedAt": "2026-10-11T16:27:30.321Z"
             }
           ]
         }
@@ -429,25 +429,25 @@
         {
           "type": "catch_up_transaction",
           "protocolVersion": 1,
-          "workspaceId": "018283ef-dc0c-4515-adf1-28d49e9de6ec",
-          "connectionEpoch": "75fbbfc1-498b-4872-a73b-1af64d0a81a9",
-          "transactionId": "45e347c2-02e4-4cc1-87a9-f9a23cfad5b9",
+          "workspaceId": "8926d2c1-dcee-485d-8216-d946fe08ddbf",
+          "connectionEpoch": "d8b0f167-2686-4f34-9600-cfb4d8b2e49b",
+          "transactionId": "68f50d22-f5d7-4a64-8965-a78274d2f1ef",
           "fromServerSeq": 1,
           "toServerSeq": 1,
           "workspaceVersion": 1,
           "operations": [
             {
               "serverSeq": 1,
-              "operationId": "71a7ef0c-6f44-45b3-8205-cf6244e7fb57",
-              "transactionId": "45e347c2-02e4-4cc1-87a9-f9a23cfad5b9",
-              "actorId": "5456f0d5-ad2a-4525-bf52-4c4df96d9996",
-              "clientId": "15c1a455-4ec4-4597-9f7c-8abe59845320",
+              "operationId": "23fd30af-ed03-4dc6-a470-b0b24f45ae44",
+              "transactionId": "68f50d22-f5d7-4a64-8965-a78274d2f1ef",
+              "actorId": "2c56336c-224f-4c1c-a6f4-ccdaaaabb71e",
+              "clientId": "4744b995-4fa2-4b4c-96dc-302414e36664",
               "clientSeq": 1,
               "baseVersion": 0,
               "workspaceVersion": 1,
               "operationType": "create_object",
               "payload": {
-                "objectId": "b9f809d7-c17c-4cd5-b0c3-ded2dd85acdc",
+                "objectId": "986fc6d7-ee7a-4c89-9d2f-37e2c2afe399",
                 "transform": {
                   "x": 0,
                   "y": 0,
@@ -461,32 +461,32 @@
                 }
               },
               "schemaVersion": 1,
-              "committedAt": "2026-10-11T16:27:16.687Z"
+              "committedAt": "2026-10-11T16:27:30.321Z"
             }
           ]
         },
         {
           "type": "catch_up_transaction",
           "protocolVersion": 1,
-          "workspaceId": "018283ef-dc0c-4515-adf1-28d49e9de6ec",
-          "connectionEpoch": "75fbbfc1-498b-4872-a73b-1af64d0a81a9",
-          "transactionId": "45e347c2-02e4-4cc1-87a9-f9a23cfad5b9",
+          "workspaceId": "8926d2c1-dcee-485d-8216-d946fe08ddbf",
+          "connectionEpoch": "d8b0f167-2686-4f34-9600-cfb4d8b2e49b",
+          "transactionId": "68f50d22-f5d7-4a64-8965-a78274d2f1ef",
           "fromServerSeq": 1,
           "toServerSeq": 1,
           "workspaceVersion": 1,
           "operations": [
             {
               "serverSeq": 1,
-              "operationId": "71a7ef0c-6f44-45b3-8205-cf6244e7fb57",
-              "transactionId": "45e347c2-02e4-4cc1-87a9-f9a23cfad5b9",
-              "actorId": "5456f0d5-ad2a-4525-bf52-4c4df96d9996",
-              "clientId": "15c1a455-4ec4-4597-9f7c-8abe59845320",
+              "operationId": "23fd30af-ed03-4dc6-a470-b0b24f45ae44",
+              "transactionId": "68f50d22-f5d7-4a64-8965-a78274d2f1ef",
+              "actorId": "2c56336c-224f-4c1c-a6f4-ccdaaaabb71e",
+              "clientId": "4744b995-4fa2-4b4c-96dc-302414e36664",
               "clientSeq": 1,
               "baseVersion": 0,
               "workspaceVersion": 1,
               "operationType": "create_object",
               "payload": {
-                "objectId": "b9f809d7-c17c-4cd5-b0c3-ded2dd85acdc",
+                "objectId": "986fc6d7-ee7a-4c89-9d2f-37e2c2afe399",
                 "transform": {
                   "x": 0,
                   "y": 0,
@@ -500,7 +500,7 @@
                 }
               },
               "schemaVersion": 1,
-              "committedAt": "2026-10-11T16:27:16.687Z"
+              "committedAt": "2026-10-11T16:27:30.321Z"
             }
           ]
         }

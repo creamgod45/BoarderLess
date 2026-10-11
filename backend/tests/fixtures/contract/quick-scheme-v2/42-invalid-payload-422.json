@@ -1,0 +1,41 @@
+{
+  "description": "payload 不合法：422 invalid_payload + APP issue code",
+  "request": {
+    "method": "PUT",
+    "path": "/api/v1/users/me/quick-schemes/00000000-0000-4000-8000-000000000039",
+    "headers": {
+      "if-none-match": "*",
+      "idempotency-key": "00000000-0000-4000-8000-000000000040"
+    },
+    "body": {
+      "resourceVersion": 2,
+      "name": "Planning card",
+      "schemaVersion": 1,
+      "payload": {
+        "format": "boarderless/selection",
+        "version": 1,
+        "nodes": [],
+        "groups": [],
+        "media": [],
+        "relations": []
+      },
+      "assetBindings": []
+    }
+  },
+  "response": {
+    "status": 422,
+    "headers": {
+      "cache-control": "private, no-store"
+    },
+    "body": {
+      "error": {
+        "code": "invalid_payload",
+        "message": "payload is not a valid boarderless/selection",
+        "details": {
+          "issue": "Empty"
+        }
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

@@ -10,6 +10,7 @@ import { registerErrorHandler } from './middlewares/error-handler.ts'
 import { Database } from './repositories/index.ts'
 import { apiRoutes } from './routes/api.routes.ts'
 import { pageRoutes } from './routes/page.routes.ts'
+import { quickSchemeRoutes } from './routes/quick-scheme.routes.ts'
 import { localStorageRoutes } from './routes/storage.routes.ts'
 import { requestValidatorCompiler } from './schemas/validator.ts'
 import { RealtimeHub } from './realtime/hub.ts'
@@ -78,8 +79,8 @@ export async function buildApp({ config, sql, storage, logger = true }: BuildApp
   await app.register(cors, {
     origin: config.corsOrigins.includes('*') ? true : config.corsOrigins,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['content-type', DEV_USER_HEADER],
-    exposedHeaders: ['content-length', 'etag'],
+    allowedHeaders: ['content-type', DEV_USER_HEADER, 'if-match', 'if-none-match', 'idempotency-key'],
+    exposedHeaders: ['content-length', 'etag', 'retry-after', 'idempotent-replayed'],
     maxAge: 600,
   })
 
@@ -95,6 +96,7 @@ export async function buildApp({ config, sql, storage, logger = true }: BuildApp
   await app.register(swaggerUi, { routePrefix: '/docs' })
 
   await app.register(pageRoutes(services, () => endpoints))
+  await app.register(quickSchemeRoutes(services.quickSchemes), { prefix: '/api/v1' })
   const realtime = config.realtime?.enabled ? config.realtime : null
   await app.register(apiRoutes(services, { realtime: realtime !== null }), { prefix: '/api/v1' })
   if (realtime) {

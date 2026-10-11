@@ -18,7 +18,12 @@ export const CapabilitiesSchema = Type.Object({
     Type.Object({ supported: Type.Literal(true), protocolVersions: Type.Array(Type.Integer()), subprotocol: Type.String() }),
     Unsupported,
   ]),
-  quickSchemes: Unsupported,
+  quickSchemes: Type.Object({
+    supported: Type.Literal(true),
+    resourceVersions: Type.Array(Type.Integer()),
+    selectionSchemaVersions: Type.Array(Type.Integer()),
+    materializationEnabled: Type.Boolean(),
+  }),
   canvasStyle: Unsupported,
   relationGeometry: Unsupported,
   vectorPath: Unsupported,

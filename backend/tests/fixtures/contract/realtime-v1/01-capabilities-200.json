@@ -6,6 +6,7 @@
   },
   "response": {
     "status": 200,
+    "headers": {},
     "body": {
       "protocolVersions": [
         1

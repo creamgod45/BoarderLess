@@ -1,0 +1,85 @@
+{
+  "description": "If-None-Match: * + Idempotency-Key：201 resource + ETag",
+  "request": {
+    "method": "PUT",
+    "path": "/api/v1/users/me/quick-schemes/00000000-0000-4000-8000-000000000025",
+    "headers": {
+      "if-none-match": "*",
+      "idempotency-key": "00000000-0000-4000-8000-000000000026"
+    },
+    "body": {
+      "resourceVersion": 2,
+      "name": "Planning card",
+      "schemaVersion": 1,
+      "payload": {
+        "format": "boarderless/selection",
+        "version": 1,
+        "nodes": [
+          {
+            "originalId": "n1",
+            "x": 0,
+            "y": 0,
+            "width": 240,
+            "height": 120,
+            "rotationDegrees": 0,
+            "text": "Plan",
+            "colorToken": "paper",
+            "shapeToken": "rounded",
+            "parentOriginalId": null,
+            "locked": false,
+            "zOffset": 0,
+            "vectorPath": null
+          }
+        ],
+        "groups": [],
+        "media": [],
+        "relations": []
+      },
+      "assetBindings": []
+    }
+  },
+  "response": {
+    "status": 201,
+    "headers": {
+      "etag": "\"fixture-etag-11\"",
+      "cache-control": "private, no-store"
+    },
+    "body": {
+      "id": "00000000-0000-4000-8000-000000000025",
+      "ownerId": "11111111-1111-4111-8111-111111111111",
+      "resourceVersion": 2,
+      "name": "Planning card",
+      "schemaVersion": 1,
+      "payload": {
+        "media": [],
+        "nodes": [
+          {
+            "x": 0,
+            "y": 0,
+            "text": "Plan",
+            "width": 240,
+            "height": 120,
+            "locked": false,
+            "zOffset": 0,
+            "colorToken": "paper",
+            "originalId": "n1",
+            "shapeToken": "rounded",
+            "vectorPath": null,
+            "rotationDegrees": 0,
+            "parentOriginalId": null
+          }
+        ],
+        "format": "boarderless/selection",
+        "groups": [],
+        "version": 1,
+        "relations": []
+      },
+      "assetBindings": [],
+      "revision": 1,
+      "createdAt": "2026-10-02T00:00:00.000Z",
+      "updatedAt": "2026-10-02T00:00:00.000Z",
+      "etag": "\"fixture-etag-11\"",
+      "assetAvailability": []
+    }
+  }
+}
