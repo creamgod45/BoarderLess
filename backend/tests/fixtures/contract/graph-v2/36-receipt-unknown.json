@@ -1,0 +1,28 @@
+{
+  "description": "未知 ACK：先查原 transaction receipt（未提交 → unknown）",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations/receipts",
+    "body": {
+      "transactionIds": [
+        "00000000-0000-4000-8000-000000000233"
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "workspaceId": "22222222-2222-4222-8222-222222222222",
+      "headServerSeq": 77,
+      "headWorkspaceVersion": 31,
+      "receipts": [],
+      "lookups": [
+        {
+          "type": "transaction",
+          "id": "00000000-0000-4000-8000-000000000233",
+          "status": "unknown"
+        }
+      ]
+    }
+  }
+}

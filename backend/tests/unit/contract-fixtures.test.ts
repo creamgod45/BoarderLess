@@ -9,6 +9,7 @@ import { capabilitiesSchema } from '../../src/schemas/capabilities.schema.ts'
 import { RealtimeCapabilitiesSchema, RealtimeTicketSchema } from '../../src/schemas/realtime.schema.ts'
 import { QuickSchemeCapabilitiesSchema, QuickSchemeListSchema, QuickSchemeResourceSchema } from '../../src/schemas/quick-scheme.schema.ts'
 import { validateSelectionPayload } from '../../src/domain/selection.ts'
+import { relationGeometryIssue } from '../../src/domain/relation-geometry.ts'
 import { CLIENT_MESSAGE_SCHEMAS, SERVER_EVENT_SCHEMAS } from '../../src/realtime/messages.ts'
 import { AssetSchema, TransferDirectiveSchema } from '../../src/schemas/asset.schema.ts'
 import { validateObjectState } from '../../src/domain/canvas-objects.ts'
@@ -247,6 +248,38 @@ describe('Canvas style v1 contract fixtures', () => {
       // 正式 payload 帶權威版本，且等於 expected + 1
       for (const op of body?.operations ?? []) {
         if (op.operationType === 'update_canvas_style') expect(op.payload.canvasStyleVersion).toBe(op.payload.expectedCanvasStyleVersion + 1)
+      }
+    })
+  }
+})
+
+// ---- Graph v2（batch D）----
+const GRAPH_DIR = join(import.meta.dirname, '../fixtures/contract/graph-v2')
+const graphFiles = (await readdir(GRAPH_DIR)).filter((f) => /^\d+-.*\.json$/.test(f))
+
+describe('Graph v2 contract fixtures', () => {
+  for (const file of graphFiles) {
+    test(file, async () => {
+      const doc = JSON.parse(await readFile(join(GRAPH_DIR, file), 'utf8'))
+      const { status, body } = doc.response
+      const path: string = doc.request.path
+      const schema =
+        status === 409 && body.status === 'conflict' ? ConflictResponse
+        : status >= 400 ? ErrorEnvelope
+        : path.endsWith('/state') ? SnapshotContentSchema
+        : path.endsWith('/receipts') ? ReceiptResponse
+        : path.includes('/operations?') ? Type.Object({ operations: Type.Array(Type.Unknown()), lastServerSeq: Type.Integer(), hasMore: Type.Boolean() })
+        : CommittedResponse
+      expect([...Value.Errors(schema, body)].map((e) => `${e.instancePath} ${e.message}`)).toEqual([])
+      const expected = /-(\d{3})$/.exec(file.replace('.json', ''))?.[1]
+      if (expected) expect(String(status)).toBe(expected)
+      // projection 內每條 relation 的 geometry、每個 text 的 vectorPath 都符合正式規則
+      if (path.endsWith('/state')) {
+        for (const r of body.relations) {
+          if (r.style.geometry !== undefined) expect(relationGeometryIssue(r.style.geometry, r.sourceObjectId === r.targetObjectId)).toBeNull()
+          else expect(r.sourceObjectId).not.toBe(r.targetObjectId)
+        }
+        for (const o of body.objects) expect(validateObjectState(o.objectType, o.transform, o.properties)).toEqual({ ok: true })
       }
     })
   }

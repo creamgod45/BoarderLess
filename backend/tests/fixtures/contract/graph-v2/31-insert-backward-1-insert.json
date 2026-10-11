@@ -1,0 +1,156 @@
+{
+  "description": "插入節點（backward）：delete R（版本 CAS）+ create N + create R1 / R2，同一 transaction；新段 geometry auto",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "00000000-0000-4000-8000-000000000123",
+      "transactionId": "00000000-0000-4000-8000-000000000124",
+      "baseVersion": 14,
+      "operations": [
+        {
+          "operationId": "00000000-0000-4000-8000-000000000125",
+          "clientSeq": 1,
+          "kind": "delete_relations",
+          "payload": {
+            "relationIds": [
+              "00000000-0000-4000-8000-000000000122"
+            ]
+          },
+          "expectedObjectVersions": {
+            "00000000-0000-4000-8000-000000000122": 1
+          }
+        },
+        {
+          "operationId": "00000000-0000-4000-8000-000000000126",
+          "clientSeq": 2,
+          "kind": "create_object",
+          "payload": {
+            "objectId": "00000000-0000-4000-8000-000000000127",
+            "objectType": "text",
+            "properties": {
+              "text": "Step"
+            }
+          }
+        },
+        {
+          "operationId": "00000000-0000-4000-8000-000000000128",
+          "clientSeq": 3,
+          "kind": "create_relation",
+          "payload": {
+            "relationId": "00000000-0000-4000-8000-000000000129",
+            "sourceObjectId": "88888888-8888-4888-8888-888888888888",
+            "targetObjectId": "00000000-0000-4000-8000-000000000127",
+            "direction": "forward"
+          }
+        },
+        {
+          "operationId": "00000000-0000-4000-8000-000000000130",
+          "clientSeq": 4,
+          "kind": "create_relation",
+          "payload": {
+            "relationId": "00000000-0000-4000-8000-000000000131",
+            "sourceObjectId": "00000000-0000-4000-8000-000000000127",
+            "targetObjectId": "66666666-6666-4666-8666-666666666666",
+            "direction": "forward"
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "status": "accepted",
+      "fromServerSeq": 30,
+      "toServerSeq": 33,
+      "workspaceVersion": 15,
+      "operations": [
+        {
+          "serverSeq": 30,
+          "operationId": "00000000-0000-4000-8000-000000000125",
+          "transactionId": "00000000-0000-4000-8000-000000000124",
+          "actorId": "11111111-1111-4111-8111-111111111111",
+          "clientId": "00000000-0000-4000-8000-000000000123",
+          "clientSeq": 1,
+          "baseVersion": 14,
+          "workspaceVersion": 15,
+          "operationType": "delete_relations",
+          "payload": {
+            "relationIds": [
+              "00000000-0000-4000-8000-000000000122"
+            ]
+          },
+          "schemaVersion": 1,
+          "committedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "serverSeq": 31,
+          "operationId": "00000000-0000-4000-8000-000000000126",
+          "transactionId": "00000000-0000-4000-8000-000000000124",
+          "actorId": "11111111-1111-4111-8111-111111111111",
+          "clientId": "00000000-0000-4000-8000-000000000123",
+          "clientSeq": 2,
+          "baseVersion": 14,
+          "workspaceVersion": 15,
+          "operationType": "create_object",
+          "payload": {
+            "objectId": "00000000-0000-4000-8000-000000000127",
+            "transform": {
+              "x": 0,
+              "y": 0,
+              "width": 260,
+              "height": 132,
+              "rotationDegrees": 0
+            },
+            "objectType": "text",
+            "properties": {
+              "text": "Step"
+            }
+          },
+          "schemaVersion": 1,
+          "committedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "serverSeq": 32,
+          "operationId": "00000000-0000-4000-8000-000000000128",
+          "transactionId": "00000000-0000-4000-8000-000000000124",
+          "actorId": "11111111-1111-4111-8111-111111111111",
+          "clientId": "00000000-0000-4000-8000-000000000123",
+          "clientSeq": 3,
+          "baseVersion": 14,
+          "workspaceVersion": 15,
+          "operationType": "create_relation",
+          "payload": {
+            "direction": "forward",
+            "relationId": "00000000-0000-4000-8000-000000000129",
+            "sourceObjectId": "88888888-8888-4888-8888-888888888888",
+            "targetObjectId": "00000000-0000-4000-8000-000000000127"
+          },
+          "schemaVersion": 1,
+          "committedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "serverSeq": 33,
+          "operationId": "00000000-0000-4000-8000-000000000130",
+          "transactionId": "00000000-0000-4000-8000-000000000124",
+          "actorId": "11111111-1111-4111-8111-111111111111",
+          "clientId": "00000000-0000-4000-8000-000000000123",
+          "clientSeq": 4,
+          "baseVersion": 14,
+          "workspaceVersion": 15,
+          "operationType": "create_relation",
+          "payload": {
+            "direction": "forward",
+            "relationId": "00000000-0000-4000-8000-000000000131",
+            "sourceObjectId": "00000000-0000-4000-8000-000000000127",
+            "targetObjectId": "66666666-6666-4666-8666-666666666666"
+          },
+          "schemaVersion": 1,
+          "committedAt": "2026-10-02T00:00:00.000Z"
+        }
+      ]
+    }
+  }
+}

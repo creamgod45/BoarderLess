@@ -1,0 +1,246 @@
+{
+  "description": "刪除 / 還原保留 path（BAI-011 restore）",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "00000000-0000-4000-8000-000000000264",
+      "transactionId": "00000000-0000-4000-8000-000000000265",
+      "baseVersion": 36,
+      "operations": [
+        {
+          "operationId": "00000000-0000-4000-8000-000000000266",
+          "clientSeq": 1,
+          "kind": "update_object",
+          "payload": {
+            "objectId": "00000000-0000-4000-8000-000000000242",
+            "properties": {
+              "vectorPath": {
+                "viewBox": {
+                  "width": 100,
+                  "height": 100
+                },
+                "commands": [
+                  {
+                    "type": "move",
+                    "point": {
+                      "x": 0,
+                      "y": 0
+                    }
+                  },
+                  {
+                    "type": "line",
+                    "point": {
+                      "x": 100,
+                      "y": 0
+                    }
+                  },
+                  {
+                    "type": "line",
+                    "point": {
+                      "x": 100,
+                      "y": 100
+                    }
+                  },
+                  {
+                    "type": "line",
+                    "point": {
+                      "x": 0,
+                      "y": 100
+                    }
+                  },
+                  {
+                    "type": "close"
+                  },
+                  {
+                    "type": "move",
+                    "point": {
+                      "x": 25,
+                      "y": 25
+                    }
+                  },
+                  {
+                    "type": "line",
+                    "point": {
+                      "x": 75,
+                      "y": 25
+                    }
+                  },
+                  {
+                    "type": "quadratic",
+                    "control": {
+                      "x": 150,
+                      "y": 50
+                    },
+                    "point": {
+                      "x": 75,
+                      "y": 75
+                    }
+                  },
+                  {
+                    "type": "close"
+                  },
+                  {
+                    "type": "move",
+                    "point": {
+                      "x": -40,
+                      "y": -40
+                    }
+                  },
+                  {
+                    "type": "cubic",
+                    "control1": {
+                      "x": 200,
+                      "y": -60
+                    },
+                    "control2": {
+                      "x": -60,
+                      "y": 200
+                    },
+                    "point": {
+                      "x": 10,
+                      "y": 10
+                    }
+                  }
+                ],
+                "style": {
+                  "fillColorToken": "paper",
+                  "strokeColorToken": null,
+                  "strokeWidth": 2,
+                  "fillRule": "EvenOdd"
+                },
+                "schemaVersion": 1
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "status": "accepted",
+      "fromServerSeq": 84,
+      "toServerSeq": 84,
+      "workspaceVersion": 37,
+      "operations": [
+        {
+          "serverSeq": 84,
+          "operationId": "00000000-0000-4000-8000-000000000266",
+          "transactionId": "00000000-0000-4000-8000-000000000265",
+          "actorId": "11111111-1111-4111-8111-111111111111",
+          "clientId": "00000000-0000-4000-8000-000000000264",
+          "clientSeq": 1,
+          "baseVersion": 36,
+          "workspaceVersion": 37,
+          "operationType": "update_object",
+          "payload": {
+            "objectId": "00000000-0000-4000-8000-000000000242",
+            "properties": {
+              "vectorPath": {
+                "style": {
+                  "fillRule": "EvenOdd",
+                  "strokeWidth": 2,
+                  "fillColorToken": "paper",
+                  "strokeColorToken": null
+                },
+                "viewBox": {
+                  "width": 100,
+                  "height": 100
+                },
+                "commands": [
+                  {
+                    "type": "move",
+                    "point": {
+                      "x": 0,
+                      "y": 0
+                    }
+                  },
+                  {
+                    "type": "line",
+                    "point": {
+                      "x": 100,
+                      "y": 0
+                    }
+                  },
+                  {
+                    "type": "line",
+                    "point": {
+                      "x": 100,
+                      "y": 100
+                    }
+                  },
+                  {
+                    "type": "line",
+                    "point": {
+                      "x": 0,
+                      "y": 100
+                    }
+                  },
+                  {
+                    "type": "close"
+                  },
+                  {
+                    "type": "move",
+                    "point": {
+                      "x": 25,
+                      "y": 25
+                    }
+                  },
+                  {
+                    "type": "line",
+                    "point": {
+                      "x": 75,
+                      "y": 25
+                    }
+                  },
+                  {
+                    "type": "quadratic",
+                    "point": {
+                      "x": 75,
+                      "y": 75
+                    },
+                    "control": {
+                      "x": 150,
+                      "y": 50
+                    }
+                  },
+                  {
+                    "type": "close"
+                  },
+                  {
+                    "type": "move",
+                    "point": {
+                      "x": -40,
+                      "y": -40
+                    }
+                  },
+                  {
+                    "type": "cubic",
+                    "point": {
+                      "x": 10,
+                      "y": 10
+                    },
+                    "control1": {
+                      "x": 200,
+                      "y": -60
+                    },
+                    "control2": {
+                      "x": -60,
+                      "y": 200
+                    }
+                  }
+                ],
+                "schemaVersion": 1
+              }
+            }
+          },
+          "schemaVersion": 1,
+          "committedAt": "2026-10-02T00:00:00.000Z"
+        }
+      ]
+    }
+  }
+}

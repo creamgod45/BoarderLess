@@ -1,0 +1,65 @@
+{
+  "description": "座標超過 ±10,000,000；同交易的其他 operation 不提交",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "00000000-0000-4000-8000-000000000078",
+      "transactionId": "00000000-0000-4000-8000-000000000079",
+      "baseVersion": 9,
+      "operations": [
+        {
+          "operationId": "00000000-0000-4000-8000-000000000080",
+          "clientSeq": 1,
+          "kind": "create_object",
+          "payload": {
+            "objectId": "00000000-0000-4000-8000-000000000081",
+            "objectType": "text"
+          }
+        },
+        {
+          "operationId": "00000000-0000-4000-8000-000000000082",
+          "clientSeq": 2,
+          "kind": "create_relation",
+          "payload": {
+            "relationId": "00000000-0000-4000-8000-000000000083",
+            "sourceObjectId": "66666666-6666-4666-8666-666666666666",
+            "targetObjectId": "88888888-8888-4888-8888-888888888888",
+            "direction": "forward",
+            "style": {
+              "geometry": {
+                "schema": "boarderless.relation-geometry.v1",
+                "route": {
+                  "mode": "manual",
+                  "waypoints": [
+                    {
+                      "x": 100000000,
+                      "y": 0
+                    }
+                  ]
+                },
+                "labelPlacement": {
+                  "mode": "manual",
+                  "pathFraction": 0.5,
+                  "tangentOffset": 0,
+                  "normalOffset": 24
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 422,
+    "body": {
+      "error": {
+        "code": "invalid_relation_geometry",
+        "message": "relation geometry must use an auto or manual route with valid bounds"
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

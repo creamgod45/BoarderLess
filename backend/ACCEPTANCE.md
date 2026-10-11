@@ -1,7 +1,7 @@
 # Backend 驗收追蹤
 
 對照：[`docs/BACKEND_ACCEPTANCE_SPEC.md`](../docs/BACKEND_ACCEPTANCE_SPEC.md)（案例 ID 與通過條件以該文件為準）
-最後更新：2026-10-11（批次 A–C 預檢）
+最後更新：2026-10-11（批次 A–D 預檢）
 
 依規格，正式驗收要等所有業務功能完成、驗收版本封存後才集中執行。下表的**正式狀態**只用規格的六種值；**後端預檢**是目前未封存版本上的自動化證據，不能代替正式驗收，也不代表 APP 對接或雙端通過。
 
@@ -56,6 +56,8 @@
 | 所有 request body 嚴格驗證（不做型別轉換） | 全部 v1 寫入 API（operations、workspaces、members、assets） | 以字串送數字（如 `"baseVersion": "0"`）原本被轉型接受，現在回 400 `validation_error`；錯誤訊息改為列出全部錯誤 |
 | 寬高改為顯示尺寸 | Media v1 `asset.width/height`、preparation v2 `verified` | 帶 EXIF orientation 5–8 的影像、旋轉 ±90° 的影片，寬高與先前相反 |
 | 寬高上限 2147483647、duration 上限 JSON safe integer | Media v1 prepare | 超過上限原本回 500，現在回 400 |
+| `validation_error` details 改為 TypeBox 格式（CORE-02） | 所有 400 `validation_error` | details 陣列的欄位（`schemaPath`、順序）與 Ajv 不同；只比對 `error.code` 的 client 不受影響 |
+| 自循環在帶 geometry 時被接受（批次 D） | `create_relation` | 原本 source = target 一律 422；現在帶 auto / loop geometry 時接受 |
 | state / snapshot 新增 canvasStyle（批次 C） | `GET …/state`、新 snapshot（schema 2） | 嚴格 decoder 需接受新欄位；新 snapshot 的 schemaVersion 改為 2 |
 | MediaNode 新引用必須 ready（ASSET-07） | `create_object`、替換 `assetId` / `thumbnailAssetId` 的 `update_object` | 引用 pending / rejected / missing 素材原本接受，現在回 422 `asset_not_ready`；以 `update_object` 把引用改回已 missing 的舊素材（例如替換素材的 Undo）也會被拒，刪除的 Undo 請用 `restore_objects` |
 | v1 complete 不能用於 v2 資產 | `POST /assets/:id/complete` | v2 建立的資產回 409 `preparation_v2_required` |
@@ -74,11 +76,13 @@
 | SCHEME-03 | 待執行 | 整合：assetBindings 精確覆蓋、來源 workspace ACL 403、非 ready 409、假縮圖 / 錯 kind 422、撤權後 availability=access_denied、讀取不插入畫布 | 跨畫布 materialization 未交付（capability false） |
 | STYLE-01 | 待執行 | 整合：update_canvas_style CAS、同 expected 並行只一個接受、與圖形同交易 rollback、duplicate 不 +1、Undo 為新版本、viewer 403 | APP picker / history 待對接 |
 | STYLE-02 | 待執行 | 整合：state / snapshot 同一 checkpoint、log replay = state、schema 1 舊 snapshot 原樣；WS fan-out 走同一 operation log | grid world-unit / density 雙端確認、視覺簽核 |
-| GRAPH-01、03、04 | 待實作 | — | relation v2 geometry、vectorPath、sequence 語意尚未實作 |
-| GRAPH-02 | 待實作 | — | 現有 operation 已可在單一 transaction 內「刪線 + 建節點 + 兩條新線」原子提交；正式契約待 Diagram／Relation v2 定案 |
+| GRAPH-01 | 待執行 | 整合 + fixtures：自循環 / 平行線、完整 geometry round-trip（create / update 整體替換 / delete / restore / log）、非法 schema / 數字 / null 拒絕不部分提交 | APP renderer 待對接 |
+| GRAPH-02 | 待執行 | 整合 + fixtures：插入節點單一 transaction（四方向 + 自循環）、Undo / Redo、CAS race、端點被刪全交易拒絕、receipt 查詢 | 撤權途中的雙端案例待集中執行 |
+| GRAPH-03 | 待執行 | 整合 + fixtures：vectorPath 邊界、create / update / null 清除 / delete / restore、textPlacement | 鋼筆 gesture / 雙端視覺 |
+| GRAPH-04 | 待實作 | 時序圖 metadata（批次 E） | — |
 
 ## 預檢紀錄
 
 | 日期 | 項目 | 版本 | 結果 | 證據 |
 | --- | --- | --- | --- | --- |
-| 2026-10-12 | `bun test` | `89a85a3` + 本 commit | 預檢通過（364 tests） | 本機執行 |
+| 2026-10-12 | `bun test` | `89a85a3` + 本 commit | 預檢通過（428 tests） | 本機執行 |

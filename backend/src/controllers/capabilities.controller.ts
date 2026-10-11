@@ -3,7 +3,8 @@ import { ASSET_MEDIA_TYPES, MAX_ASSET_BYTES } from '../models/asset.ts'
 import { PREPARATION_RESPONSE_SCHEMA, PREPARE_REQUEST_SCHEMA } from '../models/asset-preparation.ts'
 import { REALTIME_PROTOCOL_VERSION, REALTIME_SUBPROTOCOL } from '../realtime/messages.ts'
 import type { CapabilitiesSchema } from '../schemas/capabilities.schema.ts'
-import { SELECTION_SCHEMA_VERSIONS } from '../domain/selection.ts'
+import { RELATION_GEOMETRY_SCHEMA, SELECTION_SCHEMA_VERSIONS } from '../domain/selection.ts'
+import { VECTOR_PATH_LIMITS } from '../domain/vector-path.ts'
 import { CANVAS_STYLE_SCHEMA_VERSIONS, DEFAULT_CANVAS_STYLE } from '../domain/canvas-style.ts'
 import { SNAPSHOT_SCHEMA_VERSION } from '../services/snapshot.service.ts'
 import { QUICK_SCHEME_RESOURCE_VERSION } from '../models/quick-scheme.ts'
@@ -49,8 +50,25 @@ export class CapabilitiesController {
       snapshotSchemaVersion: SNAPSHOT_SCHEMA_VERSION,
       defaultStyle: DEFAULT_CANVAS_STYLE,
     },
-    relationGeometry: { supported: false },
-    vectorPath: { supported: false },
+    relationGeometry: {
+      supported: true as const,
+      schema: RELATION_GEOMETRY_SCHEMA,
+      selfLoop: true,
+      parallelEdges: true,
+      /** 插入節點沿既有單一 transaction：delete_relations + create_object + create_relation × 2 */
+      insertNodeTransaction: true,
+      endpointRewire: false,
+      limits: { maxWaypoints: 32, maxCoordinate: 10_000_000, loopExtentMin: 16, loopExtentMax: 4096, maxLabelOffset: 4096 },
+    },
+    vectorPath: {
+      supported: true as const,
+      objectType: 'text',
+      property: 'vectorPath',
+      schemaVersions: [1],
+      commandTypes: ['move', 'line', 'quadratic', 'cubic', 'close'],
+      limits: { ...VECTOR_PATH_LIMITS },
+    },
+    textPlacement: { supported: true as const, objectType: 'text', property: 'textPlacement' },
     sequenceDiagrams: { supported: false },
     mediaReferenceRestore: { supported: false },
   })

@@ -1,0 +1,60 @@
+{
+  "description": "自循環不接受 manual route",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "00000000-0000-4000-8000-000000000033",
+      "transactionId": "00000000-0000-4000-8000-000000000034",
+      "baseVersion": 5,
+      "operations": [
+        {
+          "operationId": "00000000-0000-4000-8000-000000000035",
+          "clientSeq": 1,
+          "kind": "create_relation",
+          "payload": {
+            "relationId": "00000000-0000-4000-8000-000000000036",
+            "sourceObjectId": "66666666-6666-4666-8666-666666666666",
+            "targetObjectId": "66666666-6666-4666-8666-666666666666",
+            "direction": "forward",
+            "style": {
+              "geometry": {
+                "schema": "boarderless.relation-geometry.v1",
+                "route": {
+                  "mode": "manual",
+                  "waypoints": [
+                    {
+                      "x": 320,
+                      "y": 180
+                    },
+                    {
+                      "x": 520,
+                      "y": 180
+                    }
+                  ]
+                },
+                "labelPlacement": {
+                  "mode": "manual",
+                  "pathFraction": 0.5,
+                  "tangentOffset": 0,
+                  "normalOffset": 24
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 422,
+    "body": {
+      "error": {
+        "code": "invalid_relation_geometry",
+        "message": "self-loop geometry must use an auto or loop route with valid bounds"
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

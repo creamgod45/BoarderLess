@@ -1,0 +1,91 @@
+{
+  "description": "分支內不相干欄位；同交易的其他 operation 不提交",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "00000000-0000-4000-8000-000000000090",
+      "transactionId": "00000000-0000-4000-8000-000000000091",
+      "baseVersion": 9,
+      "operations": [
+        {
+          "operationId": "00000000-0000-4000-8000-000000000092",
+          "clientSeq": 1,
+          "kind": "create_object",
+          "payload": {
+            "objectId": "00000000-0000-4000-8000-000000000093",
+            "objectType": "text"
+          }
+        },
+        {
+          "operationId": "00000000-0000-4000-8000-000000000094",
+          "clientSeq": 2,
+          "kind": "create_relation",
+          "payload": {
+            "relationId": "00000000-0000-4000-8000-000000000095",
+            "sourceObjectId": "66666666-6666-4666-8666-666666666666",
+            "targetObjectId": "88888888-8888-4888-8888-888888888888",
+            "direction": "forward",
+            "style": {
+              "geometry": {
+                "schema": "boarderless.relation-geometry.v1",
+                "route": {
+                  "mode": "auto",
+                  "waypoints": []
+                },
+                "labelPlacement": {
+                  "mode": "auto"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 422,
+    "body": {
+      "error": {
+        "code": "invalid_relation_geometry",
+        "message": "style.geometry does not match the geometry schema",
+        "details": [
+          {
+            "path": "/style/geometry/route/waypoints",
+            "message": "schema is false"
+          },
+          {
+            "path": "/style/geometry/route",
+            "message": "must not have additional properties"
+          },
+          {
+            "path": "/style/geometry/route/mode",
+            "message": "must be equal to constant"
+          },
+          {
+            "path": "/style/geometry/route",
+            "message": "must have required properties side, extent"
+          },
+          {
+            "path": "/style/geometry/route/waypoints",
+            "message": "schema is false"
+          },
+          {
+            "path": "/style/geometry/route",
+            "message": "must not have additional properties"
+          },
+          {
+            "path": "/style/geometry/route/mode",
+            "message": "must be equal to constant"
+          },
+          {
+            "path": "/style/geometry/route",
+            "message": "must match a schema in anyOf"
+          }
+        ]
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

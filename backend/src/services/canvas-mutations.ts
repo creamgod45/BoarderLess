@@ -1,3 +1,4 @@
+import { relationGeometryIssue } from '../domain/relation-geometry.ts'
 import { canonicalCanvasStyle, canvasStyleIssue } from '../domain/canvas-style.ts'
 import {
   completeTransform,
@@ -224,8 +225,10 @@ export async function applyOperation(
 
     case 'create_relation': {
       const p = op.payload
-      if (p.sourceObjectId === p.targetObjectId) {
-        throw rejected('invalid_relation', 'Relation source and target must differ')
+      const selfLoop = p.sourceObjectId === p.targetObjectId
+      // 批次 D：自循環只在明確 geometry（auto / loop）時允許；不用零長度直線冒充
+      if (selfLoop && p.style?.geometry === undefined) {
+        throw rejected('invalid_relation_geometry', 'Self-loops require an explicit style.geometry (auto or loop route)')
       }
       const [existing] = await canvas.findRelations(workspaceId, [p.relationId])
       if (existing) {
@@ -234,7 +237,7 @@ export async function applyOperation(
           ...(existing.deletedAt ? { restoreWith: 'restore_relations' } : {}),
         })
       }
-      assertValidStyle(p.style ?? {})
+      assertValidStyle(p.style ?? {}, selfLoop)
       await requireActiveObjects(repos, workspaceId, [p.sourceObjectId, p.targetObjectId])
       await canvas.insertRelation(workspaceId, {
         relationId: p.relationId,
@@ -259,7 +262,8 @@ export async function applyOperation(
           field: changedEndpoint,
         })
       }
-      assertValidStyle({ ...relation!.style, ...p.style })
+      // style 淺層 merge：geometry 是整個子物件替換（不 deep merge）；驗證 merge 後的完整 relation
+      assertValidStyle({ ...relation!.style, ...p.style }, relation!.sourceObjectId === relation!.targetObjectId)
       await canvas.updateRelation(workspaceId, p.relationId, p)
       return p
     }
@@ -330,9 +334,15 @@ function assertValidState(objectType: string, transform: unknown, properties: un
   throw rejected('invalid_object', 'Object state does not match its type schema', result.errors)
 }
 
-function assertValidStyle(style: unknown): void {
+function assertValidStyle(style: Record<string, unknown>, selfLoop: boolean): void {
   const errors = validateRelationStyle(style)
   if (errors.length > 0) throw rejected('invalid_relation', 'Relation style is invalid', errors)
+  if (style.geometry !== undefined) {
+    const issue = relationGeometryIssue(style.geometry, selfLoop)
+    if (issue) throw rejected(issue.code, issue.message, issue.errors)
+  } else if (selfLoop) {
+    throw rejected('invalid_relation_geometry', 'Self-loops require an explicit style.geometry (auto or loop route)')
+  }
 }
 
 /**

@@ -128,3 +128,43 @@
 ### 5. 尚待集中執行
 - STYLE-01 / 02。證據：8 個整合測試（CAS、並行只一個成功、rollback、duplicate、Undo、log replay = state、舊 snapshot）。
 - 未涵蓋：APP picker / history 接線、grid world-unit / density / snap 雙端確認（本批不新增 spacing 欄位）、雙端視覺。
+
+---
+
+## 批次 D：連線 geometry、自循環、插線與 vectorPath（2026-10-11）
+
+### 1. 分支與 commit
+- 分支 `backend/media-v1`（基底 `89a85a3`），**尚未 commit**。狀態：源碼完成 ✅；服務已部署 ⬜；正式驗收 ⬜。
+- 未完成：端點改接（`endpointRewire: false`，update_relation 改端點仍 `unsupported_change`）；新形狀 / Mermaid shape 對應不在本批。
+
+### 2. 格式、規則與 capability
+- `relation.style.geometry`（`boarderless.relation-geometry.v1`）。server 寫入格式為完整 canonical 形狀，所有欄位必填：
+  - `schema`、`route`、`labelPlacement`；route 為 `{mode:auto}`、`{mode:manual, waypoints[1..32]}` 或 `{mode:loop, side, extent}`；label 為 `{mode:auto}` 或 `{mode:manual, pathFraction, tangentOffset, normalOffset}`。
+  - 判別分支不接受不相干欄位；座標絕對值 ≤ 10,000,000；extent 16..4096；pathFraction 0..1；offset 絕對值 ≤ 4096。
+- create 缺 geometry 合法（自動路徑）。update 帶 geometry 時整個子物件替換（style 淺層 merge），只改 colorToken 的舊 client 不會抹除 geometry；重設送完整 auto，explicit null 拒絕。驗證的是 merge 後的完整 relation。
+- 自循環：source = target 只在明確 geometry 且 route 為 auto / loop 時允許；普通線不接受 loop，自循環不接受 manual。刪除端點時自循環只 cascade 一次，還原時版本只 +1。
+- 平行線：不同 relationId 可有相同 source / target / intent。
+- 鎖定：server 不禁止在鎖定節點上建立 / 刪除 relation（鎖定只限制節點本身的移動 / 修改 / 刪除）。
+- 插入節點：不新增 operation，沿既有單一 transaction：`delete_relations`（R 版本 CAS）+ `create_object`（N）+ 兩個 `create_relation`。同交易建立的 N 可供後續 relation 引用；任一失敗全部 rollback，並行 CAS 只有一方成功；Undo / Redo 用 delete + restore_*（同 ID）。
+- vectorPath / textPlacement：TextNode 的 `properties.vectorPath` / `properties.textPlacement`，不是新 objectType。
+  - 寫入格式完整（含 style、schemaVersion）；commands 只允許 move / line / quadratic / cubic / close，2..4096 commands，≤128 subpath，第一段必須是 move，close 後只能接 move；viewBox 0.001..100000；點絕對值 ≤ 1,000,000（控制點可超出 viewBox）；style token `[A-Za-z0-9#_-]{1,64}`、strokeWidth (0, 128]；帶 path 的節點尺寸必須 > 0。
+  - null 表示清除。delete / restore / log / state 都完整保留。
+- 錯誤碼：`invalid_relation_geometry`、`unsupported_geometry_schema`（422）；vectorPath / textPlacement 不合法沿用 `invalid_object`（details 有 path）。
+- Capability：`relationGeometry {supported, schema, selfLoop, parallelEdges, insertNodeTransaction, endpointRewire:false, limits}`、`vectorPath {supported, objectType:"text", property:"vectorPath", schemaVersions:[1], commandTypes, limits}`、`textPlacement {supported}`。
+- 最小可寫版本 / 舊 client：canvas protocol 仍是 1。不認識 geometry 的舊 client 更新 style 時 geometry 會保留；不認識自循環 / vectorPath 的 client 應依 capability 唯讀降級（APP 端責任），server 不會改寫或丟棄這些欄位。
+
+### 3. Migration、部署與相容性
+- 不需要 migration（資料在既有 `style` / `properties` JSONB）。
+- 相容性：原本 source = target 一律拒絕，現在帶 geometry 時接受；text properties 多了兩個可選 key。
+
+### 4. Fixtures
+- `tests/fixtures/contract/graph-v2/`（56 個）：
+  - 四方向 / 平行、auto reset、只改 colorToken 保留 geometry、manual label。
+  - 自循環缺 geometry / manual / 普通線 loop 422、自循環 cascade 一次與還原。
+  - 6 種非法 geometry（不部分提交）。
+  - forward / backward / both / none / self-loop 插入 + Undo + Redo、CAS race 409、receipt unknown → commit → committed。
+  - vectorPath（多 subpath、孔洞、控制點超出、quadratic / cubic）、更新、textPlacement、null 清除、3 種非法 422、刪除 / 還原、最終 state 與 catch-up。
+
+### 5. 尚待集中執行
+- GRAPH-01 / 02 / 03。證據：8 個整合測試、fixtures 契約測試（每條 projection geometry 與 vectorPath 重新驗證）。
+- 未涵蓋：APP renderer / hit test、端點改接、跨端拖曳 UI。

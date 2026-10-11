@@ -1,6 +1,6 @@
 import { Type, type Static, type TSchema } from 'typebox'
 import { Compile } from 'typebox/compile'
-import { NODE_SHAPES } from './canvas-objects.ts'
+import { NODE_SHAPES } from './node-shapes.ts'
 
 /**
  * `boarderless/selection` v1–v9（APP `ClipboardPayload.kt` / `validateClipboardPayload`）的後端移植。

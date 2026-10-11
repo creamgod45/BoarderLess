@@ -1,0 +1,82 @@
+{
+  "description": "textPlacement（APP v8）",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "00000000-0000-4000-8000-000000000246",
+      "transactionId": "00000000-0000-4000-8000-000000000247",
+      "baseVersion": 34,
+      "operations": [
+        {
+          "operationId": "00000000-0000-4000-8000-000000000248",
+          "clientSeq": 1,
+          "kind": "update_object",
+          "payload": {
+            "objectId": "00000000-0000-4000-8000-000000000242",
+            "properties": {
+              "textPlacement": {
+                "anchor": "Below",
+                "offsetX": 0,
+                "offsetY": 8,
+                "appearance": {
+                  "fontSize": 18,
+                  "weight": 700,
+                  "color": "#112233",
+                  "font": "Serif",
+                  "italic": true,
+                  "underline": false,
+                  "strikethrough": false
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "status": "accepted",
+      "fromServerSeq": 82,
+      "toServerSeq": 82,
+      "workspaceVersion": 35,
+      "operations": [
+        {
+          "serverSeq": 82,
+          "operationId": "00000000-0000-4000-8000-000000000248",
+          "transactionId": "00000000-0000-4000-8000-000000000247",
+          "actorId": "11111111-1111-4111-8111-111111111111",
+          "clientId": "00000000-0000-4000-8000-000000000246",
+          "clientSeq": 1,
+          "baseVersion": 34,
+          "workspaceVersion": 35,
+          "operationType": "update_object",
+          "payload": {
+            "objectId": "00000000-0000-4000-8000-000000000242",
+            "properties": {
+              "textPlacement": {
+                "anchor": "Below",
+                "offsetX": 0,
+                "offsetY": 8,
+                "appearance": {
+                  "font": "Serif",
+                  "color": "#112233",
+                  "italic": true,
+                  "weight": 700,
+                  "fontSize": 18,
+                  "underline": false,
+                  "strikethrough": false
+                }
+              }
+            }
+          },
+          "schemaVersion": 1,
+          "committedAt": "2026-10-02T00:00:00.000Z"
+        }
+      ]
+    }
+  }
+}
