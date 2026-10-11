@@ -134,6 +134,21 @@ export const UpdateSequenceDiagramsPayload = Type.Object(
   { additionalProperties: false },
 )
 
+/**
+ * 素材引用的歷史還原（批次 F）：依原交易保存的 before / after provenance 還原 targetSide。
+ * client 不提交 assetId；原交易必須是同 workspace、目前 actor 已 commit 的媒體引用更新。
+ */
+export const RestoreMediaReferencesPayload = Type.Object(
+  {
+    objectId: Uuid,
+    expectedObjectVersion: Type.Integer({ minimum: 1, maximum: 9007199254740991 }),
+    originalTransactionId: Uuid,
+    originalOperationId: Uuid,
+    targetSide: Type.Union([Type.Literal('before'), Type.Literal('after')]),
+  },
+  { additionalProperties: false },
+)
+
 export const OPERATION_PAYLOADS = {
   create_object: CreateObjectPayload,
   update_object: UpdateObjectPayload,
@@ -146,6 +161,7 @@ export const OPERATION_PAYLOADS = {
   restore_relations: RestoreRelationsPayload,
   update_canvas_style: UpdateCanvasStylePayload,
   update_sequence_diagrams: UpdateSequenceDiagramsPayload,
+  restore_media_references: RestoreMediaReferencesPayload,
 } satisfies Record<string, TSchema>
 
 export type OperationKind = keyof typeof OPERATION_PAYLOADS
@@ -211,6 +227,8 @@ export function touchedObjectIds(op: TypedOperation): string[] {
       return op.payload.relationIds
     case 'update_canvas_style':
     case 'update_sequence_diagrams':
+    // 使用自己的 expectedObjectVersion，不經 expectedObjectVersions
+    case 'restore_media_references':
       return []
   }
 }

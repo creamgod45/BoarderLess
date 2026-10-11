@@ -207,3 +207,32 @@
 ### 5. 尚待集中執行
 - GRAPH-04。證據：5 個整合測試、fixtures。
 - 未涵蓋：APP 時序圖 wizard / 引導式編輯的 server 模式接線、雙端視覺。
+
+---
+
+## 批次 F：素材引用的歷史還原（2026-10-11）
+
+### 1. 分支與 commit
+- 分支 `backend/media-v1`（基底 `89a85a3`），**尚未 commit**。狀態：源碼完成 ✅；服務已部署 ⬜；正式驗收 ⬜。
+
+### 2. Operation 與 capability
+- Provenance：每次 `update_object` 實際改變 MediaNode 的 `assetId` / `thumbnailAssetId` 時，在同一 transaction 保存完整 before / after 引用（含 transactionId / operationId / actor），不是只存 patch。`restore_media_references` 本身也會記錄。
+- Operation `restore_media_references`：payload `{objectId, expectedObjectVersion, originalTransactionId, originalOperationId, targetSide: before|after}`，**不接受 client 提交 assetId**。
+  - 原交易必須是同 workspace、目前 authenticated actor、已 commit 的引用變更，且 objectId 相同。
+  - 目標物件必須是 active、未鎖定的 MediaNode，版本等於 expectedObjectVersion。
+  - 目前引用必須恰為原交易的另一側；成功時原檔與縮圖成對還原，其他 properties 不變，objectVersion + 1。
+  - missing / rejected 素材允許作為歷史引用：不要求 ready、不讓素材復活、不重驗、不授予下載；只確認素材仍屬同一 Workspace。
+  - 正式 payload 加上 `restoredReference {assetId, thumbnailAssetId}` 與 `objectVersion`，replay / fan-out 依此套用。
+  - 一般 `create_object` / `update_object` 仍需 Ready（ASSET-07 未放寬）。
+- 錯誤：`provenance_not_found`（沒有 provenance、交易不符、他人的交易、migration 前的舊變更）、`provenance_mismatch`、`media_reference_changed`（目前引用已被改寫）、`asset_not_found`（跨 scope）、409 物件版本 conflict、403（viewer / commenter）、`invalid_operation`（含 assetId 等未知欄位）。
+- Capability：`mediaReferenceRestore {supported, operationKinds: ["restore_media_references"], requiresProvenance: true}`。
+
+### 3. Migration、部署與相容性
+- Migration `010_media_reference_provenance.sql`。既有引用變更沒有 provenance → 明確 `provenance_not_found`，不回推假資料。
+- 相容性：純新增 operation kind；`update_object` 換素材時多寫一列 provenance。
+
+### 4. Fixtures
+- `tests/fixtures/contract/media-restore-v1/`（11 個）：建立、換素材、一般 update 換回 missing 素材 422、Undo（before）、Redo（after）、交易不符、stale 409、非另一側、他人 actor、client assetId 拒絕、capabilities。
+
+### 5. 尚待集中執行
+- 對應 ASSET-07 的 Undo 情境與 UNDO_RESTORE_ACCEPTANCE。證據：3 個整合測試（含成對縮圖還原）、fixtures。

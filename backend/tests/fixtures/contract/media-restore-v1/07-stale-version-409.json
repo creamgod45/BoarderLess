@@ -1,0 +1,43 @@
+{
+  "description": "expectedObjectVersion 過期：409 conflict",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "00000000-0000-4000-8000-000000000024",
+      "transactionId": "00000000-0000-4000-8000-000000000025",
+      "baseVersion": 4,
+      "operations": [
+        {
+          "operationId": "00000000-0000-4000-8000-000000000026",
+          "clientSeq": 1,
+          "kind": "restore_media_references",
+          "payload": {
+            "objectId": "66666666-6666-4666-8666-666666666666",
+            "expectedObjectVersion": 3,
+            "originalTransactionId": "99999999-9999-4999-8999-999999999999",
+            "originalOperationId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "targetSide": "before"
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 409,
+    "body": {
+      "status": "conflict",
+      "conflicts": [
+        {
+          "id": "66666666-6666-4666-8666-666666666666",
+          "expectedVersion": 3,
+          "actualVersion": 4
+        }
+      ],
+      "workspaceVersion": 4,
+      "lastServerSeq": 4,
+      "missingOperations": []
+    }
+  }
+}

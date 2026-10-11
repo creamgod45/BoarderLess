@@ -1,0 +1,37 @@
+{
+  "description": "目前引用不是原交易另一側（已是 after）：media_reference_changed",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "00000000-0000-4000-8000-000000000027",
+      "transactionId": "00000000-0000-4000-8000-000000000028",
+      "baseVersion": 4,
+      "operations": [
+        {
+          "operationId": "00000000-0000-4000-8000-000000000029",
+          "clientSeq": 1,
+          "kind": "restore_media_references",
+          "payload": {
+            "objectId": "66666666-6666-4666-8666-666666666666",
+            "expectedObjectVersion": 4,
+            "originalTransactionId": "99999999-9999-4999-8999-999999999999",
+            "originalOperationId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "targetSide": "after"
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 422,
+    "body": {
+      "error": {
+        "code": "media_reference_changed",
+        "message": "The current media reference is not the other side of the original transaction"
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

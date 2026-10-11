@@ -144,7 +144,10 @@ export class OperationService {
 
     for (const { input: opInput, op } of operations) {
       await checkExpectedVersions(repos, workspace.id, op, opInput.expectedObjectVersions)
-      const storedPayload = await applyOperation(repos, workspace.id, actorId, op)
+      const storedPayload = await applyOperation(repos, workspace.id, actorId, op, {
+        transactionId: input.transactionId,
+        operationId: opInput.operationId,
+      })
       serverSeq += 1
       committed.push(
         await repos.operations.append({

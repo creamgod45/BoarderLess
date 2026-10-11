@@ -284,9 +284,9 @@
               "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
             ],
             "cascadedRelationIds": [
+              "99999999-9999-4999-8999-999999999999",
               "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-              "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-              "99999999-9999-4999-8999-999999999999"
+              "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
             ]
           },
           "schemaVersion": 1,

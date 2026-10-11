@@ -347,14 +347,38 @@
       ],
       "relations": [
         {
-          "relationId": "00000000-0000-4000-8000-000000000017",
-          "relationVersion": 1,
+          "relationId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          "relationVersion": 4,
           "sourceObjectId": "66666666-6666-4666-8666-666666666666",
           "targetObjectId": "88888888-8888-4888-8888-888888888888",
-          "direction": "none",
-          "intent": null,
-          "label": null,
-          "style": {},
+          "direction": "forward",
+          "intent": "flow",
+          "label": "call",
+          "style": {
+            "geometry": {
+              "route": {
+                "mode": "manual",
+                "waypoints": [
+                  {
+                    "x": 320,
+                    "y": 180
+                  },
+                  {
+                    "x": 520,
+                    "y": 180
+                  }
+                ]
+              },
+              "schema": "boarderless.relation-geometry.v1",
+              "labelPlacement": {
+                "mode": "manual",
+                "normalOffset": 24,
+                "pathFraction": 0.5,
+                "tangentOffset": 0
+              }
+            },
+            "colorToken": "#123456"
+          },
           "createdAt": "2026-10-02T00:00:00.000Z",
           "updatedAt": "2026-10-02T00:00:00.000Z"
         },
@@ -393,6 +417,18 @@
           "updatedAt": "2026-10-02T00:00:00.000Z"
         },
         {
+          "relationId": "00000000-0000-4000-8000-000000000017",
+          "relationVersion": 1,
+          "sourceObjectId": "66666666-6666-4666-8666-666666666666",
+          "targetObjectId": "88888888-8888-4888-8888-888888888888",
+          "direction": "none",
+          "intent": null,
+          "label": null,
+          "style": {},
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
           "relationId": "00000000-0000-4000-8000-000000000019",
           "relationVersion": 1,
           "sourceObjectId": "66666666-6666-4666-8666-666666666666",
@@ -401,64 +437,6 @@
           "intent": "parallel",
           "label": null,
           "style": {},
-          "createdAt": "2026-10-02T00:00:00.000Z",
-          "updatedAt": "2026-10-02T00:00:00.000Z"
-        },
-        {
-          "relationId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
-          "relationVersion": 4,
-          "sourceObjectId": "66666666-6666-4666-8666-666666666666",
-          "targetObjectId": "88888888-8888-4888-8888-888888888888",
-          "direction": "forward",
-          "intent": "flow",
-          "label": "call",
-          "style": {
-            "geometry": {
-              "route": {
-                "mode": "manual",
-                "waypoints": [
-                  {
-                    "x": 320,
-                    "y": 180
-                  },
-                  {
-                    "x": 520,
-                    "y": 180
-                  }
-                ]
-              },
-              "schema": "boarderless.relation-geometry.v1",
-              "labelPlacement": {
-                "mode": "manual",
-                "normalOffset": 24,
-                "pathFraction": 0.5,
-                "tangentOffset": 0
-              }
-            },
-            "colorToken": "#123456"
-          },
-          "createdAt": "2026-10-02T00:00:00.000Z",
-          "updatedAt": "2026-10-02T00:00:00.000Z"
-        },
-        {
-          "relationId": "00000000-0000-4000-8000-000000000042",
-          "relationVersion": 1,
-          "sourceObjectId": "66666666-6666-4666-8666-666666666666",
-          "targetObjectId": "66666666-6666-4666-8666-666666666666",
-          "direction": "forward",
-          "intent": null,
-          "label": null,
-          "style": {
-            "geometry": {
-              "route": {
-                "mode": "auto"
-              },
-              "schema": "boarderless.relation-geometry.v1",
-              "labelPlacement": {
-                "mode": "auto"
-              }
-            }
-          },
           "createdAt": "2026-10-02T00:00:00.000Z",
           "updatedAt": "2026-10-02T00:00:00.000Z"
         },
@@ -476,6 +454,28 @@
                 "mode": "loop",
                 "side": "right",
                 "extent": 80
+              },
+              "schema": "boarderless.relation-geometry.v1",
+              "labelPlacement": {
+                "mode": "auto"
+              }
+            }
+          },
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "relationId": "00000000-0000-4000-8000-000000000042",
+          "relationVersion": 1,
+          "sourceObjectId": "66666666-6666-4666-8666-666666666666",
+          "targetObjectId": "66666666-6666-4666-8666-666666666666",
+          "direction": "forward",
+          "intent": null,
+          "label": null,
+          "style": {
+            "geometry": {
+              "route": {
+                "mode": "auto"
               },
               "schema": "boarderless.relation-geometry.v1",
               "labelPlacement": {
@@ -511,18 +511,6 @@
           "updatedAt": "2026-10-02T00:00:00.000Z"
         },
         {
-          "relationId": "00000000-0000-4000-8000-000000000106",
-          "relationVersion": 3,
-          "sourceObjectId": "66666666-6666-4666-8666-666666666666",
-          "targetObjectId": "00000000-0000-4000-8000-000000000104",
-          "direction": "forward",
-          "intent": "flow",
-          "label": "call",
-          "style": {},
-          "createdAt": "2026-10-02T00:00:00.000Z",
-          "updatedAt": "2026-10-02T00:00:00.000Z"
-        },
-        {
           "relationId": "00000000-0000-4000-8000-000000000108",
           "relationVersion": 3,
           "sourceObjectId": "00000000-0000-4000-8000-000000000104",
@@ -530,6 +518,18 @@
           "direction": "forward",
           "intent": null,
           "label": null,
+          "style": {},
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "relationId": "00000000-0000-4000-8000-000000000106",
+          "relationVersion": 3,
+          "sourceObjectId": "66666666-6666-4666-8666-666666666666",
+          "targetObjectId": "00000000-0000-4000-8000-000000000104",
+          "direction": "forward",
+          "intent": "flow",
+          "label": "call",
           "style": {},
           "createdAt": "2026-10-02T00:00:00.000Z",
           "updatedAt": "2026-10-02T00:00:00.000Z"
@@ -583,10 +583,10 @@
           "updatedAt": "2026-10-02T00:00:00.000Z"
         },
         {
-          "relationId": "00000000-0000-4000-8000-000000000175",
+          "relationId": "00000000-0000-4000-8000-000000000177",
           "relationVersion": 3,
-          "sourceObjectId": "66666666-6666-4666-8666-666666666666",
-          "targetObjectId": "00000000-0000-4000-8000-000000000173",
+          "sourceObjectId": "00000000-0000-4000-8000-000000000173",
+          "targetObjectId": "88888888-8888-4888-8888-888888888888",
           "direction": "none",
           "intent": null,
           "label": null,
@@ -595,10 +595,10 @@
           "updatedAt": "2026-10-02T00:00:00.000Z"
         },
         {
-          "relationId": "00000000-0000-4000-8000-000000000177",
+          "relationId": "00000000-0000-4000-8000-000000000175",
           "relationVersion": 3,
-          "sourceObjectId": "00000000-0000-4000-8000-000000000173",
-          "targetObjectId": "88888888-8888-4888-8888-888888888888",
+          "sourceObjectId": "66666666-6666-4666-8666-666666666666",
+          "targetObjectId": "00000000-0000-4000-8000-000000000173",
           "direction": "none",
           "intent": null,
           "label": null,

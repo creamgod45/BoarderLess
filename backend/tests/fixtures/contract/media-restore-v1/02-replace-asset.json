@@ -1,0 +1,56 @@
+{
+  "description": "換素材 A → B（server 同交易保存 before / after provenance）",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "88888888-8888-4888-8888-888888888888",
+      "transactionId": "99999999-9999-4999-8999-999999999999",
+      "baseVersion": 1,
+      "operations": [
+        {
+          "operationId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "clientSeq": 1,
+          "kind": "update_object",
+          "payload": {
+            "objectId": "66666666-6666-4666-8666-666666666666",
+            "properties": {
+              "assetId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "status": "accepted",
+      "fromServerSeq": 2,
+      "toServerSeq": 2,
+      "workspaceVersion": 2,
+      "operations": [
+        {
+          "serverSeq": 2,
+          "operationId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "transactionId": "99999999-9999-4999-8999-999999999999",
+          "actorId": "11111111-1111-4111-8111-111111111111",
+          "clientId": "88888888-8888-4888-8888-888888888888",
+          "clientSeq": 1,
+          "baseVersion": 1,
+          "workspaceVersion": 2,
+          "operationType": "update_object",
+          "payload": {
+            "objectId": "66666666-6666-4666-8666-666666666666",
+            "properties": {
+              "assetId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+            }
+          },
+          "schemaVersion": 1,
+          "committedAt": "2026-10-02T00:00:00.000Z"
+        }
+      ]
+    }
+  }
+}

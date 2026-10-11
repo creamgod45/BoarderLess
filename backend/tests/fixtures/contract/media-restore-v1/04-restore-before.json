@@ -1,0 +1,63 @@
+{
+  "description": "Undo：restore_media_references targetSide=before（不提交 assetId；由 provenance 取 A），objectVersion +1，素材不復活",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "ffffffff-ffff-4fff-8fff-ffffffffffff",
+      "transactionId": "00000000-0000-4000-8000-000000000015",
+      "baseVersion": 2,
+      "operations": [
+        {
+          "operationId": "00000000-0000-4000-8000-000000000016",
+          "clientSeq": 1,
+          "kind": "restore_media_references",
+          "payload": {
+            "objectId": "66666666-6666-4666-8666-666666666666",
+            "expectedObjectVersion": 2,
+            "originalTransactionId": "99999999-9999-4999-8999-999999999999",
+            "originalOperationId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "targetSide": "before"
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "status": "accepted",
+      "fromServerSeq": 3,
+      "toServerSeq": 3,
+      "workspaceVersion": 3,
+      "operations": [
+        {
+          "serverSeq": 3,
+          "operationId": "00000000-0000-4000-8000-000000000016",
+          "transactionId": "00000000-0000-4000-8000-000000000015",
+          "actorId": "11111111-1111-4111-8111-111111111111",
+          "clientId": "ffffffff-ffff-4fff-8fff-ffffffffffff",
+          "clientSeq": 1,
+          "baseVersion": 2,
+          "workspaceVersion": 3,
+          "operationType": "restore_media_references",
+          "payload": {
+            "objectId": "66666666-6666-4666-8666-666666666666",
+            "targetSide": "before",
+            "objectVersion": 3,
+            "restoredReference": {
+              "assetId": "77777777-7777-4777-8777-777777777777",
+              "thumbnailAssetId": null
+            },
+            "originalOperationId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "expectedObjectVersion": 2,
+            "originalTransactionId": "99999999-9999-4999-8999-999999999999"
+          },
+          "schemaVersion": 1,
+          "committedAt": "2026-10-02T00:00:00.000Z"
+        }
+      ]
+    }
+  }
+}

@@ -1,7 +1,7 @@
 # Backend 驗收追蹤
 
 對照：[`docs/BACKEND_ACCEPTANCE_SPEC.md`](../docs/BACKEND_ACCEPTANCE_SPEC.md)（案例 ID 與通過條件以該文件為準）
-最後更新：2026-10-11（批次 A–E 預檢）
+最後更新：2026-10-11（批次 A–F 預檢）
 
 依規格，正式驗收要等所有業務功能完成、驗收版本封存後才集中執行。下表的**正式狀態**只用規格的六種值；**後端預檢**是目前未封存版本上的自動化證據，不能代替正式驗收，也不代表 APP 對接或雙端通過。
 
@@ -37,6 +37,7 @@
 | ASSET-05 | 待執行 | 整合 + fixtures 20–25、35：wrong lease / checksum / requestId、並行 complete 只一個 job、v1 complete 回 `preparation_v2_required` | — |
 | ASSET-06 | 待執行 | 整合 + fixtures 24–34：各 phase、tombstone、晚到 prepare 不復活、ready / accepted 禁止 PUT | — |
 | ASSET-07 | 待執行 | ffmpeg：有效舊 PUT 不能改 ready 原檔、內容變更 → rejected、下載 hash 一致；新建 / 替換引用 pending、rejected → 422 `asset_not_ready`；missing 後 restore 與不改引用的編輯照常 | 已定案：新建 MediaNode 與替換素材必須引用同 Workspace 且 ready 的素材；`restore_objects` 還原原引用不要求 ready，素材 missing / rejected 時由 APP 顯示不可用，還原不是重新授權也不讓素材復活。APP 端「錯檔不得授予映射」待對接驗收 |
+| ASSET-07b（批次 F） | 待執行 | 整合 + fixtures：restore_media_references 依 provenance 還原到 missing 原素材、成對縮圖、一般 update 仍需 Ready、他人 / 改寫 / 無 provenance 拒絕 | 對應 UNDO_RESTORE_ACCEPTANCE；APP Undo 接線待對接 |
 | ASSET-08 | 待執行 | 契約已定案並實作（見下節）；ffmpeg + fixtures 36–37 | APP 需改用 `declared` 綁定 identity、`verified` 取實際尺寸 |
 | ASSET-09 | 待執行 | — | 需 APP 對接後雙端執行 |
 
@@ -60,7 +61,7 @@
 | 自循環在帶 geometry 時被接受（批次 D） | `create_relation` | 原本 source = target 一律 422；現在帶 auto / loop geometry 時接受 |
 | state / snapshot 新增 sequenceDiagrams（批次 E） | `GET …/state`、新 snapshot（schema 3） | 嚴格 decoder 需接受新欄位；有時序圖的 Workspace 中，破壞 binding 的 graph 變更會被拒絕 |
 | state / snapshot 新增 canvasStyle（批次 C） | `GET …/state`、新 snapshot（schema 2） | 嚴格 decoder 需接受新欄位；新 snapshot 的 schemaVersion 改為 2 |
-| MediaNode 新引用必須 ready（ASSET-07） | `create_object`、替換 `assetId` / `thumbnailAssetId` 的 `update_object` | 引用 pending / rejected / missing 素材原本接受，現在回 422 `asset_not_ready`；以 `update_object` 把引用改回已 missing 的舊素材（例如替換素材的 Undo）也會被拒，刪除的 Undo 請用 `restore_objects` |
+| MediaNode 新引用必須 ready（ASSET-07） | `create_object`、替換 `assetId` / `thumbnailAssetId` 的 `update_object` | 引用 pending / rejected / missing 素材原本接受，現在回 422 `asset_not_ready`；替換素材的 Undo 改用 `restore_media_references`（批次 F），刪除的 Undo 用 `restore_objects` |
 | v1 complete 不能用於 v2 資產 | `POST /assets/:id/complete` | v2 建立的資產回 409 `preparation_v2_required` |
 
 ## 即時協作、快速方案簿、共用背景、圖形語意
@@ -86,4 +87,4 @@
 
 | 日期 | 項目 | 版本 | 結果 | 證據 |
 | --- | --- | --- | --- | --- |
-| 2026-10-12 | `bun test` | `89a85a3` + 本 commit | 預檢通過（447 tests） | 本機執行 |
+| 2026-10-12 | `bun test` | `89a85a3` + 本 commit | 預檢通過（461 tests） | 本機執行 |

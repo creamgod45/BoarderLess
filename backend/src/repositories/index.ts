@@ -8,6 +8,7 @@ import { MemberRepository } from './member.repository.ts'
 import { OperationRepository } from './operation.repository.ts'
 import { OutboxRepository } from './outbox.repository.ts'
 import { PreparationRepository } from './preparation.repository.ts'
+import { ProvenanceRepository } from './provenance.repository.ts'
 import { QuickSchemeRepository } from './quick-scheme.repository.ts'
 import { RealtimeRepository } from './realtime.repository.ts'
 import { SnapshotRepository } from './snapshot.repository.ts'
@@ -28,6 +29,7 @@ export interface Repositories {
   preparations: PreparationRepository
   realtime: RealtimeRepository
   quickSchemes: QuickSchemeRepository
+  provenance: ProvenanceRepository
 }
 
 export function createRepositories(db: Db): Repositories {
@@ -45,6 +47,7 @@ export function createRepositories(db: Db): Repositories {
     preparations: new PreparationRepository(db),
     realtime: new RealtimeRepository(db),
     quickSchemes: new QuickSchemeRepository(db),
+    provenance: new ProvenanceRepository(db),
   }
 }
 

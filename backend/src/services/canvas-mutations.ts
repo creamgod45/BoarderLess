@@ -1,3 +1,4 @@
+import type { MediaReference } from '../repositories/provenance.repository.ts'
 import { canonicalDiagrams, diagramListErrors, firstInvalidDiagram, sameDiagrams } from '../domain/sequence-diagrams.ts'
 import { relationGeometryIssue } from '../domain/relation-geometry.ts'
 import { canonicalCanvasStyle, canvasStyleIssue } from '../domain/canvas-style.ts'
@@ -105,11 +106,24 @@ export async function checkExpectedVersions(
  * 套用 operation 到目前 projection，並回傳要寫入 operation log 的正式 payload。
  * 任何 invariant 不成立都丟出 rejected，整個 transaction rollback。
  */
+/** 原交易身分（provenance 記錄用） */
+export interface OperationContext {
+  transactionId: string
+  operationId: string
+}
+
+const mediaReferenceOf = (properties: JsonObject): MediaReference => ({
+  assetId: properties.assetId as string,
+  thumbnailAssetId: (properties.thumbnailAssetId as string | null | undefined) ?? null,
+})
+const sameReference = (a: MediaReference, b: MediaReference) => a.assetId === b.assetId && a.thumbnailAssetId === b.thumbnailAssetId
+
 export async function applyOperation(
   repos: Repositories,
   workspaceId: string,
   actorId: string,
   op: TypedOperation,
+  context: OperationContext,
 ): Promise<JsonObject> {
   const { canvas } = repos
 
@@ -160,6 +174,12 @@ export async function applyOperation(
         // 替換素材時新引用必須 ready；只改 mediaKind / 其他欄位時沿用既有引用
         const changed = MEDIA_REF_KEYS.filter((k) => k in p.properties! && p.properties![k] !== obj!.properties[k])
         await validateMediaReferences(repos, workspaceId, properties, { requireReady: changed })
+        // 批次 F：引用實際改變時，同交易保存完整 before / after（不是只存 patch）
+        const before = mediaReferenceOf(obj!.properties)
+        const after = mediaReferenceOf(properties)
+        if (!sameReference(before, after)) {
+          await repos.provenance.record({ workspaceId, actorId, ...context, objectId: p.objectId, before, after })
+        }
       }
       await canvas.updateObject(workspaceId, p.objectId, actorId, {
         parentId: p.parentId,
@@ -328,6 +348,40 @@ export async function applyOperation(
       await repos.workspaces.updateCanvasStyle(workspaceId, canvasStyle, canvasStyleVersion)
       // 正式 payload 帶權威的新版本：replay / fan-out 依此設定，不由 client 自行推算
       return { expectedCanvasStyleVersion: p.expectedCanvasStyleVersion, canvasStyle, canvasStyleVersion }
+    }
+
+    case 'restore_media_references': {
+      const p = op.payload
+      // 原交易 provenance：同 workspace、目前 actor、已 commit；陌生 actor 或沒有 provenance（含 migration 前的舊變更）一律拒絕
+      const provenance = await repos.provenance.find(workspaceId, actorId, p.originalOperationId)
+      if (!provenance || provenance.transactionId !== p.originalTransactionId) {
+        throw rejected('provenance_not_found', 'No media reference provenance for this original transaction by the current actor')
+      }
+      if (provenance.objectId !== p.objectId) throw rejected('provenance_mismatch', 'The original operation did not change this object')
+      const [obj] = await canvas.findObjects(workspaceId, [p.objectId])
+      if (!obj || obj.deletedAt) throw rejected('object_not_found', 'Some objects do not exist', { objectIds: [p.objectId] })
+      if (obj.objectType !== MEDIA) throw rejected('unsupported_change', 'Only media nodes have media references')
+      if (obj.objectVersion !== p.expectedObjectVersion) {
+        throw new VersionConflictSignal([{ id: p.objectId, expectedVersion: p.expectedObjectVersion, actualVersion: obj.objectVersion }])
+      }
+      if (obj.locked) throw rejected('object_locked', `Object ${p.objectId} is locked`)
+      const target = p.targetSide === 'before' ? provenance.before : provenance.after
+      const opposite = p.targetSide === 'before' ? provenance.after : provenance.before
+      // 目前引用必須恰為原交易的另一側；已被其他變更改寫則拒絕
+      if (!sameReference(mediaReferenceOf(obj.properties), opposite)) {
+        throw rejected('media_reference_changed', 'The current media reference is not the other side of the original transaction')
+      }
+      // 歷史引用可以是 missing / rejected：不要求 ready、不讓素材復活或授予下載；只確認仍屬同一 Workspace
+      const ids = [target.assetId, ...(target.thumbnailAssetId ? [target.thumbnailAssetId] : [])]
+      for (const id of ids) {
+        const asset = await repos.assets.findById(id)
+        if (!asset || asset.workspaceId !== workspaceId) throw rejected('asset_not_found', 'Referenced assets do not exist in this workspace', { assetIds: [id] })
+      }
+      const patch = { assetId: target.assetId, thumbnailAssetId: target.thumbnailAssetId }
+      await canvas.updateObject(workspaceId, p.objectId, actorId, { properties: patch })
+      await repos.provenance.record({ workspaceId, actorId, ...context, objectId: p.objectId, before: opposite, after: target })
+      // 正式 payload 帶還原後的引用，replay / fan-out 依此套用
+      return { ...p, restoredReference: patch, objectVersion: obj.objectVersion + 1 }
     }
 
     case 'update_sequence_diagrams': {

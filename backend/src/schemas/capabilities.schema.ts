@@ -1,8 +1,6 @@
 import { Type } from 'typebox'
 import { CanvasStyleSchema } from '../domain/canvas-style.ts'
 
-const Unsupported = Type.Object({ supported: Type.Literal(false) })
-
 export const CapabilitiesSchema = Type.Object({
   canvas: Type.Object({
     protocolVersion: Type.Integer(),
@@ -17,7 +15,7 @@ export const CapabilitiesSchema = Type.Object({
   }),
   realtime: Type.Union([
     Type.Object({ supported: Type.Literal(true), protocolVersions: Type.Array(Type.Integer()), subprotocol: Type.String() }),
-    Unsupported,
+    Type.Object({ supported: Type.Literal(false) }),
   ]),
   quickSchemes: Type.Object({
     supported: Type.Literal(true),
@@ -57,7 +55,7 @@ export const CapabilitiesSchema = Type.Object({
     snapshotSchemaVersion: Type.Integer(),
     limits: Type.Record(Type.String(), Type.Integer()),
   }),
-  mediaReferenceRestore: Unsupported,
+  mediaReferenceRestore: Type.Object({ supported: Type.Literal(true), operationKinds: Type.Array(Type.String()), requiresProvenance: Type.Boolean() }),
 })
 
 export const capabilitiesSchema = {

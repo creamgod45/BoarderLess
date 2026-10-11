@@ -1,0 +1,138 @@
+{
+  "description": "capabilities：mediaReferenceRestore",
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/capabilities"
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "canvas": {
+        "protocolVersion": 1,
+        "operationSchemaVersion": 1,
+        "minWritableProtocolVersion": 1
+      },
+      "assetPreparation": {
+        "requestSchema": "boarderless.asset-prepare.v1",
+        "responseSchema": "boarderless.asset-preparation.v1",
+        "maxByteSize": 209715200,
+        "mediaTypes": [
+          "image/png",
+          "image/jpeg",
+          "image/webp",
+          "image/gif",
+          "video/mp4",
+          "video/webm"
+        ]
+      },
+      "realtime": {
+        "supported": false
+      },
+      "quickSchemes": {
+        "supported": true,
+        "resourceVersions": [
+          2
+        ],
+        "selectionSchemaVersions": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "materializationEnabled": false
+      },
+      "canvasStyle": {
+        "supported": true,
+        "operationKinds": [
+          "update_canvas_style"
+        ],
+        "styleSchemaVersions": [
+          1
+        ],
+        "snapshotSchemaVersion": 3,
+        "defaultStyle": {
+          "schemaVersion": 1,
+          "backgroundToken": "default",
+          "gridStyle": {
+            "pattern": "lines",
+            "colorToken": "auto"
+          }
+        }
+      },
+      "relationGeometry": {
+        "supported": true,
+        "schema": "boarderless.relation-geometry.v1",
+        "selfLoop": true,
+        "parallelEdges": true,
+        "insertNodeTransaction": true,
+        "endpointRewire": false,
+        "limits": {
+          "maxWaypoints": 32,
+          "maxCoordinate": 10000000,
+          "loopExtentMin": 16,
+          "loopExtentMax": 4096,
+          "maxLabelOffset": 4096
+        }
+      },
+      "vectorPath": {
+        "supported": true,
+        "objectType": "text",
+        "property": "vectorPath",
+        "schemaVersions": [
+          1
+        ],
+        "commandTypes": [
+          "move",
+          "line",
+          "quadratic",
+          "cubic",
+          "close"
+        ],
+        "limits": {
+          "minCommands": 2,
+          "maxCommands": 4096,
+          "maxSubpaths": 128,
+          "viewBoxMin": 0.001,
+          "viewBoxMax": 100000,
+          "maxCoordinate": 1000000,
+          "maxStrokeWidth": 128
+        }
+      },
+      "textPlacement": {
+        "supported": true,
+        "objectType": "text",
+        "property": "textPlacement"
+      },
+      "sequenceDiagrams": {
+        "supported": true,
+        "schema": "boarderless.sequence-canvas.v1",
+        "operationKinds": [
+          "update_sequence_diagrams"
+        ],
+        "snapshotSchemaVersion": 3,
+        "limits": {
+          "maxDiagrams": 64,
+          "maxParticipants": 32,
+          "maxMessages": 512,
+          "maxBlocks": 128,
+          "maxNesting": 16,
+          "maxBranches": 16,
+          "maxLabelBytes": 4096,
+          "maxTextBytes": 262144
+        }
+      },
+      "mediaReferenceRestore": {
+        "supported": true,
+        "operationKinds": [
+          "restore_media_references"
+        ],
+        "requiresProvenance": true
+      }
+    }
+  }
+}

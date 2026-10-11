@@ -86,6 +86,11 @@ export class CapabilitiesController {
         maxTextBytes: 262144,
       },
     },
-    mediaReferenceRestore: { supported: false },
+    mediaReferenceRestore: {
+      supported: true as const,
+      operationKinds: ['restore_media_references'],
+      /** 只有 provenance 存在（migration 010 之後的引用變更）才可還原 */
+      requiresProvenance: true,
+    },
   })
 }

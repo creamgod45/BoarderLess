@@ -127,7 +127,11 @@
         }
       },
       "mediaReferenceRestore": {
-        "supported": false
+        "supported": true,
+        "operationKinds": [
+          "restore_media_references"
+        ],
+        "requiresProvenance": true
       }
     }
   }

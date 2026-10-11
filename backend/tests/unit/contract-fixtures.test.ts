@@ -310,3 +310,28 @@ describe('Sequence diagrams v1 contract fixtures', () => {
     })
   }
 })
+
+// ---- Media reference restore v1（batch F）----
+const MR_DIR = join(import.meta.dirname, '../fixtures/contract/media-restore-v1')
+const mrFiles = (await readdir(MR_DIR)).filter((f) => /^\d+-.*\.json$/.test(f))
+
+describe('Media reference restore v1 contract fixtures', () => {
+  for (const file of mrFiles) {
+    test(file, async () => {
+      const doc = JSON.parse(await readFile(join(MR_DIR, file), 'utf8'))
+      const { status, body } = doc.response
+      const schema =
+        status === 409 && body.status === 'conflict' ? ConflictResponse
+        : status >= 400 ? ErrorEnvelope
+        : doc.request.path.endsWith('/capabilities') ? capabilitiesSchema.response[200]
+        : CommittedResponse
+      expect([...Value.Errors(schema, body)].map((e) => `${e.instancePath} ${e.message}`)).toEqual([])
+      const expected = /-(\d{3})$/.exec(file.replace('.json', ''))?.[1]
+      if (expected) expect(String(status)).toBe(expected)
+      // 請求永遠不帶 client 自選的 assetId（除了刻意的拒絕案例）
+      for (const op of doc.request.body?.operations ?? []) {
+        if (op.kind === 'restore_media_references' && !file.includes('client-asset-id')) expect(op.payload.assetId).toBeUndefined()
+      }
+    })
+  }
+})
