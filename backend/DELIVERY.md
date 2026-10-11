@@ -1,6 +1,8 @@
 # 後端交付紀錄（BACKEND_MISSING_IMPLEMENTATION_SPEC）
 
 依 [`docs/BACKEND_MISSING_IMPLEMENTATION_SPEC.md`](../docs/BACKEND_MISSING_IMPLEMENTATION_SPEC.md) §9 模板，每批一節。
+
+Commit（分支 `backend/media-v1`，基底 `89a85a3`）：`15ad83b` preparation v2、ASSET-07 / 08、驗收追蹤 → `53951b6` A → `01fb88a` B → `8d9841d` C → `30dfe9a` D → `dc53bd3` E → `ada96b8` F → `ebd05fd` 冪等修正。每個 commit 提交前都在當時的源碼上重錄 fixtures、typecheck 與全部測試通過。
 狀態分三種，彼此獨立：**源碼完成**（本 repo）／**服務已部署**／**正式驗收通過**。本文件只記錄源碼與預檢，部署與正式驗收另行標示。
 
 ## 整體狀態：**未完成**
@@ -20,7 +22,7 @@ A–F 各批次的源碼已交付，但以下能力仍未完成，**不宣告整
 ## 批次 A：即時協作（2026-10-11）
 
 ### 1. 分支與 commit
-- 分支 `backend/media-v1`，基底 `89a85a3`。**尚未 commit**；未提交範圍包含 preparation v2、ASSET-07 / 08、驗收追蹤與批次 A（`git status -- backend`）。
+- 分支 `backend/media-v1`，commit `53951b6`（前一個 commit `15ad83b` 為 preparation v2、ASSET-07 / 08 與驗收追蹤）。
 - 狀態：源碼完成 ✅；服務已部署 ⬜；正式驗收 ⬜（依規格待全部功能完成後集中執行）。
 - 未完成：正式 HTTP auth（目前仍是 `x-user-id` 開發替身，ticket endpoint 已使用同一 middleware，換成正式 auth 時不需改 gateway）。
 
@@ -65,7 +67,7 @@ A–F 各批次的源碼已交付，但以下能力仍未完成，**不宣告整
 ## 批次 B：雲端快速方案簿（2026-10-11）
 
 ### 1. 分支與 commit
-- 分支 `backend/media-v1`（基底 `89a85a3`），**尚未 commit**（與批次 A 同一批未提交變更）。
+- 分支 `backend/media-v1`，commit `01fb88a`。
 - 狀態：源碼完成 ✅；服務已部署 ⬜；正式驗收 ⬜。
 - 未完成：跨 workspace 素材 materialization（`materializationEnabled: false`，引用其他 workspace 素材的方案由 APP 阻擋插入）；`rate_limited`（429 / Retry-After）尚未實作。
 
@@ -111,7 +113,7 @@ A–F 各批次的源碼已交付，但以下能力仍未完成，**不宣告整
 ## 批次 C：共用背景（2026-10-11）
 
 ### 1. 分支與 commit
-- 分支 `backend/media-v1`（基底 `89a85a3`），**尚未 commit**。狀態：源碼完成 ✅；服務已部署 ⬜；正式驗收 ⬜。
+- 分支 `backend/media-v1`，commit `8d9841d`。狀態：源碼完成 ✅；服務已部署 ⬜；正式驗收 ⬜。
 
 ### 2. Projection、operation 與 capability
 - `GET …/state` 與新 snapshot（**snapshot schema 2**）新增 `canvasStyle`、`canvasStyleVersion`，與 objects / relations 同一 `throughServerSeq`（同一 repeatable-read 讀取點）。
@@ -146,7 +148,7 @@ A–F 各批次的源碼已交付，但以下能力仍未完成，**不宣告整
 ## 批次 D：連線 geometry、自循環、插線與 vectorPath（2026-10-11）
 
 ### 1. 分支與 commit
-- 分支 `backend/media-v1`（基底 `89a85a3`），**尚未 commit**。狀態：源碼完成 ✅；服務已部署 ⬜；正式驗收 ⬜。
+- 分支 `backend/media-v1`，commit `30dfe9a`。狀態：源碼完成 ✅；服務已部署 ⬜；正式驗收 ⬜。
 - 未完成：端點改接（`endpointRewire: false`，update_relation 改端點仍 `unsupported_change`）；新形狀 / Mermaid shape 對應不在本批。
 
 ### 2. 格式、規則與 capability
@@ -186,7 +188,7 @@ A–F 各批次的源碼已交付，但以下能力仍未完成，**不宣告整
 ## 批次 E：時序圖（2026-10-11）
 
 ### 1. 分支與 commit
-- 分支 `backend/media-v1`（基底 `89a85a3`），**尚未 commit**。狀態：源碼完成 ✅；服務已部署 ⬜；正式驗收 ⬜。
+- 分支 `backend/media-v1`，commit `dc53bd3`。狀態：源碼完成 ✅；服務已部署 ⬜；正式驗收 ⬜。
 
 ### 2. 格式、operation 與 capability
 - `GET …/state` 與新 snapshot（**snapshot schema 3**）新增 `sequenceDiagrams`（依 containerId 排序的陣列）與 `sequenceDiagramsVersion`（初始 0）。
@@ -225,7 +227,7 @@ A–F 各批次的源碼已交付，但以下能力仍未完成，**不宣告整
 ## 批次 F：素材引用的歷史還原（2026-10-11）
 
 ### 1. 分支與 commit
-- 分支 `backend/media-v1`（基底 `89a85a3`），**尚未 commit**。狀態：源碼完成 ✅；服務已部署 ⬜；正式驗收 ⬜。
+- 分支 `backend/media-v1`，commit `ada96b8`。狀態：源碼完成 ✅；服務已部署 ⬜；正式驗收 ⬜。
 
 ### 2. Operation 與 capability
 - Provenance：每次 `update_object` 實際改變 MediaNode 的 `assetId` / `thumbnailAssetId` 時，在同一 transaction 保存完整 before / after 引用（含 transactionId / operationId / actor），不是只存 patch。`restore_media_references` 本身也會記錄。
@@ -253,6 +255,7 @@ A–F 各批次的源碼已交付，但以下能力仍未完成，**不宣告整
 
 ## 冪等修正：同 ID 不同內容明確拒絕（2026-10-12）
 
+- 分支 `backend/media-v1`，commit `ebd05fd`。
 - 問題：原本只要 operation ID 都已提交就回 `duplicate`，即使 payload 不同，等於用原結果冒充新請求成功。
 - 修正：
   - commit 時保存原 envelope 的 request digest（SHA-256；涵蓋 protocolVersion、transactionId、clientId、baseVersion，以及每個 operation 的 ID、clientSeq、kind、expectedObjectVersions、payload；key 順序無關，空 expectedObjectVersions 視同未提供）。

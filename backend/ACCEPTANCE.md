@@ -90,7 +90,7 @@
 
 | 日期 | 項目 | 版本 | 結果 | 證據 |
 | --- | --- | --- | --- | --- |
-| 2026-10-11 | 真 DB 重啟（CORE-08、ASSET-03） | `89a85a3` + 未提交變更 | 預檢通過（restart 296ms、kill 291ms 恢復） | `acceptance/results/2026-10-11T16-08-23-336Z-db-restart.json`（批次 A–F 與冪等修正後重跑） |
-| 2026-10-11 | `bun test` | 同上 | 預檢通過（224 tests） | 本機執行 |
-| 2026-10-11 | 真多 process（CORE-04、RT-04） | 同上 | 預檢通過（11 項） | `acceptance/results/2026-10-11T16-08-28-381Z-multi-process.json`（批次 A–F 與冪等修正後重跑） |
-| 2026-10-12 | `bun test`（含批次 A–F 與冪等修正） | 同上 | 預檢通過（464 tests） | 本機執行 |
+| 2026-10-11 | 真 DB 重啟（CORE-08、ASSET-03） | 與 `ebd05fd` 相同的源碼（提交前執行） | 預檢通過（restart 296ms、kill 291ms 恢復） | `acceptance/results/2026-10-11T16-08-23-336Z-db-restart.json`（批次 A–F 與冪等修正後重跑） |
+| 2026-10-11 | `bun test` | `15ad83b`（preparation v2、ASSET-07 / 08） | 預檢通過（224 tests） | 本機執行 |
+| 2026-10-11 | 真多 process（CORE-04、RT-04） | 與 `ebd05fd` 相同的源碼（提交前執行） | 預檢通過（11 項） | `acceptance/results/2026-10-11T16-08-28-381Z-multi-process.json`（批次 A–F 與冪等修正後重跑） |
+| 2026-10-12 | `bun test`（含批次 A–F 與冪等修正） | `ebd05fd` | 預檢通過（464 tests） | 本機執行 |
