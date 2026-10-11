@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox'
 import { AssetPreparationController } from '../controllers/asset-preparation.controller.ts'
 import { AssetController } from '../controllers/asset.controller.ts'
+import { CapabilitiesController } from '../controllers/capabilities.controller.ts'
 import { MemberController } from '../controllers/member.controller.ts'
 import { OperationController } from '../controllers/operation.controller.ts'
 import { SnapshotController } from '../controllers/snapshot.controller.ts'
@@ -9,6 +10,7 @@ import { UserController } from '../controllers/user.controller.ts'
 import { WorkspaceController } from '../controllers/workspace.controller.ts'
 import * as preparation from '../schemas/asset-preparation.schema.ts'
 import * as asset from '../schemas/asset.schema.ts'
+import { capabilitiesSchema } from '../schemas/capabilities.schema.ts'
 import * as operation from '../schemas/operation.schema.ts'
 import * as snapshot from '../schemas/snapshot.schema.ts'
 import * as user from '../schemas/user.schema.ts'
@@ -16,9 +18,11 @@ import * as workspace from '../schemas/workspace.schema.ts'
 import type { Services } from '../services/index.ts'
 
 /** /api/v1：路由只負責 URL ↔ schema ↔ controller 對應 */
-export function apiRoutes(services: Services) {
+export function apiRoutes(services: Services, flags: { realtime: boolean }) {
   return async (fastify: FastifyInstance) => {
     const app = fastify.withTypeProvider<TypeBoxTypeProvider>()
+
+    app.get('/capabilities', { schema: capabilitiesSchema }, new CapabilitiesController(flags).get)
 
     const users = new UserController(services.users)
     app.post('/users', { schema: user.createUserSchema }, users.create)
@@ -57,7 +61,6 @@ export function apiRoutes(services: Services) {
 
     const preparations = new AssetPreparationController(services.preparations)
     const prepBase = '/workspaces/:workspaceId/assets/preparations'
-    app.get('/capabilities', { schema: preparation.capabilitiesSchema }, preparations.capabilities)
     app.post(prepBase, { schema: preparation.createPreparationSchema }, preparations.prepare)
     app.get(`${prepBase}/:requestId`, { schema: preparation.getPreparationSchema }, preparations.get)
     app.post(`${prepBase}/:requestId/upload-tickets`, { schema: preparation.issueTicketSchema }, preparations.issueTicket)

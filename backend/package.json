@@ -18,13 +18,16 @@
     "fixtures:contract": "bun scripts/generate-contract-fixtures.ts",
     "fixtures:canvas": "bun scripts/generate-canvas-fixtures.ts",
     "fixtures:preparation": "bun scripts/generate-preparation-fixtures.ts",
-    "acceptance:db-restart": "bun scripts/acceptance/db-restart.ts"
+    "fixtures:realtime": "bun scripts/generate-realtime-fixtures.ts",
+    "acceptance:db-restart": "bun scripts/acceptance/db-restart.ts",
+    "acceptance:multi-process": "bun scripts/acceptance/multi-process.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",
     "@fastify/swagger": "^9.9.0",
     "@fastify/swagger-ui": "^6.1.1",
     "@fastify/type-provider-typebox": "^6.1.0",
+    "@fastify/websocket": "11",
     "aws4fetch": "^1.0.20",
     "fastify": "^5.12.5",
     "pino": "^10.3.1",
@@ -33,6 +36,7 @@
   },
   "devDependencies": {
     "@types/bun": "^1.4.2",
+    "@types/ws": "^8.18.2",
     "typescript": "^7.0.2"
   }
 }

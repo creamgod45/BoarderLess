@@ -1,0 +1,183 @@
+{
+  "description": "超過 cursor 10 次/秒：rate_limited + retryAfterMs，不關閉連線",
+  "transport": "websocket",
+  "subprotocol": "boarderless.v1",
+  "exchange": [
+    {
+      "direction": "client",
+      "frame": {
+        "type": "presence_update",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000043",
+        "cursor": {
+          "x": 5,
+          "y": 5
+        },
+        "selectedObjectIds": [],
+        "presenceSeq": 5
+      }
+    },
+    {
+      "direction": "client",
+      "frame": {
+        "type": "presence_update",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000043",
+        "cursor": {
+          "x": 6,
+          "y": 6
+        },
+        "selectedObjectIds": [],
+        "presenceSeq": 6
+      }
+    },
+    {
+      "direction": "client",
+      "frame": {
+        "type": "presence_update",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000043",
+        "cursor": {
+          "x": 7,
+          "y": 7
+        },
+        "selectedObjectIds": [],
+        "presenceSeq": 7
+      }
+    },
+    {
+      "direction": "client",
+      "frame": {
+        "type": "presence_update",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000043",
+        "cursor": {
+          "x": 8,
+          "y": 8
+        },
+        "selectedObjectIds": [],
+        "presenceSeq": 8
+      }
+    },
+    {
+      "direction": "client",
+      "frame": {
+        "type": "presence_update",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000043",
+        "cursor": {
+          "x": 9,
+          "y": 9
+        },
+        "selectedObjectIds": [],
+        "presenceSeq": 9
+      }
+    },
+    {
+      "direction": "client",
+      "frame": {
+        "type": "presence_update",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000043",
+        "cursor": {
+          "x": 10,
+          "y": 10
+        },
+        "selectedObjectIds": [],
+        "presenceSeq": 10
+      }
+    },
+    {
+      "direction": "client",
+      "frame": {
+        "type": "presence_update",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000043",
+        "cursor": {
+          "x": 11,
+          "y": 11
+        },
+        "selectedObjectIds": [],
+        "presenceSeq": 11
+      }
+    },
+    {
+      "direction": "client",
+      "frame": {
+        "type": "presence_update",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000043",
+        "cursor": {
+          "x": 12,
+          "y": 12
+        },
+        "selectedObjectIds": [],
+        "presenceSeq": 12
+      }
+    },
+    {
+      "direction": "client",
+      "frame": {
+        "type": "presence_update",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000043",
+        "cursor": {
+          "x": 13,
+          "y": 13
+        },
+        "selectedObjectIds": [],
+        "presenceSeq": 13
+      }
+    },
+    {
+      "direction": "client",
+      "frame": {
+        "type": "presence_update",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000043",
+        "cursor": {
+          "x": 14,
+          "y": 14
+        },
+        "selectedObjectIds": [],
+        "presenceSeq": 14
+      }
+    },
+    {
+      "direction": "client",
+      "frame": {
+        "type": "presence_update",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000043",
+        "cursor": {
+          "x": 15,
+          "y": 15
+        },
+        "selectedObjectIds": [],
+        "presenceSeq": 15
+      }
+    },
+    {
+      "direction": "server",
+      "frame": {
+        "type": "protocol_error",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000043",
+        "code": "rate_limited",
+        "retryAfterMs": 250
+      }
+    }
+  ]
+}

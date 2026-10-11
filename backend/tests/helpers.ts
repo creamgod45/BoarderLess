@@ -132,7 +132,7 @@ export async function createUser(app: FastifyInstance, displayName = 'Tester'): 
 export function envelope(
   baseVersion: number,
   operations: { kind: string; payload: unknown; expectedObjectVersions?: Record<string, number> }[],
-  clientId = uuid(),
+  clientId: string = uuid(),
 ) {
   return {
     protocolVersion: 1,

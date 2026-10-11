@@ -1,0 +1,27 @@
+{
+  "description": "heartbeat：只延續 presence TTL，不改保存 checkpoint",
+  "transport": "websocket",
+  "subprotocol": "boarderless.v1",
+  "exchange": [
+    {
+      "direction": "client",
+      "frame": {
+        "type": "heartbeat",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000043",
+        "heartbeatSeq": 1
+      }
+    },
+    {
+      "direction": "server",
+      "frame": {
+        "type": "heartbeat_ack",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000043",
+        "heartbeatSeq": 1
+      }
+    }
+  ]
+}

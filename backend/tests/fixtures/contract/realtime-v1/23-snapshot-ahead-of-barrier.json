@@ -1,0 +1,97 @@
+{
+  "description": "REST snapshot 比 barrier 新：以實際 throughServerSeq 為 checkpoint，不重送已覆蓋的 transaction",
+  "transport": "websocket",
+  "subprotocol": "boarderless.v1",
+  "exchange": [
+    {
+      "direction": "client",
+      "frame": {
+        "type": "join_workspace",
+        "protocolVersion": 1,
+        "schemaVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "clientId": "00000000-0000-4000-8000-000000000037",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000038",
+        "lastSeenServerSeq": 2,
+        "metadataRevision": 1,
+        "ticket": "fixture-only-not-a-real-ticket"
+      }
+    },
+    {
+      "direction": "server",
+      "frame": {
+        "type": "join_accepted",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000038",
+        "connectionId": "00000000-0000-4000-8000-000000000039",
+        "userId": "11111111-1111-4111-8111-111111111111",
+        "role": "owner",
+        "barrierServerSeq": 3,
+        "workspaceVersion": 2,
+        "metadataRevision": 3
+      }
+    },
+    {
+      "direction": "server",
+      "frame": {
+        "type": "snapshot_required",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000038",
+        "barrierServerSeq": 3,
+        "workspaceVersion": 2,
+        "metadataRevision": 3,
+        "reason": "checkpoint_not_at_transaction_boundary"
+      }
+    },
+    {
+      "direction": "client",
+      "frame": {
+        "type": "catch_up_applied",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000038",
+        "appliedServerSeq": 4,
+        "workspaceVersion": 3,
+        "metadataRevision": 1
+      }
+    },
+    {
+      "direction": "server",
+      "frame": {
+        "type": "live_ready",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000038",
+        "throughServerSeq": 4,
+        "workspaceVersion": 3,
+        "metadataRevision": 3,
+        "connectionId": "00000000-0000-4000-8000-000000000039"
+      }
+    },
+    {
+      "direction": "server",
+      "frame": {
+        "type": "presence_snapshot",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000038",
+        "roomEpoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "roomRevision": 5,
+        "peers": [
+          {
+            "connectionId": "00000000-0000-4000-8000-000000000039",
+            "userId": "11111111-1111-4111-8111-111111111111",
+            "clientId": "00000000-0000-4000-8000-000000000037",
+            "displayName": "Owner",
+            "role": "owner",
+            "cursor": null,
+            "selectedObjectIds": [],
+            "presenceSeq": 0
+          }
+        ]
+      }
+    }
+  ]
+}

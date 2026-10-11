@@ -1,0 +1,171 @@
+{
+  "contract": "Realtime v1（batch A）",
+  "generatedBy": "scripts/generate-realtime-fixtures.ts",
+  "fixtures": [
+    {
+      "name": "01-capabilities-200",
+      "description": "realtime-capabilities：需 read membership；不含 ticket",
+      "status": 200
+    },
+    {
+      "name": "02-ticket-201",
+      "description": "一次性 ticket（Cache-Control: no-store；DB 只存 SHA-256）",
+      "status": 201
+    },
+    {
+      "name": "03-ticket-unsupported-protocol-400",
+      "description": "不支援的 protocolVersion",
+      "status": 400
+    },
+    {
+      "name": "04-capabilities-non-member-404",
+      "description": "非成員：404（不洩漏 Workspace 是否存在）",
+      "status": 404
+    },
+    {
+      "name": "10-join-empty-live",
+      "description": "join → join_accepted（barrier 0）→ catch_up_applied → live_ready → presence_snapshot（含自己）",
+      "status": 101
+    },
+    {
+      "name": "11-join-unknown-ticket",
+      "description": "未知 ticket：authentication_required；驗證前 workspaceId / connectionEpoch 為 null",
+      "status": 4401
+    },
+    {
+      "name": "12-join-ticket-used",
+      "description": "同一 ticket 第二次使用：ticket_used",
+      "status": 4401
+    },
+    {
+      "name": "13-join-ticket-expired",
+      "description": "過期 ticket：ticket_expired",
+      "status": 4401
+    },
+    {
+      "name": "14-join-scope-mismatch",
+      "description": "ticket 綁定的 clientId 與 join 不同：scope_mismatch（ticket 已作廢）",
+      "status": 4401
+    },
+    {
+      "name": "20-join-catch-up",
+      "description": "lastSeen=0：依完整 transaction 送 catch_up_transaction（單 op、兩個 op 同一 transaction），再 live_ready",
+      "status": 101
+    },
+    {
+      "name": "21-snapshot-required-mid-transaction",
+      "description": "checkpoint 位於 transaction 中段：snapshot_required",
+      "status": 101
+    },
+    {
+      "name": "22-snapshot-required-ahead",
+      "description": "checkpoint 大於 server head：snapshot_required",
+      "status": 101
+    },
+    {
+      "name": "23-snapshot-ahead-of-barrier",
+      "description": "REST snapshot 比 barrier 新：以實際 throughServerSeq 為 checkpoint，不重送已覆蓋的 transaction",
+      "status": 101
+    },
+    {
+      "name": "24-catch-up-applied-gap",
+      "description": "appliedServerSeq 不在 transaction 邊界：sequence_gap + resync_required",
+      "status": 4409
+    },
+    {
+      "name": "30-submit-accepted",
+      "description": "WS submit：operation_ack accepted（完整 committed operations，只在 DB commit 後）",
+      "status": 101
+    },
+    {
+      "name": "31-fan-out-other-gateway",
+      "description": "另一個 gateway 收到同一完整 transaction（committed_transaction）",
+      "status": 101
+    },
+    {
+      "name": "32-submit-duplicate",
+      "description": "原 envelope 重送：duplicate，回原 commit 結果，不產生新 sequence",
+      "status": 101
+    },
+    {
+      "name": "33-fan-out-200-operations",
+      "description": "200 operations 原子 transaction：一個 committed_transaction frame",
+      "status": 101
+    },
+    {
+      "name": "34-submit-conflict",
+      "description": "版本衝突：conflict + missingOperations；正式資料不部分寫入",
+      "status": 101
+    },
+    {
+      "name": "35-submit-rejected",
+      "description": "rejected：安全 code 與 details；正式資料未改變",
+      "status": 101
+    },
+    {
+      "name": "36-submit-partial-duplicate",
+      "description": "部分 operation 已提交：明確拒絕（不默默接受剩餘部分）",
+      "status": 101
+    },
+    {
+      "name": "40-presence-delta",
+      "description": "presence_update（world 座標；未知 selection 丟棄）→ 其他 gateway 收到 presence_delta",
+      "status": 101
+    },
+    {
+      "name": "41-presence-rate-limited",
+      "description": "超過 cursor 10 次/秒：rate_limited + retryAfterMs，不關閉連線",
+      "status": 101
+    },
+    {
+      "name": "42-heartbeat",
+      "description": "heartbeat：只延續 presence TTL，不改保存 checkpoint",
+      "status": 101
+    },
+    {
+      "name": "50-workspace-metadata",
+      "description": "改名：metadataRevision +1，送授權範圍內的 title / selfRole",
+      "status": 101
+    },
+    {
+      "name": "51-viewer-submit-forbidden",
+      "description": "viewer 可讀與 presence，不能 mutation：rejected forbidden",
+      "status": 101
+    },
+    {
+      "name": "52-access-revoked",
+      "description": "撤銷 membership：access_revoked 後關閉（4403），不再收到內容",
+      "status": 4403
+    },
+    {
+      "name": "53-presence-removed-on-revoke",
+      "description": "撤權連線的 presence 被移除（新 roomRevision）",
+      "status": 101
+    },
+    {
+      "name": "60-unknown-message-type",
+      "description": "未知 type：invalid_message，fail closed",
+      "status": 4400
+    },
+    {
+      "name": "61-unsupported-protocol",
+      "description": "不支援的 protocolVersion：需更新 APP，不作一般 backoff",
+      "status": 4426
+    },
+    {
+      "name": "62-message-too-large",
+      "description": "超過 maxMessageBytes：message_too_large",
+      "status": 4413
+    },
+    {
+      "name": "63-transaction-too-large-resync",
+      "description": "單一 transaction 超過 frame 上限：resync_required（不切半 transaction），改用 REST state",
+      "status": 4409
+    },
+    {
+      "name": "70-client-sequence-validation",
+      "description": "APP 以 applied checkpoint 驗證 transaction 序列：重複可忽略；gap / 亂序 → 暫停並 resync；同 ID 不同內容 → protocol error",
+      "status": 200
+    }
+  ]
+}

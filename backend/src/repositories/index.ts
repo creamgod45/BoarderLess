@@ -8,6 +8,7 @@ import { MemberRepository } from './member.repository.ts'
 import { OperationRepository } from './operation.repository.ts'
 import { OutboxRepository } from './outbox.repository.ts'
 import { PreparationRepository } from './preparation.repository.ts'
+import { RealtimeRepository } from './realtime.repository.ts'
 import { SnapshotRepository } from './snapshot.repository.ts'
 import { UserRepository } from './user.repository.ts'
 import { WorkspaceRepository } from './workspace.repository.ts'
@@ -24,6 +25,7 @@ export interface Repositories {
   jobs: JobRepository
   fences: FenceRepository
   preparations: PreparationRepository
+  realtime: RealtimeRepository
 }
 
 export function createRepositories(db: Db): Repositories {
@@ -39,6 +41,7 @@ export function createRepositories(db: Db): Repositories {
     jobs: new JobRepository(db),
     fences: new FenceRepository(db),
     preparations: new PreparationRepository(db),
+    realtime: new RealtimeRepository(db),
   }
 }
 

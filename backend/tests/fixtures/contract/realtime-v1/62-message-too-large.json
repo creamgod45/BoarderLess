@@ -1,0 +1,22 @@
+{
+  "description": "超過 maxMessageBytes：message_too_large",
+  "transport": "websocket",
+  "subprotocol": "boarderless.v1",
+  "exchange": [
+    {
+      "direction": "client",
+      "frame": "<4096-byte text frame>"
+    },
+    {
+      "direction": "server",
+      "frame": {
+        "type": "protocol_error",
+        "protocolVersion": 1,
+        "workspaceId": null,
+        "connectionEpoch": null,
+        "code": "message_too_large"
+      }
+    }
+  ],
+  "closeCode": 4413
+}

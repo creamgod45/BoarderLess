@@ -12,6 +12,7 @@ export const WorkspaceSchema = Type.Object({
   currentVersion: Type.Integer(),
   lastServerSeq: Type.Integer(),
   schemaVersion: Type.Integer(),
+  metadataRevision: Type.Integer({ description: 'title / membership / 角色的 durable revision（即時協作 workspace_metadata 共用）' }),
   role: Role,
   createdAt: DateTime,
   updatedAt: DateTime,

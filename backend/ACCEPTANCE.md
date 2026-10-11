@@ -1,7 +1,7 @@
 # Backend 驗收追蹤
 
 對照：[`docs/BACKEND_ACCEPTANCE_SPEC.md`](../docs/BACKEND_ACCEPTANCE_SPEC.md)（案例 ID 與通過條件以該文件為準）
-最後更新：2026-10-11（ASSET-07、CORE-08 定案；相容性影響）
+最後更新：2026-10-11（批次 A 預檢）
 
 依規格，正式驗收要等所有業務功能完成、驗收版本封存後才集中執行。下表的**正式狀態**只用規格的六種值；**後端預檢**是目前未封存版本上的自動化證據，不能代替正式驗收，也不代表 APP 對接或雙端通過。
 
@@ -20,8 +20,8 @@
 | CORE-01 | 待執行 | 整合：`protocolVersion` 不符回 `unsupported_protocol_version`；`GET /capabilities` 宣告 `assetPreparation`；所有 body 拒絕未知欄位 | capability 目前只涵蓋 preparation v2；即時協作等草案 endpoint 不存在（回 404 `route_not_found`） |
 | CORE-02 | 待執行 | 整合 `request-validation.test.ts`、`asset-preparation.test.ts`；fixtures canvas-v1 / preparation-v2 | 2026-10-11 起全域 body 嚴格驗證（不做型別轉換）；querystring / params 仍依 schema 轉型 |
 | CORE-03 | 待執行 | 整合：operationId 冪等重送、preparation 同 key 200 / 不同 metadata 409；方案簿 Idempotency-Key | — |
-| CORE-04 | 待執行 | 整合：20 個並行寫入 serverSeq 連續、版本衝突、transaction rollback、12 個並行 prepare 只建一份 | **多 process 競爭尚未驗證**（目前是單 process 多連線），待補 |
-| CORE-05 | 待執行 | 整合：非成員 404、viewer 403、撤權後 404（operations、assets、preparations、receipts） | socket 端待即時協作實作（RT-*） |
+| CORE-04 | 待執行 | 整合：20 個並行寫入 serverSeq 連續、版本衝突、rollback；**真多 process**預檢（`acceptance:multi-process`）：兩個 `src/server.ts` process 同時提交 40 筆，serverSeq / version 連續無重複 | 多 process 預檢已通過；正式驗收待集中執行 |
+| CORE-05 | 待執行 | 整合：非成員 404、viewer 403、撤權後 404（REST）；WS：viewer submit rejected forbidden、撤權 access_revoked + 4403、撤權後不再送內容 | — |
 | CORE-06 | 待執行 | 整合 + fixtures：receipt partial / 跨 actor、fence 晚到原請求、fence 並行競爭；真 DB 重啟後 fence 仍成立 | — |
 | CORE-07 | 待執行 | 整合 + fixtures：restore_objects / restore_relations、group 循環 / 非法 parent、cascade | — |
 | CORE-08 | 待執行 | **真 DB 重啟**預檢通過（restart、kill 各 9 項 + durable job）：projection、receipt、operation replay、fence、tombstone、preparation identity | 已定案：現有測試資料不做內容搬移，schema 一律以 migration 交付；清除資料需另行明確授權；**正式上線前仍須資料檢查與處置計畫**（不得以「目前皆為測試資料」永久免驗）。snapshot 尚無 compaction |
@@ -63,7 +63,11 @@
 
 | ID | 正式狀態 | 後端預檢 | 缺口 / 備註 |
 | --- | --- | --- | --- |
-| RT-01 – RT-05 | 待實作 | — | 尚無 WebSocket、正式 auth、fan-out、Presence |
+| RT-01 | 待執行 | 整合：ticket 一次性 / 過期 / 重用 / 跨 scope、3 秒未驗證關閉、Origin 與 subprotocol 於 upgrade 前拒絕 | **正式 HTTP auth 未交付**（目前 `x-user-id` dev 替身）；WSS 需由部署（TLS 反向代理 + `REALTIME_PUBLIC_URL`）提供 |
+| RT-02 | 待執行 | 整合：先註冊訂閱再讀 head、完整 transaction catch-up、snapshot ahead of barrier、非邊界 checkpoint → snapshot_required / sequence_gap | — |
+| RT-03 | 待執行 | 整合：duplicate ack、原 cursor 去重、REST 與 WS 提交走同一 service；client 端 gap / 亂序 / 同 ID 不同內容案例見 fixture 70 | APP reducer 對接後雙端驗證 |
+| RT-04 | 待執行 | 同 process 兩 gateway 整合測試；**真多 process**預檢：跨 process fan-out、kill -9 後以 checkpoint 重新 join 補齊、outbox 由存活 process 補發；slow consumer / 過大 transaction → resync | broker 為 PostgreSQL LISTEN/NOTIFY（無 Redis）；負載與背壓數字留待效能驗收 |
+| RT-05 | 待執行 | 整合：presence snapshot / delta、world 座標、未知 selection 丟棄、rate limit、heartbeat TTL 移除、roomEpoch 重建、撤權移除 | 視覺 overlay 由 QA 人工簽核 |
 | SCHEME-01 – 03 | 待實作 | — | — |
 | STYLE-01 – 02 | 待實作 | — | — |
 | GRAPH-01、03、04 | 待實作 | — | relation v2 geometry、vectorPath、sequence 語意尚未實作 |
@@ -73,4 +77,4 @@
 
 | 日期 | 項目 | 版本 | 結果 | 證據 |
 | --- | --- | --- | --- | --- |
-| 2026-10-12 | `bun test` | `89a85a3` + 本 commit | 預檢通過（224 tests） | 本機執行 |
+| 2026-10-12 | `bun test` | `89a85a3` + 本 commit | 預檢通過（274 tests） | 本機執行 |

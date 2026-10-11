@@ -8,6 +8,8 @@ export interface Workspace {
   currentVersion: number
   lastServerSeq: number
   schemaVersion: number
+  /** title / membership / 角色的 durable 版本（與 canvas workspaceVersion 分開） */
+  metadataRevision: number
   createdAt: Date
   updatedAt: Date
   deletedAt: Date | null

@@ -51,8 +51,11 @@ export class FixtureRecorder {
           : 'https://storage.example.invalid/signed-download'
       }
       if (key === 'expiresAt') return '2026-10-02T00:15:00.000Z'
+      if (key === 'ticket') return 'fixture-only-not-a-real-ticket'
+      if (key === 'webSocketUrl') return 'wss://qa.example.invalid/api/v1/realtime'
       return value.replace(UUID_RE, (id) => this.normId(id)).replace(ISO_RE, '2026-10-02T00:00:00.000Z')
     }
+    if (typeof value === 'number' && key === 'retryAfterMs') return 250
     if (Array.isArray(value)) return value.map((v) => this.normalize(v))
     if (value && typeof value === 'object') {
       // UUID 作為 key（例如 expectedObjectVersions）也要正規化
@@ -87,6 +90,24 @@ export class FixtureRecorder {
     }
     await this.writeJson(`${name}.json`, doc)
     this.written.push({ name, description, status: response.status })
+  }
+
+  /** WebSocket 交換：依序記錄 client / server frame（同樣正規化 UUID、時間、ticket） */
+  async recordSocket(
+    name: string,
+    description: string,
+    exchange: { direction: 'client' | 'server'; frame: unknown }[],
+    closeCode: number | null = null,
+  ): Promise<void> {
+    const doc = {
+      description,
+      transport: 'websocket',
+      subprotocol: 'boarderless.v1',
+      exchange: exchange.map((e) => ({ direction: e.direction, frame: this.normalize(e.frame) })),
+      ...(closeCode === null ? {} : { closeCode }),
+    }
+    await this.writeJson(`${name}.json`, doc)
+    this.written.push({ name, description, status: closeCode ?? 101 })
   }
 
   /** 非 API 呼叫（例如 signed PUT）的說明型 fixture */

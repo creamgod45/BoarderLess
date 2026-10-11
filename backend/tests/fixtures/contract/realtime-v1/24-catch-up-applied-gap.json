@@ -1,0 +1,84 @@
+{
+  "description": "appliedServerSeq 不在 transaction 邊界：sequence_gap + resync_required",
+  "transport": "websocket",
+  "subprotocol": "boarderless.v1",
+  "exchange": [
+    {
+      "direction": "client",
+      "frame": {
+        "type": "join_workspace",
+        "protocolVersion": 1,
+        "schemaVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "clientId": "00000000-0000-4000-8000-000000000040",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000041",
+        "lastSeenServerSeq": 2,
+        "metadataRevision": 1,
+        "ticket": "fixture-only-not-a-real-ticket"
+      }
+    },
+    {
+      "direction": "server",
+      "frame": {
+        "type": "join_accepted",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000041",
+        "connectionId": "00000000-0000-4000-8000-000000000042",
+        "userId": "11111111-1111-4111-8111-111111111111",
+        "role": "owner",
+        "barrierServerSeq": 4,
+        "workspaceVersion": 3,
+        "metadataRevision": 3
+      }
+    },
+    {
+      "direction": "server",
+      "frame": {
+        "type": "snapshot_required",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000041",
+        "barrierServerSeq": 4,
+        "workspaceVersion": 3,
+        "metadataRevision": 3,
+        "reason": "checkpoint_not_at_transaction_boundary"
+      }
+    },
+    {
+      "direction": "client",
+      "frame": {
+        "type": "catch_up_applied",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000041",
+        "appliedServerSeq": 2,
+        "workspaceVersion": 2,
+        "metadataRevision": 1
+      }
+    },
+    {
+      "direction": "server",
+      "frame": {
+        "type": "protocol_error",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000041",
+        "code": "sequence_gap"
+      }
+    },
+    {
+      "direction": "server",
+      "frame": {
+        "type": "resync_required",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000041",
+        "reason": "sequence_gap",
+        "headServerSeq": 4,
+        "workspaceVersion": 3
+      }
+    }
+  ],
+  "closeCode": 4409
+}

@@ -1,0 +1,20 @@
+{
+  "description": "單一 transaction 超過 frame 上限：resync_required（不切半 transaction），改用 REST state",
+  "transport": "websocket",
+  "subprotocol": "boarderless.v1",
+  "exchange": [
+    {
+      "direction": "server",
+      "frame": {
+        "type": "resync_required",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000475",
+        "reason": "transaction_too_large",
+        "headServerSeq": 205,
+        "workspaceVersion": 5
+      }
+    }
+  ],
+  "closeCode": 4409
+}

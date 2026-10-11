@@ -1,0 +1,53 @@
+{
+  "description": "rejected：安全 code 與 details；正式資料未改變",
+  "transport": "websocket",
+  "subprotocol": "boarderless.v1",
+  "exchange": [
+    {
+      "direction": "client",
+      "frame": {
+        "type": "submit_operations",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000043",
+        "clientId": "00000000-0000-4000-8000-000000000044",
+        "transactionId": "00000000-0000-4000-8000-000000000458",
+        "baseVersion": 5,
+        "operations": [
+          {
+            "operationId": "00000000-0000-4000-8000-000000000459",
+            "clientSeq": 1,
+            "kind": "create_object",
+            "payload": {
+              "objectId": "00000000-0000-4000-8000-000000000460",
+              "objectType": "future"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "direction": "server",
+      "frame": {
+        "type": "operation_ack",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000043",
+        "transactionId": "00000000-0000-4000-8000-000000000458",
+        "operationIds": [
+          "00000000-0000-4000-8000-000000000459"
+        ],
+        "status": "rejected",
+        "code": "unsupported_object_type",
+        "details": {
+          "supportedObjectTypes": [
+            "text",
+            "group",
+            "media"
+          ],
+          "objectSchemaVersion": 1
+        }
+      }
+    }
+  ]
+}

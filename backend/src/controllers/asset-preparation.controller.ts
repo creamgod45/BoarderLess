@@ -1,7 +1,5 @@
 import type { FastifyReply } from 'fastify'
 import { requireUser } from '../middlewares/auth.ts'
-import { ASSET_MEDIA_TYPES, MAX_ASSET_BYTES } from '../models/asset.ts'
-import { PREPARATION_RESPONSE_SCHEMA, PREPARE_REQUEST_SCHEMA } from '../models/asset-preparation.ts'
 import type {
   completePreparationSchema,
   createPreparationSchema,
@@ -39,14 +37,4 @@ export class AssetPreparationController {
     const envelope = await this.preparations.complete(workspaceId, user.id, requestId, request.body)
     return reply.status(envelope.phase === 'completionAccepted' ? 202 : 200).send(envelope)
   }
-
-  /** 公開的能力宣告：不需要身分 */
-  capabilities = async () => ({
-    assetPreparation: {
-      requestSchema: PREPARE_REQUEST_SCHEMA,
-      responseSchema: PREPARATION_RESPONSE_SCHEMA,
-      maxByteSize: MAX_ASSET_BYTES,
-      mediaTypes: Object.keys(ASSET_MEDIA_TYPES),
-    },
-  })
 }

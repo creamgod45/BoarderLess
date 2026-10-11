@@ -3,6 +3,7 @@ import type { MemberWithProfile } from '../repositories/member.repository.ts'
 import type { Database } from '../repositories/index.ts'
 import { notFound, unprocessable } from '../utils/errors.ts'
 import { requireWorkspaceAccess } from './access.service.ts'
+import { recordMetadataChange } from './workspace-metadata.ts'
 
 export type AssignableRole = Exclude<WorkspaceRole, 'owner'>
 
@@ -22,7 +23,9 @@ export class MemberService {
         throw unprocessable('owner_role_immutable', 'The owner role cannot be changed')
       }
       if (!(await repos.users.findActiveById(targetUserId))) throw notFound('User')
-      return repos.members.upsert(workspaceId, targetUserId, role)
+      const member = await repos.members.upsert(workspaceId, targetUserId, role)
+      await recordMetadataChange(repos, workspaceId, 'membership')
+      return member
     })
   }
 
@@ -33,6 +36,7 @@ export class MemberService {
         throw unprocessable('owner_role_immutable', 'The owner cannot be removed')
       }
       if (!(await repos.members.revoke(workspaceId, targetUserId))) throw notFound('Member')
+      await recordMetadataChange(repos, workspaceId, 'membership')
     })
   }
 }

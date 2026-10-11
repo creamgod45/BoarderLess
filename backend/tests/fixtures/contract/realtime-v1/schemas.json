@@ -1,0 +1,1466 @@
+{
+  "protocolVersion": 1,
+  "subprotocol": "boarderless.v1",
+  "client": {
+    "join_workspace": {
+      "type": "object",
+      "required": [
+        "type",
+        "protocolVersion",
+        "workspaceId",
+        "connectionEpoch",
+        "schemaVersion",
+        "clientId",
+        "lastSeenServerSeq",
+        "metadataRevision",
+        "ticket"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "join_workspace"
+        },
+        "protocolVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "workspaceId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "connectionEpoch": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "schemaVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "clientId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "lastSeenServerSeq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "metadataRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "ticket": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "additionalProperties": false
+    },
+    "catch_up_applied": {
+      "type": "object",
+      "required": [
+        "type",
+        "protocolVersion",
+        "workspaceId",
+        "connectionEpoch",
+        "appliedServerSeq",
+        "workspaceVersion",
+        "metadataRevision"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "catch_up_applied"
+        },
+        "protocolVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "workspaceId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "connectionEpoch": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "appliedServerSeq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "workspaceVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "metadataRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "additionalProperties": false
+    },
+    "heartbeat": {
+      "type": "object",
+      "required": [
+        "type",
+        "protocolVersion",
+        "workspaceId",
+        "connectionEpoch",
+        "heartbeatSeq"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "heartbeat"
+        },
+        "protocolVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "workspaceId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "connectionEpoch": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "heartbeatSeq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "additionalProperties": false
+    },
+    "presence_update": {
+      "type": "object",
+      "required": [
+        "type",
+        "protocolVersion",
+        "workspaceId",
+        "connectionEpoch",
+        "cursor",
+        "selectedObjectIds",
+        "presenceSeq"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "presence_update"
+        },
+        "protocolVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "workspaceId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "connectionEpoch": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "cursor": {
+          "anyOf": [
+            {
+              "type": "object",
+              "required": [
+                "x",
+                "y"
+              ],
+              "properties": {
+                "x": {
+                  "type": "number",
+                  "minimum": -10000000,
+                  "maximum": 10000000
+                },
+                "y": {
+                  "type": "number",
+                  "minimum": -10000000,
+                  "maximum": 10000000
+                }
+              },
+              "additionalProperties": false,
+              "description": "world coordinates；null 表示離開 / 隱藏"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "selectedObjectIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "maxItems": 128
+        },
+        "presenceSeq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "additionalProperties": false
+    },
+    "submit_operations": {
+      "type": "object",
+      "required": [
+        "type",
+        "protocolVersion",
+        "workspaceId",
+        "connectionEpoch",
+        "clientId",
+        "transactionId",
+        "baseVersion",
+        "operations"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "submit_operations"
+        },
+        "protocolVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "workspaceId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "connectionEpoch": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "clientId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "transactionId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "baseVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "operations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "operationId",
+              "clientSeq",
+              "kind",
+              "payload"
+            ],
+            "properties": {
+              "operationId": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "clientSeq": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "kind": {
+                "type": "string"
+              },
+              "expectedObjectVersions": {
+                "type": "object",
+                "patternProperties": {
+                  "^.*$": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              },
+              "payload": {}
+            },
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 200
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "server": {
+    "join_accepted": {
+      "type": "object",
+      "required": [
+        "type",
+        "protocolVersion",
+        "workspaceId",
+        "connectionEpoch",
+        "connectionId",
+        "userId",
+        "role",
+        "barrierServerSeq",
+        "workspaceVersion",
+        "metadataRevision"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "join_accepted"
+        },
+        "protocolVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "workspaceId": {
+          "type": "string"
+        },
+        "connectionEpoch": {
+          "type": "string"
+        },
+        "connectionId": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "owner",
+            "editor",
+            "commenter",
+            "viewer"
+          ]
+        },
+        "barrierServerSeq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "workspaceVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "metadataRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      }
+    },
+    "snapshot_required": {
+      "type": "object",
+      "required": [
+        "type",
+        "protocolVersion",
+        "workspaceId",
+        "connectionEpoch",
+        "barrierServerSeq",
+        "workspaceVersion",
+        "metadataRevision",
+        "reason"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "snapshot_required"
+        },
+        "protocolVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "workspaceId": {
+          "type": "string"
+        },
+        "connectionEpoch": {
+          "type": "string"
+        },
+        "barrierServerSeq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "workspaceVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "metadataRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "reason": {
+          "enum": [
+            "checkpoint_not_at_transaction_boundary",
+            "checkpoint_ahead_of_server",
+            "catch_up_too_large"
+          ]
+        }
+      }
+    },
+    "catch_up_transaction": {
+      "type": "object",
+      "required": [
+        "type",
+        "protocolVersion",
+        "workspaceId",
+        "connectionEpoch",
+        "transactionId",
+        "fromServerSeq",
+        "toServerSeq",
+        "workspaceVersion",
+        "operations"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "catch_up_transaction"
+        },
+        "protocolVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "workspaceId": {
+          "type": "string"
+        },
+        "connectionEpoch": {
+          "type": "string"
+        },
+        "transactionId": {
+          "type": "string"
+        },
+        "fromServerSeq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "toServerSeq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "workspaceVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "operations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "serverSeq",
+              "operationId",
+              "transactionId",
+              "actorId",
+              "clientId",
+              "clientSeq",
+              "baseVersion",
+              "workspaceVersion",
+              "operationType",
+              "payload",
+              "schemaVersion",
+              "committedAt"
+            ],
+            "properties": {
+              "serverSeq": {
+                "type": "integer"
+              },
+              "operationId": {
+                "type": "string"
+              },
+              "transactionId": {
+                "type": "string"
+              },
+              "actorId": {
+                "type": "string"
+              },
+              "clientId": {
+                "type": "string"
+              },
+              "clientSeq": {
+                "type": "integer"
+              },
+              "baseVersion": {
+                "type": "integer"
+              },
+              "workspaceVersion": {
+                "type": "integer"
+              },
+              "operationType": {
+                "type": "string"
+              },
+              "payload": {
+                "type": "object",
+                "patternProperties": {
+                  "^.*$": {}
+                }
+              },
+              "schemaVersion": {
+                "type": "integer"
+              },
+              "committedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          },
+          "minItems": 1,
+          "maxItems": 200
+        }
+      }
+    },
+    "committed_transaction": {
+      "type": "object",
+      "required": [
+        "type",
+        "protocolVersion",
+        "workspaceId",
+        "connectionEpoch",
+        "transactionId",
+        "fromServerSeq",
+        "toServerSeq",
+        "workspaceVersion",
+        "operations"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "committed_transaction"
+        },
+        "protocolVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "workspaceId": {
+          "type": "string"
+        },
+        "connectionEpoch": {
+          "type": "string"
+        },
+        "transactionId": {
+          "type": "string"
+        },
+        "fromServerSeq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "toServerSeq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "workspaceVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "operations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "serverSeq",
+              "operationId",
+              "transactionId",
+              "actorId",
+              "clientId",
+              "clientSeq",
+              "baseVersion",
+              "workspaceVersion",
+              "operationType",
+              "payload",
+              "schemaVersion",
+              "committedAt"
+            ],
+            "properties": {
+              "serverSeq": {
+                "type": "integer"
+              },
+              "operationId": {
+                "type": "string"
+              },
+              "transactionId": {
+                "type": "string"
+              },
+              "actorId": {
+                "type": "string"
+              },
+              "clientId": {
+                "type": "string"
+              },
+              "clientSeq": {
+                "type": "integer"
+              },
+              "baseVersion": {
+                "type": "integer"
+              },
+              "workspaceVersion": {
+                "type": "integer"
+              },
+              "operationType": {
+                "type": "string"
+              },
+              "payload": {
+                "type": "object",
+                "patternProperties": {
+                  "^.*$": {}
+                }
+              },
+              "schemaVersion": {
+                "type": "integer"
+              },
+              "committedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          },
+          "minItems": 1,
+          "maxItems": 200
+        }
+      }
+    },
+    "live_ready": {
+      "type": "object",
+      "required": [
+        "type",
+        "protocolVersion",
+        "workspaceId",
+        "connectionEpoch",
+        "throughServerSeq",
+        "workspaceVersion",
+        "metadataRevision",
+        "connectionId"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "live_ready"
+        },
+        "protocolVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "workspaceId": {
+          "type": "string"
+        },
+        "connectionEpoch": {
+          "type": "string"
+        },
+        "throughServerSeq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "workspaceVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "metadataRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "connectionId": {
+          "type": "string"
+        }
+      }
+    },
+    "heartbeat_ack": {
+      "type": "object",
+      "required": [
+        "type",
+        "protocolVersion",
+        "workspaceId",
+        "connectionEpoch",
+        "heartbeatSeq"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "heartbeat_ack"
+        },
+        "protocolVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "workspaceId": {
+          "type": "string"
+        },
+        "connectionEpoch": {
+          "type": "string"
+        },
+        "heartbeatSeq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      }
+    },
+    "presence_snapshot": {
+      "type": "object",
+      "required": [
+        "type",
+        "protocolVersion",
+        "workspaceId",
+        "connectionEpoch",
+        "roomEpoch",
+        "roomRevision",
+        "peers"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "presence_snapshot"
+        },
+        "protocolVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "workspaceId": {
+          "type": "string"
+        },
+        "connectionEpoch": {
+          "type": "string"
+        },
+        "roomEpoch": {
+          "type": "string"
+        },
+        "roomRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "peers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "connectionId",
+              "userId",
+              "clientId",
+              "displayName",
+              "role",
+              "cursor",
+              "selectedObjectIds",
+              "presenceSeq"
+            ],
+            "properties": {
+              "connectionId": {
+                "type": "string"
+              },
+              "userId": {
+                "type": "string"
+              },
+              "clientId": {
+                "type": "string"
+              },
+              "displayName": {
+                "type": "string",
+                "maxLength": 100
+              },
+              "role": {
+                "enum": [
+                  "owner",
+                  "editor",
+                  "commenter",
+                  "viewer"
+                ]
+              },
+              "cursor": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "required": [
+                      "x",
+                      "y"
+                    ],
+                    "properties": {
+                      "x": {
+                        "type": "number",
+                        "minimum": -10000000,
+                        "maximum": 10000000
+                      },
+                      "y": {
+                        "type": "number",
+                        "minimum": -10000000,
+                        "maximum": 10000000
+                      }
+                    },
+                    "additionalProperties": false,
+                    "description": "world coordinates；null 表示離開 / 隱藏"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "selectedObjectIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 128
+              },
+              "presenceSeq": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            }
+          }
+        }
+      }
+    },
+    "presence_delta": {
+      "type": "object",
+      "required": [
+        "type",
+        "protocolVersion",
+        "workspaceId",
+        "connectionEpoch",
+        "roomEpoch",
+        "roomRevision",
+        "upserts",
+        "removedConnectionIds"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "presence_delta"
+        },
+        "protocolVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "workspaceId": {
+          "type": "string"
+        },
+        "connectionEpoch": {
+          "type": "string"
+        },
+        "roomEpoch": {
+          "type": "string"
+        },
+        "roomRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "upserts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "connectionId",
+              "userId",
+              "clientId",
+              "displayName",
+              "role",
+              "cursor",
+              "selectedObjectIds",
+              "presenceSeq"
+            ],
+            "properties": {
+              "connectionId": {
+                "type": "string"
+              },
+              "userId": {
+                "type": "string"
+              },
+              "clientId": {
+                "type": "string"
+              },
+              "displayName": {
+                "type": "string",
+                "maxLength": 100
+              },
+              "role": {
+                "enum": [
+                  "owner",
+                  "editor",
+                  "commenter",
+                  "viewer"
+                ]
+              },
+              "cursor": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "required": [
+                      "x",
+                      "y"
+                    ],
+                    "properties": {
+                      "x": {
+                        "type": "number",
+                        "minimum": -10000000,
+                        "maximum": 10000000
+                      },
+                      "y": {
+                        "type": "number",
+                        "minimum": -10000000,
+                        "maximum": 10000000
+                      }
+                    },
+                    "additionalProperties": false,
+                    "description": "world coordinates；null 表示離開 / 隱藏"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "selectedObjectIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 128
+              },
+              "presenceSeq": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            }
+          }
+        },
+        "removedConnectionIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "workspace_metadata": {
+      "type": "object",
+      "required": [
+        "type",
+        "protocolVersion",
+        "workspaceId",
+        "connectionEpoch",
+        "metadataRevision",
+        "title",
+        "selfRole"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "workspace_metadata"
+        },
+        "protocolVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "workspaceId": {
+          "type": "string"
+        },
+        "connectionEpoch": {
+          "type": "string"
+        },
+        "metadataRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "title": {
+          "type": "string"
+        },
+        "selfRole": {
+          "enum": [
+            "owner",
+            "editor",
+            "commenter",
+            "viewer"
+          ]
+        }
+      }
+    },
+    "access_revoked": {
+      "type": "object",
+      "required": [
+        "type",
+        "protocolVersion",
+        "workspaceId",
+        "connectionEpoch",
+        "reason"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "access_revoked"
+        },
+        "protocolVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "workspaceId": {
+          "type": "string"
+        },
+        "connectionEpoch": {
+          "type": "string"
+        },
+        "reason": {
+          "enum": [
+            "membership_revoked",
+            "workspace_deleted"
+          ]
+        }
+      }
+    },
+    "resync_required": {
+      "type": "object",
+      "required": [
+        "type",
+        "protocolVersion",
+        "workspaceId",
+        "connectionEpoch",
+        "reason",
+        "headServerSeq",
+        "workspaceVersion"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "resync_required"
+        },
+        "protocolVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "workspaceId": {
+          "type": "string"
+        },
+        "connectionEpoch": {
+          "type": "string"
+        },
+        "reason": {
+          "enum": [
+            "too_many_pending_transactions",
+            "transaction_too_large",
+            "slow_consumer",
+            "sequence_gap"
+          ]
+        },
+        "headServerSeq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "workspaceVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      }
+    },
+    "protocol_error": {
+      "type": "object",
+      "required": [
+        "type",
+        "protocolVersion",
+        "workspaceId",
+        "connectionEpoch",
+        "code"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "protocol_error"
+        },
+        "protocolVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "workspaceId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "connectionEpoch": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "code": {
+          "enum": [
+            "authentication_required",
+            "ticket_expired",
+            "ticket_used",
+            "scope_mismatch",
+            "unsupported_protocol_version",
+            "unsupported_schema_version",
+            "access_revoked",
+            "invalid_message",
+            "message_too_large",
+            "rate_limited",
+            "sequence_gap",
+            "resync_required",
+            "not_live",
+            "heartbeat_timeout"
+          ]
+        },
+        "retryAfterMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      }
+    },
+    "operation_ack": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "protocolVersion",
+            "workspaceId",
+            "connectionEpoch",
+            "transactionId",
+            "operationIds",
+            "status",
+            "fromServerSeq",
+            "toServerSeq",
+            "workspaceVersion",
+            "operations"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "operation_ack"
+            },
+            "protocolVersion": {
+              "type": "number",
+              "const": 1
+            },
+            "workspaceId": {
+              "type": "string"
+            },
+            "connectionEpoch": {
+              "type": "string"
+            },
+            "transactionId": {
+              "type": "string"
+            },
+            "operationIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "status": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "accepted"
+                },
+                {
+                  "type": "string",
+                  "const": "duplicate"
+                }
+              ]
+            },
+            "fromServerSeq": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "toServerSeq": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "workspaceVersion": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "operations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "serverSeq",
+                  "operationId",
+                  "transactionId",
+                  "actorId",
+                  "clientId",
+                  "clientSeq",
+                  "baseVersion",
+                  "workspaceVersion",
+                  "operationType",
+                  "payload",
+                  "schemaVersion",
+                  "committedAt"
+                ],
+                "properties": {
+                  "serverSeq": {
+                    "type": "integer"
+                  },
+                  "operationId": {
+                    "type": "string"
+                  },
+                  "transactionId": {
+                    "type": "string"
+                  },
+                  "actorId": {
+                    "type": "string"
+                  },
+                  "clientId": {
+                    "type": "string"
+                  },
+                  "clientSeq": {
+                    "type": "integer"
+                  },
+                  "baseVersion": {
+                    "type": "integer"
+                  },
+                  "workspaceVersion": {
+                    "type": "integer"
+                  },
+                  "operationType": {
+                    "type": "string"
+                  },
+                  "payload": {
+                    "type": "object",
+                    "patternProperties": {
+                      "^.*$": {}
+                    }
+                  },
+                  "schemaVersion": {
+                    "type": "integer"
+                  },
+                  "committedAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "protocolVersion",
+            "workspaceId",
+            "connectionEpoch",
+            "transactionId",
+            "operationIds",
+            "status",
+            "conflicts",
+            "workspaceVersion",
+            "lastServerSeq",
+            "missingOperations"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "operation_ack"
+            },
+            "protocolVersion": {
+              "type": "number",
+              "const": 1
+            },
+            "workspaceId": {
+              "type": "string"
+            },
+            "connectionEpoch": {
+              "type": "string"
+            },
+            "transactionId": {
+              "type": "string"
+            },
+            "operationIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "status": {
+              "type": "string",
+              "const": "conflict"
+            },
+            "conflicts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "id",
+                  "expectedVersion",
+                  "actualVersion"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "expectedVersion": {
+                    "type": "integer"
+                  },
+                  "actualVersion": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "workspaceVersion": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "lastServerSeq": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "missingOperations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "serverSeq",
+                  "operationId",
+                  "transactionId",
+                  "actorId",
+                  "clientId",
+                  "clientSeq",
+                  "baseVersion",
+                  "workspaceVersion",
+                  "operationType",
+                  "payload",
+                  "schemaVersion",
+                  "committedAt"
+                ],
+                "properties": {
+                  "serverSeq": {
+                    "type": "integer"
+                  },
+                  "operationId": {
+                    "type": "string"
+                  },
+                  "transactionId": {
+                    "type": "string"
+                  },
+                  "actorId": {
+                    "type": "string"
+                  },
+                  "clientId": {
+                    "type": "string"
+                  },
+                  "clientSeq": {
+                    "type": "integer"
+                  },
+                  "baseVersion": {
+                    "type": "integer"
+                  },
+                  "workspaceVersion": {
+                    "type": "integer"
+                  },
+                  "operationType": {
+                    "type": "string"
+                  },
+                  "payload": {
+                    "type": "object",
+                    "patternProperties": {
+                      "^.*$": {}
+                    }
+                  },
+                  "schemaVersion": {
+                    "type": "integer"
+                  },
+                  "committedAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "protocolVersion",
+            "workspaceId",
+            "connectionEpoch",
+            "transactionId",
+            "operationIds",
+            "status",
+            "code"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "operation_ack"
+            },
+            "protocolVersion": {
+              "type": "number",
+              "const": 1
+            },
+            "workspaceId": {
+              "type": "string"
+            },
+            "connectionEpoch": {
+              "type": "string"
+            },
+            "transactionId": {
+              "type": "string"
+            },
+            "operationIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "status": {
+              "type": "string",
+              "const": "rejected"
+            },
+            "code": {
+              "type": "string"
+            },
+            "retryAfterMs": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "details": {}
+          }
+        }
+      ]
+    }
+  }
+}

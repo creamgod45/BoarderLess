@@ -51,6 +51,15 @@ export class WorkspaceRepository {
     `
   }
 
+  /** metadata（title / membership / 角色）變更：revision +1；含已 soft delete 的 Workspace */
+  async bumpMetadataRevision(id: string): Promise<{ metadataRevision: number; lastServerSeq: number }> {
+    const [row] = await this.db<{ metadataRevision: number; lastServerSeq: number }[]>`
+      UPDATE workspaces SET metadata_revision = metadata_revision + 1 WHERE id = ${id}
+      RETURNING metadata_revision, last_server_seq
+    `
+    return row!
+  }
+
   async softDelete(id: string): Promise<boolean> {
     const result = await this.db`
       UPDATE workspaces SET deleted_at = now(), updated_at = now() WHERE id = ${id} AND deleted_at IS NULL

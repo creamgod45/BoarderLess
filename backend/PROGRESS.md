@@ -1,7 +1,7 @@
 # Backend 開發進度
 
 對照：[`docs/BACKEND_ARCHITECTURE.md`](../docs/BACKEND_ARCHITECTURE.md) §11 交付階段、[`docs/BACKEND_MEDIA_API_SPEC.md`](../docs/BACKEND_MEDIA_API_SPEC.md)（Media v1）、[`docs/BACKEND_ASSET_PREPARATION_V2_SPEC.md`](../docs/BACKEND_ASSET_PREPARATION_V2_SPEC.md)（preparation v2）
-最後更新：2026-10-11（新增 asset preparation v2；ASSET-08 / ASSET-07 定案；驗收追蹤）
+最後更新：2026-10-11（批次 A 源碼）
 
 圖例：✅ 完成 · 🟡 部分完成／暫定 · ⬜ 未開始
 
@@ -11,7 +11,7 @@
 |---|---|---|
 | B0 Protocol 與單機資料基線 | 🟡 | 資料表、transaction、冪等、測試基礎完成；protocol 尚未與 KMP 共用定稿 |
 | B1 單實例保存與同步 | 🟡 | REST 版本的 Workspace CRUD / membership / submit / catch-up / state 完成；WebSocket 與正式 auth 未做 |
-| B2 多程序與即時 fan-out | ⬜ | outbox 已同 transaction 寫入，但尚無 publisher、Redis |
+| B2 多程序與即時 fan-out | 🟡 | 批次 A：WebSocket gateway、ticket、catch-up barrier、outbox publisher（PostgreSQL NOTIFY）、Presence、metadataRevision 已交付；正式 auth 未做 |
 | B3 資產與背景工作 | 🟡 | Media v1 後端完成（signed PUT/GET、complete、worker 驗證、縮圖、abandon、GC）；APP 真實端到端與 QA 簽核待做；snapshot compaction 未做 |
 | B4 協作產品化 | ⬜ | — |
 
@@ -44,6 +44,17 @@
 - ✅ State / Snapshots：`GET …/state`（一致讀取的目前 projection）、`POST …/snapshots`（checksum）、`GET …/snapshots/latest`
 - ✅ Assets（Media v1）、Asset preparations（v2）：見下節
 - ✅ `GET /capabilities`：宣告可選協定（目前為 `assetPreparation`）
+
+### 即時協作（批次 A，BACKEND_MISSING_IMPLEMENTATION_SPEC §3）
+- ✅ Migration `006`：`workspaces.metadata_revision`、`realtime_tickets`（只存 SHA-256）、UNLOGGED `presence_rooms` / `presence_peers`
+- ✅ REST：`GET …/realtime-capabilities`、`POST …/realtime-ticket`（一次性、60 秒、no-store）；全域 `/capabilities` 加入 `canvas`（最小可寫 protocol）、`realtime`，未交付能力為 `supported: false`
+- ✅ WS `/api/v1/realtime`（`@fastify/websocket`，subprotocol `boarderless.v1`）：join 驗證 ticket / membership、3 秒逾時、Origin、未驗證連線上限、frame 大小
+- ✅ catch-up / live barrier：先註冊再讀 head、完整 transaction、snapshot_required（非邊界 / 超前 / 過多）、snapshot ahead of barrier、resync（過多 pending / 過大 transaction / 慢 consumer）
+- ✅ WS submit 與 REST 共用 `OperationService`；ack accepted / duplicate / conflict / rejected（含 partial_duplicate）
+- ✅ 跨 process fan-out：outbox publisher（SKIP LOCKED + 同交易 `pg_notify`）、LISTEN 喚醒、輪詢安全網；每次送出前重新檢查 ACL
+- ✅ metadataRevision：改名 / 成員 / 角色 / 刪除同交易 +1 並寫 outbox；`workspace_metadata`、`access_revoked`
+- ✅ Presence：world 座標 cursor、selection（過濾不存在物件）、rate limit、heartbeat TTL、roomEpoch / roomRevision、撤權與離線移除
+- ✅ 15 個整合測試（兩個 gateway、各自連線池）、33 個 fixtures + `schemas.json`；真多 process 預檢 `acceptance:multi-process`
 
 ### 容器與 CI
 - ✅ `Dockerfile`：`api`（預設，port 3000、HEALTHCHECK、啟動時自動 migration）與 `worker`（含 ffmpeg）兩個 target；以非 root `bun` 使用者執行；`/data` volume 供 local storage driver
@@ -120,7 +131,7 @@
 - ✅ locked 物件只能切換 `locked`，不可移動 / 修改 / 刪除
 - ✅ operation、projection、outbox 在同一 transaction 提交
 
-### 測試（`bun test`，224 個）
+### 測試（`bun test`，274 個）
 - ✅ 單元：operation payload 驗證、touched ids、角色權限矩陣、HTML 跳脫、MIME sniff、本機簽名 URL、contract fixtures schema
 - ✅ 整合（真實 PostgreSQL）：create/move/delete + 冪等重送、20 個並行寫入的 `serverSeq` 連續性、版本衝突、transaction rollback、relation cascade、角色與撤銷、outbox、snapshot
 - ✅ 素材整合（真實 ffmpeg）：六種 MIME 完整流程、驗證失敗分類、complete 冪等 / 衝突、abandon 競爭、GC、lease 過期重領、重複縮圖 job、多 worker、不可覆寫、missing、ACL、MediaNode 引用、storage 503
@@ -152,9 +163,17 @@
 
 ### 驗收（[`docs/BACKEND_ACCEPTANCE_SPEC.md`](../docs/BACKEND_ACCEPTANCE_SPEC.md)）
 - 案例狀態與後端預檢證據見 [`ACCEPTANCE.md`](ACCEPTANCE.md)；正式驗收在業務功能完成、版本封存後集中執行
-- [ ] CORE-04 多 process 競爭尚未驗證
+- [x] CORE-04 多 process 競爭：`acceptance:multi-process` 預檢通過（正式驗收待集中執行）
 - [ ] CORE-08 正式上線前的資料檢查與處置計畫（見「資料政策」）
 - [ ] APP 依更新後 schema / fixtures 對接，並評估「相容性影響」（[`ACCEPTANCE.md`](ACCEPTANCE.md)）
+
+### 缺少功能實作（[`docs/BACKEND_MISSING_IMPLEMENTATION_SPEC.md`](../docs/BACKEND_MISSING_IMPLEMENTATION_SPEC.md)，交付紀錄見 [`DELIVERY.md`](DELIVERY.md)）
+- [x] A 即時協作（正式 HTTP auth 仍未交付）
+- [ ] B 雲端快速方案簿
+- [ ] C 共用背景
+- [ ] D 連線 geometry 與 vectorPath
+- [ ] E 時序圖
+- [ ] F 素材引用歷史還原
 
 ### 素材 preparation v2——後端已完成，待 APP 對接
 - [ ] APP：durable reservation、v2 HTTP adapter（先檢查 `/capabilities`）、ticket lease、上傳串流、local → server ID 映射發布

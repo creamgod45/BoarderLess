@@ -114,19 +114,3 @@ export const completePreparationSchema = {
   ),
   response: { 200: PreparationEnvelopeSchema, 202: PreparationEnvelopeSchema, ...preparationErrors },
 }
-
-export const capabilitiesSchema = {
-  tags: ['meta'],
-  summary: '後端宣告的可選協定能力（APP 只在此宣告存在時使用 preparation v2）',
-  security: [],
-  response: {
-    200: Type.Object({
-      assetPreparation: Type.Object({
-        requestSchema: Type.String(),
-        responseSchema: Type.String(),
-        maxByteSize: Type.Integer(),
-        mediaTypes: Type.Array(Type.String()),
-      }),
-    }),
-  },
-}

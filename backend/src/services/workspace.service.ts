@@ -1,6 +1,7 @@
 import type { Workspace, WorkspaceWithRole } from '../models/workspace.ts'
 import type { Database } from '../repositories/index.ts'
 import { requireWorkspaceAccess } from './access.service.ts'
+import { recordMetadataChange } from './workspace-metadata.ts'
 
 export class WorkspaceService {
   constructor(private readonly db: Database) {}
@@ -26,7 +27,9 @@ export class WorkspaceService {
   async rename(workspaceId: string, userId: string, title: string): Promise<WorkspaceWithRole> {
     return this.db.transaction(async (repos) => {
       const { member } = await requireWorkspaceAccess(repos, workspaceId, userId, 'workspace.update', { lock: true })
-      const updated = (await repos.workspaces.updateTitle(workspaceId, title.trim())) as Workspace
+      await repos.workspaces.updateTitle(workspaceId, title.trim())
+      await recordMetadataChange(repos, workspaceId, 'title')
+      const updated = (await repos.workspaces.findById(workspaceId)) as Workspace
       return { ...updated, role: member.role }
     })
   }
@@ -36,6 +39,7 @@ export class WorkspaceService {
     await this.db.transaction(async (repos) => {
       await requireWorkspaceAccess(repos, workspaceId, userId, 'workspace.delete', { lock: true })
       await repos.workspaces.softDelete(workspaceId)
+      await recordMetadataChange(repos, workspaceId, 'deleted')
     })
   }
 }

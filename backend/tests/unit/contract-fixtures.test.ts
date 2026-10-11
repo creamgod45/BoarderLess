@@ -4,7 +4,10 @@ import { join } from 'node:path'
 import { Type } from 'typebox'
 import { Value } from 'typebox/value'
 import { preparationDigest } from '../../src/domain/asset-preparation.ts'
-import { capabilitiesSchema, PreparationEnvelopeSchema } from '../../src/schemas/asset-preparation.schema.ts'
+import { PreparationEnvelopeSchema } from '../../src/schemas/asset-preparation.schema.ts'
+import { capabilitiesSchema } from '../../src/schemas/capabilities.schema.ts'
+import { RealtimeCapabilitiesSchema, RealtimeTicketSchema } from '../../src/schemas/realtime.schema.ts'
+import { CLIENT_MESSAGE_SCHEMAS, SERVER_EVENT_SCHEMAS } from '../../src/realtime/messages.ts'
 import { AssetSchema, TransferDirectiveSchema } from '../../src/schemas/asset.schema.ts'
 import { validateObjectState } from '../../src/domain/canvas-objects.ts'
 import { ErrorEnvelope } from '../../src/schemas/common.schema.ts'
@@ -136,5 +139,56 @@ describe('Asset preparation v2 contract fixtures', () => {
   test('golden vector fixture carries the cross-platform digest', async () => {
     const doc = JSON.parse(await readFile(join(PREP_DIR, '04-prepare-golden-vector-201.json'), 'utf8'))
     expect(doc.response.body.requestDigest).toBe('32d5f0d51e3a30dc0c7057664dc28914132cf09fe6e109098725c05d26f602ee')
+  })
+})
+
+// ---- Realtime v1（batch A）----
+const RT_DIR = join(import.meta.dirname, '../fixtures/contract/realtime-v1')
+const rtFiles = (await readdir(RT_DIR)).filter((f) => /^\d+-.*\.json$/.test(f))
+
+describe('Realtime v1 contract fixtures', () => {
+  test('fixtures exist', () => {
+    expect(rtFiles.length).toBeGreaterThanOrEqual(30)
+  })
+
+  for (const file of rtFiles) {
+    test(file, async () => {
+      const raw = await readFile(join(RT_DIR, file), 'utf8')
+      // 不洩漏真實 host、ticket、簽名
+      expect(raw).not.toMatch(/127\.0\.0\.1|localhost|sig=|X-Amz-Signature/)
+      const doc = JSON.parse(raw)
+      if (doc.request) {
+        const { status, body } = doc.response
+        const schema = status >= 400 ? ErrorEnvelope : doc.request.path.endsWith('/realtime-ticket') ? RealtimeTicketSchema : RealtimeCapabilitiesSchema
+        expect([...Value.Errors(schema, body)].map((e) => `${e.instancePath} ${e.message}`)).toEqual([])
+        if (body?.ticket) expect(body.ticket).toBe('fixture-only-not-a-real-ticket')
+        return
+      }
+      for (const { direction, frame } of doc.exchange ?? []) {
+        if (typeof frame === 'string') continue
+        if (direction === 'server') {
+          const schema = SERVER_EVENT_SCHEMAS[frame.type]
+          expect(schema).toBeDefined()
+          expect([...Value.Errors(schema!, frame)].map((e) => `${frame.type}${e.instancePath} ${e.message}`)).toEqual([])
+        } else if (frame.type in CLIENT_MESSAGE_SCHEMAS) {
+          const schema = CLIENT_MESSAGE_SCHEMAS[frame.type as keyof typeof CLIENT_MESSAGE_SCHEMAS]
+          // 刻意送出的不合法 frame 由對應 protocol_error 標示
+          if (file.includes('unsupported') || file.includes('unknown')) continue
+          expect([...Value.Errors(schema, frame)].map((e) => `${frame.type}${e.instancePath} ${e.message}`)).toEqual([])
+        }
+      }
+      for (const c of doc.cases ?? []) for (const f of c.frames) expect([...Value.Errors(SERVER_EVENT_SCHEMAS[f.type]!, f)]).toEqual([])
+    })
+  }
+
+  test('committed transactions are complete and contiguous', async () => {
+    const doc = JSON.parse(await readFile(join(RT_DIR, '33-fan-out-200-operations.json'), 'utf8'))
+    const tx = doc.exchange.find((e: any) => e.frame.type === 'committed_transaction').frame
+    expect(tx.operations).toHaveLength(200)
+    expect(tx.toServerSeq - tx.fromServerSeq + 1).toBe(200)
+    tx.operations.forEach((o: any, i: number) => {
+      expect(o.serverSeq).toBe(tx.fromServerSeq + i)
+      expect(o.transactionId).toBe(tx.transactionId)
+    })
   })
 })

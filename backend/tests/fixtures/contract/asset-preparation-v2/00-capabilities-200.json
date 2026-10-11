@@ -7,6 +7,11 @@
   "response": {
     "status": 200,
     "body": {
+      "canvas": {
+        "protocolVersion": 1,
+        "operationSchemaVersion": 1,
+        "minWritableProtocolVersion": 1
+      },
       "assetPreparation": {
         "requestSchema": "boarderless.asset-prepare.v1",
         "responseSchema": "boarderless.asset-preparation.v1",
@@ -19,6 +24,27 @@
           "video/mp4",
           "video/webm"
         ]
+      },
+      "realtime": {
+        "supported": false
+      },
+      "quickSchemes": {
+        "supported": false
+      },
+      "canvasStyle": {
+        "supported": false
+      },
+      "relationGeometry": {
+        "supported": false
+      },
+      "vectorPath": {
+        "supported": false
+      },
+      "sequenceDiagrams": {
+        "supported": false
+      },
+      "mediaReferenceRestore": {
+        "supported": false
       }
     }
   }
