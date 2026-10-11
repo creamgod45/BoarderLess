@@ -1,10 +1,14 @@
 import { createHash } from 'node:crypto'
+import { canonicalCanvasStyle } from '../domain/canvas-style.ts'
 import type { SnapshotContent, WorkspaceSnapshot } from '../models/snapshot.ts'
 import type { Workspace } from '../models/workspace.ts'
 import type { WorkspaceAction } from '../domain/permissions.ts'
 import type { Database } from '../repositories/index.ts'
 import { notFound } from '../utils/errors.ts'
 import { requireWorkspaceAccess } from './access.service.ts'
+
+/** 1：objects / relations；2：加上 canvasStyle / canvasStyleVersion（批次 C） */
+export const SNAPSHOT_SCHEMA_VERSION = 2
 
 export class SnapshotService {
   constructor(private readonly db: Database) {}
@@ -19,11 +23,11 @@ export class SnapshotService {
    * 目前先提供手動 API。
    */
   async create(workspaceId: string, userId: string): Promise<WorkspaceSnapshot> {
-    const { workspace, content } = await this.readState(workspaceId, userId, 'snapshots.create')
+    const { content } = await this.readState(workspaceId, userId, 'snapshots.create')
     return this.db.repos.snapshots.insert(
       workspaceId,
       content.throughServerSeq,
-      workspace.schemaVersion,
+      SNAPSHOT_SCHEMA_VERSION,
       content,
       checksum(content),
     )
@@ -50,6 +54,8 @@ export class SnapshotService {
         throughServerSeq: workspace.lastServerSeq,
         objects: await repos.canvas.listActiveObjects(workspaceId),
         relations: await repos.canvas.listActiveRelations(workspaceId),
+        canvasStyle: canonicalCanvasStyle(workspace.canvasStyle),
+        canvasStyleVersion: workspace.canvasStyleVersion,
       }
       return { workspace, content }
     })

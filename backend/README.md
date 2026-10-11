@@ -214,3 +214,10 @@ APP ══ WS   /api/v1/realtime（subprotocol boarderless.v1）
 - 建立 `PUT /:id` + `If-None-Match: *`；更新 / 刪除帶 `If-Match: <ETag>`；每個 mutation 都要 `Idempotency-Key`。
 - payload 是 `boarderless/selection` v1–v9 物件，伺服器以 `src/domain/selection.ts`（APP validator 移植）嚴格驗證。
 - 列表 cursor 是穩定快照；列舉途中有變更回 410 `cursor_expired`，從第一頁重來。
+
+## 共用背景（批次 C）
+
+- `GET …/state` 與 snapshot（schema 2）含 `canvasStyle` / `canvasStyleVersion`。
+- 修改用正式 operation `update_canvas_style`（`expectedCanvasStyleVersion` CAS，失敗回 409 `canvas_style_version_conflict`）。viewport、showGrid、snap、theme 是裝置偏好，不經過這裡。
+- fixtures：[`tests/fixtures/contract/canvas-style-v1/`](tests/fixtures/contract/canvas-style-v1/)。
+

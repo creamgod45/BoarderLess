@@ -1,0 +1,76 @@
+{
+  "contract": "Canvas style v1（batch C）",
+  "generatedBy": "scripts/generate-canvas-style-fixtures.ts",
+  "fixtures": [
+    {
+      "name": "01-state-default",
+      "description": "新 Workspace：canvasStyle = default、canvasStyleVersion = 0（與 objects 同一 throughServerSeq）",
+      "status": 200
+    },
+    {
+      "name": "02-update-accepted",
+      "description": "update_canvas_style：CAS 成功 +1；正式 payload 帶權威 canvasStyleVersion",
+      "status": 200
+    },
+    {
+      "name": "03-state-after-update",
+      "description": "state 反映新 style / version",
+      "status": 200
+    },
+    {
+      "name": "04-cas-conflict-409",
+      "description": "expectedCanvasStyleVersion 過期：409 canvas_style_version_conflict + 權威 style 與 checkpoint",
+      "status": 409
+    },
+    {
+      "name": "05-invalid-hex-422",
+      "description": "大寫 hex 不靜默修正：422 invalid_canvas_style",
+      "status": 422
+    },
+    {
+      "name": "06-unknown-schema-422",
+      "description": "未知 style schemaVersion fail closed：422 unsupported_canvas_style_schema",
+      "status": 422
+    },
+    {
+      "name": "07-unknown-field-422",
+      "description": "未知欄位（alpha）：422 invalid_operation",
+      "status": 422
+    },
+    {
+      "name": "08-mixed-rollback-422",
+      "description": "與圖形 operation 同交易：任一失敗全部 rollback（style 不變）",
+      "status": 422
+    },
+    {
+      "name": "09-duplicate",
+      "description": "原 envelope 重送：duplicate，不再 +1",
+      "status": 200
+    },
+    {
+      "name": "10-undo-new-version",
+      "description": "Undo 是新的 operation：after = 原 before，版本單調增加到 2",
+      "status": 200
+    },
+    {
+      "name": "11-mixed-accepted",
+      "description": "圖形 + style 同一 transaction：同一 workspaceVersion",
+      "status": 200
+    },
+    {
+      "name": "12-viewer-forbidden-403",
+      "description": "viewer / commenter 不可修改共用背景",
+      "status": 403
+    },
+    {
+      "name": "13-snapshot-schema-2",
+      "description": "snapshot schema 2：含 canvasStyle / canvasStyleVersion",
+      "status": 201
+    },
+    {
+      "name": "14-capabilities",
+      "description": "全域 capabilities：canvasStyle 宣告 operation kind、style schema、snapshot schema、default",
+      "status": 200
+    }
+  ]
+}

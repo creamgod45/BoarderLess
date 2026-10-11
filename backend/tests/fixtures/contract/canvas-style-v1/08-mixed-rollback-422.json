@@ -1,0 +1,58 @@
+{
+  "description": "與圖形 operation 同交易：任一失敗全部 rollback（style 不變）",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "00000000-0000-4000-8000-000000000017",
+      "transactionId": "00000000-0000-4000-8000-000000000018",
+      "baseVersion": 1,
+      "operations": [
+        {
+          "operationId": "00000000-0000-4000-8000-000000000019",
+          "clientSeq": 1,
+          "kind": "update_canvas_style",
+          "payload": {
+            "expectedCanvasStyleVersion": 1,
+            "canvasStyle": {
+              "schemaVersion": 1,
+              "backgroundToken": "default",
+              "gridStyle": {
+                "pattern": "lines",
+                "colorToken": "auto"
+              }
+            }
+          }
+        },
+        {
+          "operationId": "00000000-0000-4000-8000-000000000020",
+          "clientSeq": 2,
+          "kind": "create_object",
+          "payload": {
+            "objectId": "00000000-0000-4000-8000-000000000021",
+            "objectType": "future"
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 422,
+    "body": {
+      "error": {
+        "code": "unsupported_object_type",
+        "message": "Object type \"future\" is not supported",
+        "details": {
+          "supportedObjectTypes": [
+            "text",
+            "group",
+            "media"
+          ],
+          "objectSchemaVersion": 1
+        }
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

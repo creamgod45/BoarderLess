@@ -1,0 +1,44 @@
+{
+  "description": "大寫 hex 不靜默修正：422 invalid_canvas_style",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "99999999-9999-4999-8999-999999999999",
+      "transactionId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "baseVersion": 1,
+      "operations": [
+        {
+          "operationId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "clientSeq": 1,
+          "kind": "update_canvas_style",
+          "payload": {
+            "expectedCanvasStyleVersion": 1,
+            "canvasStyle": {
+              "schemaVersion": 1,
+              "backgroundToken": "#ABCDEF",
+              "gridStyle": {
+                "pattern": "lines",
+                "colorToken": "auto"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 422,
+    "body": {
+      "error": {
+        "code": "invalid_canvas_style",
+        "message": "canvasStyle.backgroundToken is not supported",
+        "details": {
+          "field": "backgroundToken"
+        }
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

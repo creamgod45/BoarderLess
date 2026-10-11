@@ -1,3 +1,4 @@
+import { canonicalCanvasStyle, canvasStyleIssue } from '../domain/canvas-style.ts'
 import {
   completeTransform,
   OBJECT_SCHEMA_VERSION,
@@ -29,6 +30,16 @@ export interface VersionConflict {
 }
 
 /** 偵測到版本衝突時丟出，使整個 transaction rollback */
+/** update_canvas_style 的 CAS 失敗（不放進 expectedObjectVersions 的 conflicts） */
+export class CanvasStyleConflictSignal extends Error {
+  constructor(
+    readonly expectedVersion: number,
+    readonly actualVersion: number,
+  ) {
+    super('canvas style version conflict')
+  }
+}
+
 export class VersionConflictSignal extends Error {
   constructor(readonly conflicts: VersionConflict[]) {
     super('version conflict')
@@ -285,6 +296,24 @@ export async function applyOperation(
       return { ...p, restoredVersions: Object.fromEntries(restored.map((r) => [r.relationId, r.relationVersion])) }
     }
 
+    case 'update_canvas_style': {
+      const p = op.payload
+      // Workspace row 已在 commit 開頭鎖定；同一 transaction 內前一個 style operation 的結果也會讀到
+      const workspace = (await repos.workspaces.findById(workspaceId))!
+      if (workspace.canvasStyleVersion !== p.expectedCanvasStyleVersion) {
+        throw new CanvasStyleConflictSignal(p.expectedCanvasStyleVersion, workspace.canvasStyleVersion)
+      }
+      const issue = canvasStyleIssue(p.canvasStyle)
+      if (issue) throw rejected(issue.code, `canvasStyle.${issue.field} is not supported`, { field: issue.field })
+      if (workspace.canvasStyleVersion >= Number.MAX_SAFE_INTEGER) {
+        throw rejected('canvas_style_version_exhausted', 'canvasStyleVersion reached the safe integer limit')
+      }
+      const canvasStyle = canonicalCanvasStyle(p.canvasStyle)
+      const canvasStyleVersion = workspace.canvasStyleVersion + 1
+      await repos.workspaces.updateCanvasStyle(workspaceId, canvasStyle, canvasStyleVersion)
+      // 正式 payload 帶權威的新版本：replay / fan-out 依此設定，不由 client 自行推算
+      return { expectedCanvasStyleVersion: p.expectedCanvasStyleVersion, canvasStyle, canvasStyleVersion }
+    }
   }
 }
 

@@ -1,6 +1,7 @@
 import { Type, type Static, type TSchema } from 'typebox'
 import { Value } from 'typebox/value'
 import { RELATION_DIRECTIONS } from '../models/canvas.ts'
+import { CanvasStyleSchema } from './canvas-style.ts'
 
 /**
  * WorkspaceOperation 種類與 payload schema。
@@ -107,6 +108,18 @@ export const RestoreRelationsPayload = Type.Object(
   { additionalProperties: false },
 )
 
+/**
+ * 共用背景（批次 C）：workspace 鎖內以 canvasStyleVersion 做 CAS，完整替換 style。
+ * 不使用 expectedObjectVersions；成功後正式 payload 會加上權威的 canvasStyleVersion（新版本）。
+ */
+export const UpdateCanvasStylePayload = Type.Object(
+  {
+    expectedCanvasStyleVersion: Type.Integer({ minimum: 0, maximum: 9007199254740991 }),
+    canvasStyle: CanvasStyleSchema,
+  },
+  { additionalProperties: false },
+)
+
 export const OPERATION_PAYLOADS = {
   create_object: CreateObjectPayload,
   update_object: UpdateObjectPayload,
@@ -117,6 +130,7 @@ export const OPERATION_PAYLOADS = {
   delete_relations: DeleteRelationsPayload,
   restore_objects: RestoreObjectsPayload,
   restore_relations: RestoreRelationsPayload,
+  update_canvas_style: UpdateCanvasStylePayload,
 } satisfies Record<string, TSchema>
 
 export type OperationKind = keyof typeof OPERATION_PAYLOADS
@@ -180,5 +194,7 @@ export function touchedObjectIds(op: TypedOperation): string[] {
       return op.payload.objectIds
     case 'restore_relations':
       return op.payload.relationIds
+    case 'update_canvas_style':
+      return []
   }
 }

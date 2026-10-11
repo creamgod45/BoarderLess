@@ -4,6 +4,8 @@ import { PREPARATION_RESPONSE_SCHEMA, PREPARE_REQUEST_SCHEMA } from '../models/a
 import { REALTIME_PROTOCOL_VERSION, REALTIME_SUBPROTOCOL } from '../realtime/messages.ts'
 import type { CapabilitiesSchema } from '../schemas/capabilities.schema.ts'
 import { SELECTION_SCHEMA_VERSIONS } from '../domain/selection.ts'
+import { CANVAS_STYLE_SCHEMA_VERSIONS, DEFAULT_CANVAS_STYLE } from '../domain/canvas-style.ts'
+import { SNAPSHOT_SCHEMA_VERSION } from '../services/snapshot.service.ts'
 import { QUICK_SCHEME_RESOURCE_VERSION } from '../models/quick-scheme.ts'
 import { OPERATION_SCHEMA_VERSION, PROTOCOL_VERSION } from '../services/operation.service.ts'
 
@@ -40,7 +42,13 @@ export class CapabilitiesController {
       selectionSchemaVersions: [...SELECTION_SCHEMA_VERSIONS],
       materializationEnabled: false,
     },
-    canvasStyle: { supported: false },
+    canvasStyle: {
+      supported: true as const,
+      operationKinds: ['update_canvas_style'],
+      styleSchemaVersions: [...CANVAS_STYLE_SCHEMA_VERSIONS],
+      snapshotSchemaVersion: SNAPSHOT_SCHEMA_VERSION,
+      defaultStyle: DEFAULT_CANVAS_STYLE,
+    },
     relationGeometry: { supported: false },
     vectorPath: { supported: false },
     sequenceDiagrams: { supported: false },

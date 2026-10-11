@@ -47,7 +47,22 @@
         "materializationEnabled": false
       },
       "canvasStyle": {
-        "supported": false
+        "supported": true,
+        "operationKinds": [
+          "update_canvas_style"
+        ],
+        "styleSchemaVersions": [
+          1
+        ],
+        "snapshotSchemaVersion": 2,
+        "defaultStyle": {
+          "schemaVersion": 1,
+          "backgroundToken": "default",
+          "gridStyle": {
+            "pattern": "lines",
+            "colorToken": "auto"
+          }
+        }
       },
       "relationGeometry": {
         "supported": false

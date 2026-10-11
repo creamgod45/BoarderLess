@@ -1,0 +1,49 @@
+{
+  "description": "未知欄位（alpha）：422 invalid_operation",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "ffffffff-ffff-4fff-8fff-ffffffffffff",
+      "transactionId": "00000000-0000-4000-8000-000000000015",
+      "baseVersion": 1,
+      "operations": [
+        {
+          "operationId": "00000000-0000-4000-8000-000000000016",
+          "clientSeq": 1,
+          "kind": "update_canvas_style",
+          "payload": {
+            "expectedCanvasStyleVersion": 1,
+            "canvasStyle": {
+              "schemaVersion": 1,
+              "backgroundToken": "default",
+              "gridStyle": {
+                "pattern": "lines",
+                "colorToken": "auto"
+              },
+              "alpha": 0.5
+            }
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 422,
+    "body": {
+      "error": {
+        "code": "invalid_operation",
+        "message": "One or more operations are invalid",
+        "details": [
+          {
+            "index": 0,
+            "path": "/payload/canvasStyle",
+            "message": "must not have additional properties"
+          }
+        ]
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

@@ -14,7 +14,7 @@ import { AssetSchema, TransferDirectiveSchema } from '../../src/schemas/asset.sc
 import { validateObjectState } from '../../src/domain/canvas-objects.ts'
 import { ErrorEnvelope } from '../../src/schemas/common.schema.ts'
 import { CommittedResponse, ConflictResponse, ReceiptResponse } from '../../src/schemas/operation.schema.ts'
-import { SnapshotContentSchema } from '../../src/schemas/snapshot.schema.ts'
+import { SnapshotContentSchema, SnapshotSchema } from '../../src/schemas/snapshot.schema.ts'
 import { mediaFixtures } from '../helpers.ts'
 
 /** 錄製的 contract fixtures 必須符合目前的 response schema，避免文件與實作分歧 */
@@ -220,6 +220,34 @@ describe('Quick scheme v2 contract fixtures', () => {
       }
       // 請求的 payload 原樣回傳（round-trip 不丟欄位）
       if ((status === 201 || status === 200) && doc.request.body?.payload) expect(body.payload).toEqual(doc.request.body.payload)
+    })
+  }
+})
+
+// ---- Canvas style v1（batch C）----
+const CS_DIR = join(import.meta.dirname, '../fixtures/contract/canvas-style-v1')
+const csFiles = (await readdir(CS_DIR)).filter((f) => /^\d+-.*\.json$/.test(f))
+
+describe('Canvas style v1 contract fixtures', () => {
+  for (const file of csFiles) {
+    test(file, async () => {
+      const doc = JSON.parse(await readFile(join(CS_DIR, file), 'utf8'))
+      const { status, body } = doc.response
+      const path: string = doc.request.path
+      const schema =
+        status === 409 && body.status === 'conflict' ? ConflictResponse
+        : status >= 400 ? ErrorEnvelope
+        : path.endsWith('/state') ? SnapshotContentSchema
+        : path.endsWith('/snapshots') ? SnapshotSchema
+        : path.endsWith('/capabilities') ? capabilitiesSchema.response[200]
+        : CommittedResponse
+      expect([...Value.Errors(schema, body)].map((e) => `${e.instancePath} ${e.message}`)).toEqual([])
+      const expected = /-(\d{3})$/.exec(file.replace('.json', ''))?.[1]
+      if (expected) expect(String(status)).toBe(expected)
+      // 正式 payload 帶權威版本，且等於 expected + 1
+      for (const op of body?.operations ?? []) {
+        if (op.operationType === 'update_canvas_style') expect(op.payload.canvasStyleVersion).toBe(op.payload.expectedCanvasStyleVersion + 1)
+      }
     })
   }
 })

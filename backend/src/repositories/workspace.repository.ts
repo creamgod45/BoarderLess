@@ -1,4 +1,5 @@
-import type { Db } from '../db/client.ts'
+import { json, type Db } from '../db/client.ts'
+import type { CanvasStyle } from '../domain/canvas-style.ts'
 import type { Workspace, WorkspaceWithRole } from '../models/workspace.ts'
 
 export class WorkspaceRepository {
@@ -47,6 +48,13 @@ export class WorkspaceRepository {
     await this.db`
       UPDATE workspaces
       SET current_version = ${version}, last_server_seq = ${lastServerSeq}, updated_at = now()
+      WHERE id = ${id}
+    `
+  }
+
+  async updateCanvasStyle(id: string, style: CanvasStyle, version: number): Promise<void> {
+    await this.db`
+      UPDATE workspaces SET canvas_style = ${json(this.db, style)}, canvas_style_version = ${version}, updated_at = now()
       WHERE id = ${id}
     `
   }

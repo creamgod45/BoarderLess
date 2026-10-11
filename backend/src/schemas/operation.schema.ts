@@ -1,4 +1,5 @@
 import { Type } from 'typebox'
+import { CanvasStyleSchema } from '../domain/canvas-style.ts'
 import { OPERATION_KINDS } from '../domain/operations.ts'
 import { DateTime, ErrorEnvelope, errorResponses, JsonObject, Uuid, WorkspaceParams } from './common.schema.ts'
 
@@ -62,6 +63,16 @@ export const ConflictResponse = Type.Object({
   workspaceVersion: Type.Integer(),
   lastServerSeq: Type.Integer(),
   missingOperations: Type.Array(CommittedOperationSchema),
+  /** 只有 update_canvas_style 的 CAS 失敗才出現（物件版本衝突不帶這兩個欄位） */
+  code: Type.Optional(Type.Literal('canvas_style_version_conflict')),
+  canvasStyle: Type.Optional(
+    Type.Object({
+      expectedVersion: Type.Integer(),
+      actualVersion: Type.Integer(),
+      canvasStyle: CanvasStyleSchema,
+      canvasStyleVersion: Type.Integer(),
+    }),
+  ),
 })
 
 export const submitOperationsSchema = {

@@ -1,4 +1,5 @@
 import { Type } from 'typebox'
+import { CanvasStyleSchema } from '../domain/canvas-style.ts'
 import { DateTime, errorResponses, JsonObject, Nullable, WorkspaceParams } from './common.schema.ts'
 
 export const CanvasObjectSchema = Type.Object({
@@ -35,13 +36,25 @@ export const SnapshotContentSchema = Type.Object({
   throughServerSeq: Type.Integer(),
   objects: Type.Array(CanvasObjectSchema),
   relations: Type.Array(RelationSchema),
+  /** 與 objects / relations 同一 throughServerSeq 的共用背景（snapshot schema 2 起） */
+  canvasStyle: CanvasStyleSchema,
+  canvasStyleVersion: Type.Integer({ minimum: 0 }),
+})
+
+/** snapshot schema 1（批次 C 之前建立）：沒有 canvasStyle，定義上等於 default / 0；原樣回傳，不改寫已簽 checksum 的內容 */
+export const SnapshotContentV1Schema = Type.Object({
+  workspaceId: Type.String(),
+  workspaceVersion: Type.Integer(),
+  throughServerSeq: Type.Integer(),
+  objects: Type.Array(CanvasObjectSchema),
+  relations: Type.Array(RelationSchema),
 })
 
 export const SnapshotSchema = Type.Object({
   workspaceId: Type.String(),
   throughServerSeq: Type.Integer(),
-  schemaVersion: Type.Integer(),
-  snapshot: Nullable(SnapshotContentSchema),
+  schemaVersion: Type.Integer({ description: 'snapshot content schema：1 = 無 canvasStyle（視為 default / 0），2 = 含 canvasStyle' }),
+  snapshot: Nullable(Type.Union([SnapshotContentSchema, SnapshotContentV1Schema])),
   storageKey: Nullable(Type.String()),
   checksum: Type.String(),
   createdAt: DateTime,

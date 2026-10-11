@@ -1,3 +1,5 @@
+import type { CanvasStyle } from '../domain/canvas-style.ts'
+
 export const WORKSPACE_ROLES = ['owner', 'editor', 'commenter', 'viewer'] as const
 export type WorkspaceRole = (typeof WORKSPACE_ROLES)[number]
 
@@ -10,6 +12,9 @@ export interface Workspace {
   schemaVersion: number
   /** title / membership / 角色的 durable 版本（與 canvas workspaceVersion 分開） */
   metadataRevision: number
+  /** 共用背景（schema 1）與其 CAS 版本 */
+  canvasStyle: CanvasStyle
+  canvasStyleVersion: number
   createdAt: Date
   updatedAt: Date
   deletedAt: Date | null

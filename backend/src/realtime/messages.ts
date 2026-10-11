@@ -293,6 +293,8 @@ export const OperationAckEvent = Type.Union([
     workspaceVersion: Seq,
     lastServerSeq: Seq,
     missingOperations: Type.Array(CommittedOperationSchema),
+    code: ConflictResponse.properties.code,
+    canvasStyle: ConflictResponse.properties.canvasStyle,
   }),
   Type.Object({
     ...ackBase,

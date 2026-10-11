@@ -1,0 +1,81 @@
+{
+  "description": "全域 capabilities：canvasStyle 宣告 operation kind、style schema、snapshot schema、default",
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/capabilities"
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "canvas": {
+        "protocolVersion": 1,
+        "operationSchemaVersion": 1,
+        "minWritableProtocolVersion": 1
+      },
+      "assetPreparation": {
+        "requestSchema": "boarderless.asset-prepare.v1",
+        "responseSchema": "boarderless.asset-preparation.v1",
+        "maxByteSize": 209715200,
+        "mediaTypes": [
+          "image/png",
+          "image/jpeg",
+          "image/webp",
+          "image/gif",
+          "video/mp4",
+          "video/webm"
+        ]
+      },
+      "realtime": {
+        "supported": false
+      },
+      "quickSchemes": {
+        "supported": true,
+        "resourceVersions": [
+          2
+        ],
+        "selectionSchemaVersions": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "materializationEnabled": false
+      },
+      "canvasStyle": {
+        "supported": true,
+        "operationKinds": [
+          "update_canvas_style"
+        ],
+        "styleSchemaVersions": [
+          1
+        ],
+        "snapshotSchemaVersion": 2,
+        "defaultStyle": {
+          "schemaVersion": 1,
+          "backgroundToken": "default",
+          "gridStyle": {
+            "pattern": "lines",
+            "colorToken": "auto"
+          }
+        }
+      },
+      "relationGeometry": {
+        "supported": false
+      },
+      "vectorPath": {
+        "supported": false
+      },
+      "sequenceDiagrams": {
+        "supported": false
+      },
+      "mediaReferenceRestore": {
+        "supported": false
+      }
+    }
+  }
+}

@@ -93,3 +93,38 @@
 ### 5. 尚待集中執行
 - SCHEME-01 – 03（見 [`ACCEPTANCE.md`](ACCEPTANCE.md)）。目前證據：15 個整合測試（同一 process）、selection 單元測試、fixtures。
 - 未涵蓋：APP 雙裝置 CRUD / 衝突 UI、APP 端以 Kotlin serializer 對 fixtures 的雙向驗證、跨畫布 materialization（未交付）、正式 auth。
+
+---
+
+## 批次 C：共用背景（2026-10-11）
+
+### 1. 分支與 commit
+- 分支 `backend/media-v1`（基底 `89a85a3`），**尚未 commit**。狀態：源碼完成 ✅；服務已部署 ⬜；正式驗收 ⬜。
+
+### 2. Projection、operation 與 capability
+- `GET …/state` 與新 snapshot（**snapshot schema 2**）新增 `canvasStyle`、`canvasStyleVersion`，與 objects / relations 同一 `throughServerSeq`（同一 repeatable-read 讀取點）。
+- style schema 1：`{schemaVersion: 1, backgroundToken: default|warm|cool|#rrggbb（小寫）, gridStyle: {pattern: none|lines|dots, colorToken: auto|#rrggbb}}`；未知欄位、大寫 hex、alpha、URL 一律拒絕，不靜默修正。
+- Operation `update_canvas_style`（沿用 `POST …/operations` 與 WS `submit_operations`）：payload `{expectedCanvasStyleVersion, canvasStyle}`。
+  - Workspace 鎖內 CAS；成功 `canvasStyleVersion + 1`，與同交易其他 operation 共用 workspaceVersion，任一失敗全部 rollback。
+  - 正式（committed）payload 為 `{expectedCanvasStyleVersion, canvasStyle（canonical）, canvasStyleVersion（新版本）}`；replay / fan-out 依此設定。
+  - 同 style 的提交仍是一次正式接受與 +1；duplicate 只依原 transaction / operation ID 判定，不再 +1。
+  - 不接受 `expectedObjectVersions`（422 `invalid_expected_versions`）；owner / editor 可寫，viewer / commenter 403。
+- 錯誤：409 conflict envelope 擴充 `code: "canvas_style_version_conflict"`、`canvasStyle: {expectedVersion, actualVersion, canvasStyle, canvasStyleVersion}`（`conflicts: []`，workspaceVersion / lastServerSeq 為權威 checkpoint）；422 `invalid_canvas_style`（details.field）、`unsupported_canvas_style_schema`、`canvas_style_version_exhausted`。物件版本衝突的 409 形狀不變。
+- Capability：`canvasStyle: {supported: true, operationKinds: ["update_canvas_style"], styleSchemaVersions: [1], snapshotSchemaVersion: 2, defaultStyle}`。
+- Undo / Redo：APP 送新的 `update_canvas_style`（after = 原 before），版本單調增加，不退回歷史值。
+
+### 3. Migration、部署與相容性
+- Migration `008_canvas_style.sql`：`workspaces.canvas_style`（default）、`canvas_style_version`（0，CHECK 0..2^53-1）。既有 Workspace 全部為 default / 0，不讀任何裝置偏好。
+- **相容性影響**：
+  - `GET …/state` 與新 snapshot 內容多了 `canvasStyle` / `canvasStyleVersion`，嚴格 decoder 需更新。
+  - 新建 snapshot 的 `schemaVersion` 改為固定的 snapshot schema 版本（2），不再沿用 workspace.schemaVersion。
+  - schema 1 的舊 snapshot 原樣回傳（不補欄位、不改 checksum）；APP 依規則視為 default / 0。
+  - 409 conflict 新增兩個 optional 欄位（只在 style 衝突時出現）。
+
+### 4. Fixtures
+- `tests/fixtures/contract/canvas-style-v1/`（14 個）：state default、accepted、state after、CAS conflict、大寫 hex、未知 schema、未知欄位、混合 rollback、duplicate、Undo 新版本、混合 accepted、viewer 403、snapshot schema 2、capabilities。
+- 同時更新：`canvas-v1`（state 含 style）、`asset-preparation-v2/00`、`realtime-v1`（capabilities / schemas）。
+
+### 5. 尚待集中執行
+- STYLE-01 / 02。證據：8 個整合測試（CAS、並行只一個成功、rollback、duplicate、Undo、log replay = state、舊 snapshot）。
+- 未涵蓋：APP picker / history 接線、grid world-unit / density / snap 雙端確認（本批不新增 spacing 欄位）、雙端視覺。

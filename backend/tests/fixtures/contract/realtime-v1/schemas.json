@@ -1406,6 +1406,66 @@
                   }
                 }
               }
+            },
+            "code": {
+              "type": "string",
+              "const": "canvas_style_version_conflict"
+            },
+            "canvasStyle": {
+              "type": "object",
+              "required": [
+                "expectedVersion",
+                "actualVersion",
+                "canvasStyle",
+                "canvasStyleVersion"
+              ],
+              "properties": {
+                "expectedVersion": {
+                  "type": "integer"
+                },
+                "actualVersion": {
+                  "type": "integer"
+                },
+                "canvasStyle": {
+                  "type": "object",
+                  "required": [
+                    "schemaVersion",
+                    "backgroundToken",
+                    "gridStyle"
+                  ],
+                  "properties": {
+                    "schemaVersion": {
+                      "type": "integer"
+                    },
+                    "backgroundToken": {
+                      "type": "string",
+                      "description": "default / warm / cool / 小寫 #rrggbb"
+                    },
+                    "gridStyle": {
+                      "type": "object",
+                      "required": [
+                        "pattern",
+                        "colorToken"
+                      ],
+                      "properties": {
+                        "pattern": {
+                          "type": "string",
+                          "description": "none / lines / dots"
+                        },
+                        "colorToken": {
+                          "type": "string",
+                          "description": "auto / 小寫 #rrggbb"
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "canvasStyleVersion": {
+                  "type": "integer"
+                }
+              }
             }
           }
         },

@@ -1,4 +1,5 @@
 import { Type } from 'typebox'
+import { CanvasStyleSchema } from '../domain/canvas-style.ts'
 
 const Unsupported = Type.Object({ supported: Type.Literal(false) })
 
@@ -24,7 +25,13 @@ export const CapabilitiesSchema = Type.Object({
     selectionSchemaVersions: Type.Array(Type.Integer()),
     materializationEnabled: Type.Boolean(),
   }),
-  canvasStyle: Unsupported,
+  canvasStyle: Type.Object({
+    supported: Type.Literal(true),
+    operationKinds: Type.Array(Type.String()),
+    styleSchemaVersions: Type.Array(Type.Integer()),
+    snapshotSchemaVersion: Type.Integer(),
+    defaultStyle: CanvasStyleSchema,
+  }),
   relationGeometry: Unsupported,
   vectorPath: Unsupported,
   sequenceDiagrams: Unsupported,
