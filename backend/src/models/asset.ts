@@ -53,6 +53,10 @@ export interface Asset {
   sourceAssetId: string | null
   derivativeType: string | null
   derivativeVersion: number | null
+  /** 1 = Media v1 prepare；2 = preparation v2（只能經 lease complete） */
+  preparationVersion: 1 | 2
+  /** v2：被 complete 接受的 upload lease */
+  uploadLeaseId: string | null
   createdAt: Date
   updatedAt: Date
   deletedAt: Date | null

@@ -39,6 +39,8 @@ bun run worker:dev        # 另一個 terminal：素材驗證 / 縮圖 / 清理
 | `bun run fixtures:media` | 重新產生六種 MIME 的 binary fixture 與 manifest |
 | `bun run fixtures:contract` | 以真實流程重新錄製 Media v1 request / response fixtures |
 | `bun run fixtures:canvas` | 重新錄製 canvas（型別 / 階層 / restore / receipt）fixtures |
+| `bun run fixtures:preparation` | 重新錄製 asset preparation v2 fixtures |
+| `bun run acceptance:db-restart` | 驗收 CORE-08 / ASSET-03：一次性 PostgreSQL 容器真重啟（restart、kill），結果寫入 `acceptance/results/` |
 | `bun run typecheck` | `tsc --noEmit` |
 
 ### Docker
@@ -145,6 +147,30 @@ APP ── GET /assets/:id/content ──► API     只對 ready 簽發 signed 
 APP ── GET download.url ─────────► Storage  下載原檔
 ```
 
+- `width` / `height` 是顯示尺寸（已套用 EXIF orientation 與影片 rotation）。
+- MediaNode 新建或替換素材時，引用的素材必須 ready；`restore_objects` 還原原引用不要求 ready。
+- 2026-10-11 的相容性影響（body 嚴格驗證、顯示尺寸等）見 [`ACCEPTANCE.md`](ACCEPTANCE.md#相容性影響2026-10-11影響既有-media-v1--operation-client)。
 - 公開 status 只有 `pending` / `ready` / `rejected` / `missing`；內部 phase（awaiting_upload、accepted、abandoned、expired）不對外。
 - `DELETE /assets/:id` 是 pending-only abandon：只能放棄尚未 complete 的上傳。
 - 簽名 URL 只出現在 API 回應中，不寫入 DB、Node、operation 或 log。
+
+## 素材 preparation v2（固定身份與未知回應恢復）
+
+合約見 [`docs/BACKEND_ASSET_PREPARATION_V2_SPEC.md`](../docs/BACKEND_ASSET_PREPARATION_V2_SPEC.md)；範例見 [`tests/fixtures/contract/asset-preparation-v2/`](tests/fixtures/contract/asset-preparation-v2/)。APP 先確認 `GET /api/v1/capabilities` 宣告 `assetPreparation` 才使用。
+
+```text
+APP ── POST /assets/preparations ──────────────► API  {schema, requestId, metadata}：201 首次 / 200 同 key 重送 / 409 metadata 不同
+APP ── GET  /assets/preparations/:requestId ───► API  回應遺失時查原 identity（只限本人、此 Workspace）
+APP ── POST …/:requestId/upload-tickets ───────► API  {ticketRequestId}：簽發 lease（generation + 獨立 staging key）
+APP ── PUT  upload.url ────────────────────────► Storage
+APP ── POST …/:requestId/complete ─────────────► API  {requestId, leaseId, byteSize, checksum}：202 completionAccepted
+                                                  Worker 驗證 → ready / rejected
+```
+
+- Identity = 認證 user + workspace + requestId，永久保留（abandoned / rejected / missing 也保留 tombstone，不會復活或重建）。
+- `requestDigest` = canonical metadata（`byteSize, checksum, durationMs, height, mediaType, width`，null 保留）compact JSON 的 SHA-256 hex，由伺服器計算。
+- body 嚴格驗證：不做型別轉換、不接受未知 / 缺少欄位；requestId 必須是小寫 UUID。
+- `phase`：`prepared` / `completionAccepted` / `ready` / `rejected` / `missing` / `abandoned`。
+- `declared` 永不改寫（APP 以此綁定 identity）；`verified` 是 worker 解析的顯示尺寸 / duration。declared 非 null 的寬高必須與 verified 相同、duration 容差 max(100ms, 1%)，否則 rejected `declared_metadata_mismatch`。
+- 同 `ticketRequestId` 冪等回同一 lease；過期回 409 `upload_lease_expired`，需另存新的 `ticketRequestId`；新 lease 取代舊 lease（舊 lease complete 回 409 `upload_lease_superseded`）。accepted / ready 後不再簽發 PUT。
+- 過期 lease 的 staging object 由 GC 回收，reservation 本身不會過期。v1 `POST /assets/:id/complete` 對 v2 資產回 409 `preparation_v2_required`。

@@ -1,7 +1,7 @@
 # Backend 開發進度
 
-對照：[`docs/BACKEND_ARCHITECTURE.md`](../docs/BACKEND_ARCHITECTURE.md) §11 交付階段、[`docs/BACKEND_MEDIA_API_SPEC.md`](../docs/BACKEND_MEDIA_API_SPEC.md)（Media v1）
-最後更新：2026-10-05（併入同步評估；完成優先 1 資料正確性）
+對照：[`docs/BACKEND_ARCHITECTURE.md`](../docs/BACKEND_ARCHITECTURE.md) §11 交付階段、[`docs/BACKEND_MEDIA_API_SPEC.md`](../docs/BACKEND_MEDIA_API_SPEC.md)（Media v1）、[`docs/BACKEND_ASSET_PREPARATION_V2_SPEC.md`](../docs/BACKEND_ASSET_PREPARATION_V2_SPEC.md)（preparation v2）
+最後更新：2026-10-11（新增 asset preparation v2；ASSET-08 / ASSET-07 定案；驗收追蹤）
 
 圖例：✅ 完成 · 🟡 部分完成／暫定 · ⬜ 未開始
 
@@ -22,6 +22,7 @@
 - ✅ 環境變數設定（`src/config/env.ts`）、`.env.example`
 - ✅ `docker-compose.yml` 啟動 PostgreSQL 18.6（port 5433）與 RustFS S3-compatible storage（port 9000）
 - ✅ SQL migration runner（advisory lock + 單一 transaction，`bun run migrate`）
+- ✅ 所有 request body 嚴格驗證（TypeBox；不做型別轉換、不接受未知欄位，CORE-02）；querystring / params 依 schema 轉型
 - ✅ 統一 error envelope `{ error: { code, message, details }, requestId }`
 - ✅ OpenAPI / Swagger UI（`/docs`），request / response 皆有 JSON Schema
 - ✅ Structured log（pino），redact `authorization` 與 `x-user-id`；request log 不保留 query string（簽名 URL）
@@ -41,7 +42,8 @@
 - ✅ Members：列表 / 新增或變更角色 / 撤銷（owner 限定；owner 角色不可變更）
 - ✅ Operations：`POST …/operations`（§6.2 envelope）、`GET …/operations?afterSeq=&limit=`（catch-up）
 - ✅ State / Snapshots：`GET …/state`（一致讀取的目前 projection）、`POST …/snapshots`（checksum）、`GET …/snapshots/latest`
-- ✅ Assets（Media v1）：見下節
+- ✅ Assets（Media v1）、Asset preparations（v2）：見下節
+- ✅ `GET /capabilities`：宣告可選協定（目前為 `assetPreparation`）
 
 ### 容器與 CI
 - ✅ `Dockerfile`：`api`（預設，port 3000、HEALTHCHECK、啟動時自動 migration）與 `worker`（含 ffmpeg）兩個 target；以非 root `bun` 使用者執行；`/data` volume 供 local storage driver
@@ -61,6 +63,7 @@
 - ✅ Upload GC：只回收 upload ticket 過期且從未 complete 的資產，不碰 accepted / processing
 - ✅ Storage driver：`s3`（aws4fetch，S3 / RustFS / MinIO / R2）與 `local`（開發 / 測試，HMAC 簽名 URL 由 `/storage/objects` 處理）
 - ✅ MediaNode 引用驗證：`create_object` / `update_object` 的 `assetId` / `thumbnailAssetId` 必須屬於同一 Workspace，`mediaKind` 必須符合 MIME
+- ✅ ASSET-07：新建 MediaNode 與替換素材的新引用必須 ready（422 `asset_not_ready`）；`restore_objects` 還原原引用不要求 ready
 - ✅ Storage 暫時失敗回 503 `storage_unavailable`，不洩漏內部位址
 - ✅ 六種 MIME 真實 binary fixture 與 manifest（`tests/fixtures/media/`，`bun run fixtures:media`）
 - ✅ 26 份 request / response contract fixtures（`tests/fixtures/contract/media-v1/`，`bun run fixtures:contract`），並以 response schema 驗證
@@ -80,6 +83,17 @@
 #### 簽名 URL TTL 與撤銷
 - upload 預設 15 分鐘（`UPLOAD_URL_TTL_SECONDS`）、download 預設 5 分鐘（`DOWNLOAD_URL_TTL_SECONDS`）
 - 撤銷 membership 後立即停止簽發新票券；**已簽出的 S3 presigned URL 在到期前無法撤銷**，最大暴露時間即上述 TTL
+
+### 素材 preparation v2（BACKEND_ASSET_PREPARATION_V2_SPEC）
+- ✅ Migration `004`：`asset_preparations`（PK user + workspace + requestId，永久保留）、`asset_upload_leases`（ticketRequestId 冪等、generation、獨立 staging key）、`assets.preparation_version` / `upload_lease_id`；`duration_ms` 改 BIGINT（上限 JSON safe integer）
+- ✅ `POST …/assets/preparations`：先保留 receipt 再建 asset（並行同 key 只建一份）；201 首次、200 重送、409 `preparation_mismatch`；伺服器計算 `requestDigest`（golden vector 已核對）
+- ✅ `GET …/assets/preparations/:requestId`：每次重新授權；他人 / 他 Workspace / 不存在一律 404 `preparation_not_found`；降權 403
+- ✅ `POST …/:requestId/upload-tickets`：同 ticketRequestId 冪等、過期 409 不自動 renew、新 ticket 取代舊 lease；簽名在 transaction 外，失敗不影響已保存的 lease / reservation
+- ✅ `POST …/:requestId/complete`：只接受當前 lease；同一 transaction 固定 lease + verify job；重送回目前 phase；wrong lease / checksum 409；v1 complete 不能繞過
+- ✅ ASSET-08：envelope 分離 `declared`（永不改寫）與 `verified`（migration `005`）；worker 比對宣告值，不符 rejected `declared_metadata_mismatch` 並保存實際值；duration 容差 max(100ms, 1%)
+- ✅ 尺寸統一為顯示尺寸：解析 JPEG / PNG / WebP EXIF orientation、影片 display matrix rotation（Media v1 同一定義）
+- ✅ GC：過期且未被接受的 lease 回收 staging；v2 reservation 不會被 v1 GC 過期
+- ✅ 21 個整合測試（並行 prepare、回覆遺失、API 重啟、presign 失敗、lease 過期 / 取代、complete 與 renew 競爭、並行 complete、有效舊 PUT 不能改 ready、來源內容變更、missing、abandoned tombstone、撤權、GC）與 36 個 fixtures（`tests/fixtures/contract/asset-preparation-v2/`）
 
 ### 資料正確性（BAI-001 / 007 / 008 / 011 / 012）
 - ✅ 型別化物件 schema：只接受 `text` / `group` / `media`，未知型別回 `unsupported_object_type`（附 `supportedObjectTypes`、`objectSchemaVersion` 供舊 client 提示升級）
@@ -106,7 +120,7 @@
 - ✅ locked 物件只能切換 `locked`，不可移動 / 修改 / 刪除
 - ✅ operation、projection、outbox 在同一 transaction 提交
 
-### 測試（`bun test`，145 個）
+### 測試（`bun test`，224 個）
 - ✅ 單元：operation payload 驗證、touched ids、角色權限矩陣、HTML 跳脫、MIME sniff、本機簽名 URL、contract fixtures schema
 - ✅ 整合（真實 PostgreSQL）：create/move/delete + 冪等重送、20 個並行寫入的 `serverSeq` 連續性、版本衝突、transaction rollback、relation cascade、角色與撤銷、outbox、snapshot
 - ✅ 素材整合（真實 ffmpeg）：六種 MIME 完整流程、驗證失敗分類、complete 冪等 / 衝突、abandon 競爭、GC、lease 過期重領、重複縮圖 job、多 worker、不可覆寫、missing、ACL、MediaNode 引用、storage 503
@@ -135,6 +149,17 @@
 - [ ] APP 對接：刪除的 inverse 與 Redo 改送 `restore_objects` / `restore_relations`；草稿合併改用 receipt / fence；更新 BAI 文件狀態
 - [ ] 正式型別替換 / relation 端點修改 operation（目前明確不支援；需產品確認語意）
 - [ ] Receipt 依賴 operation log 保留；若日後裁剪歷史，需定義 receipt 保留期與「已裁剪」狀態
+
+### 驗收（[`docs/BACKEND_ACCEPTANCE_SPEC.md`](../docs/BACKEND_ACCEPTANCE_SPEC.md)）
+- 案例狀態與後端預檢證據見 [`ACCEPTANCE.md`](ACCEPTANCE.md)；正式驗收在業務功能完成、版本封存後集中執行
+- [ ] CORE-04 多 process 競爭尚未驗證
+- [ ] CORE-08 正式上線前的資料檢查與處置計畫（見「資料政策」）
+- [ ] APP 依更新後 schema / fixtures 對接，並評估「相容性影響」（[`ACCEPTANCE.md`](ACCEPTANCE.md)）
+
+### 素材 preparation v2——後端已完成，待 APP 對接
+- [ ] APP：durable reservation、v2 HTTP adapter（先檢查 `/capabilities`）、ticket lease、上傳串流、local → server ID 映射發布
+- [ ] 真兩端驗收：offline local import → prepare / upload → ready 驗證 → canvas 審閱 → receipt / fence → 重開 Undo / Redo
+- [x] 真 PostgreSQL 重啟：`bun run acceptance:db-restart` 預檢通過（見 [`ACCEPTANCE.md`](ACCEPTANCE.md)）
 
 ### 需先定稿的契約（§12，阻塞 B0 完成）
 - [ ] 與 KMP `shared` 模組共用 `WorkspaceOperation` 定義（種類、inverse 所需資料、transaction 邊界）；目前 `src/domain/operations.ts` 為 server 暫定版
@@ -184,7 +209,9 @@
 - [ ] Workspace 狀態 inspector page view（需先有正式 auth）
 
 ## 資料政策
-- 目前所有資料（開發與測試 DB、object storage）皆為測試資料：schema 變更不需要資料搬移或相容處理，必要時可直接重建。
+- 目前所有資料（開發與測試 DB、object storage）皆為測試資料：不做內容搬移或舊資料相容處理。
+- schema 變更一律以 migration 交付；清除或重建使用者的 DB 需另行明確授權。
+- 這不是永久免驗條件：正式上線前仍須資料檢查與處置計畫（CORE-08）。
 
 ## 與架構文件的差異
 - 目錄使用 `backend/`（文件 §7 建議 `server/`），目前為單一 package 的 MVC 結構；待 WebSocket gateway / worker 加入時再評估拆成 `apps/` + `packages/`。

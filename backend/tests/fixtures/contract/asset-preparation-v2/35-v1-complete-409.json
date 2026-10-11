@@ -1,0 +1,21 @@
+{
+  "description": "v1 complete 不能繞過 v2 lease：409 preparation_v2_required",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/assets/00000000-0000-4000-8000-000000000036/complete",
+    "body": {
+      "byteSize": 442,
+      "checksum": "sha256:15b8da68f777d7caaab816ede7dc7364cc979cc9bffaab4e93d39e24b624d49d"
+    }
+  },
+  "response": {
+    "status": 409,
+    "body": {
+      "error": {
+        "code": "preparation_v2_required",
+        "message": "This asset was prepared with preparation v2; complete it through its preparation"
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

@@ -1,5 +1,6 @@
 import type { Db } from '../db/client.ts'
 import type { Asset, AssetStatus } from '../models/asset.ts'
+import type { UploadLease } from '../models/asset-preparation.ts'
 
 export interface NewPendingAsset {
   id: string
@@ -15,6 +16,9 @@ export interface NewPendingAsset {
   height: number | null
   durationMs: number | null
 }
+
+/** Preparation v2：沒有 upload key / 到期時間（由 lease 承載），v1 GC 不會把它過期 */
+export type NewPreparedAsset = Omit<NewPendingAsset, 'uploadKey' | 'uploadExpiresAt'>
 
 export interface NewDerivedAsset {
   id: string
@@ -49,6 +53,21 @@ export class AssetRepository {
         ${asset.id}, ${asset.workspaceId}, ${asset.ownerId}, ${asset.storageKey}, ${asset.uploadKey},
         ${asset.uploadExpiresAt}, ${asset.mediaType}, ${asset.byteSize}, ${asset.checksum},
         ${asset.width}, ${asset.height}, ${asset.durationMs}, 'pending', 'awaiting_upload'
+      )
+      RETURNING *
+    `
+    return row!
+  }
+
+  async createPrepared(asset: NewPreparedAsset): Promise<Asset> {
+    const [row] = await this.db<Asset[]>`
+      INSERT INTO assets (
+        id, workspace_id, owner_id, storage_key, media_type, byte_size, checksum,
+        width, height, duration_ms, status, phase, preparation_version
+      ) VALUES (
+        ${asset.id}, ${asset.workspaceId}, ${asset.ownerId}, ${asset.storageKey}, ${asset.mediaType},
+        ${asset.byteSize}, ${asset.checksum}, ${asset.width}, ${asset.height}, ${asset.durationMs},
+        'pending', 'awaiting_upload', 2
       )
       RETURNING *
     `
@@ -93,6 +112,18 @@ export class AssetRepository {
   async markAccepted(id: string): Promise<Asset> {
     const [row] = await this.db<Asset[]>`
       UPDATE assets SET phase = 'accepted', completion_accepted_at = now(), updated_at = now()
+      WHERE id = ${id} AND phase = 'awaiting_upload'
+      RETURNING *
+    `
+    return row!
+  }
+
+  /** v2：固定被接受的 lease；verify job 之後只讀這個 lease 的 staging key */
+  async markAcceptedWithLease(id: string, lease: UploadLease): Promise<Asset> {
+    const [row] = await this.db<Asset[]>`
+      UPDATE assets SET
+        phase = 'accepted', completion_accepted_at = now(), updated_at = now(),
+        upload_lease_id = ${lease.leaseId}, upload_key = ${lease.uploadKey}, upload_expires_at = ${lease.expiresAt}
       WHERE id = ${id} AND phase = 'awaiting_upload'
       RETURNING *
     `

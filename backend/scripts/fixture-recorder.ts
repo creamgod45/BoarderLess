@@ -51,14 +51,28 @@ export class FixtureRecorder {
           : 'https://storage.example.invalid/signed-download'
       }
       if (key === 'expiresAt') return '2026-10-02T00:15:00.000Z'
-      if (key === 'requestId') return '00000000-0000-4000-8000-000000000000'
       return value.replace(UUID_RE, (id) => this.normId(id)).replace(ISO_RE, '2026-10-02T00:00:00.000Z')
     }
     if (Array.isArray(value)) return value.map((v) => this.normalize(v))
     if (value && typeof value === 'object') {
-      return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, this.normalize(v, k)]))
+      // UUID 作為 key（例如 expectedObjectVersions）也要正規化
+      return Object.fromEntries(
+        Object.entries(value).map(([k, v]) => [k.replace(UUID_RE, (id) => this.normId(id)), this.normalize(v, k)]),
+      )
     }
     return value
+  }
+
+  /**
+   * error envelope 的 requestId 是每次請求的 trace ID：不參與 UUID 編號，直接固定成常數。
+   * 其他 requestId 欄位（preparation v2）是業務 identity，照一般 UUID 正規化。
+   */
+  private normalizeBody(body: unknown): unknown {
+    if (body && typeof body === 'object' && 'error' in body && 'requestId' in body) {
+      const { requestId: _traceId, ...rest } = body as Record<string, unknown>
+      return { ...(this.normalize(rest) as object), requestId: '00000000-0000-4000-8000-000000000000' }
+    }
+    return this.normalize(body)
   }
 
   async record(name: string, description: string, request: RecordedRequest, response: RecordedResponse): Promise<void> {
@@ -69,7 +83,7 @@ export class FixtureRecorder {
         path: this.normalize(request.path),
         ...(request.body ? { body: this.normalize(request.body) } : {}),
       },
-      response: { status: response.status, ...(response.body == null ? {} : { body: this.normalize(response.body) }) },
+      response: { status: response.status, ...(response.body == null ? {} : { body: this.normalizeBody(response.body) }) },
     }
     await this.writeJson(`${name}.json`, doc)
     this.written.push({ name, description, status: response.status })

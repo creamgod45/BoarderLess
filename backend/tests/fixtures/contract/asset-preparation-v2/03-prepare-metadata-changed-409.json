@@ -1,0 +1,32 @@
+{
+  "description": "同 key 不同 metadata：409 preparation_mismatch，不另建資產",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/assets/preparations",
+    "body": {
+      "schema": "boarderless.asset-prepare.v1",
+      "requestId": "33333333-3333-4333-8333-333333333333",
+      "metadata": {
+        "byteSize": 442,
+        "checksum": "sha256:15b8da68f777d7caaab816ede7dc7364cc979cc9bffaab4e93d39e24b624d49d",
+        "durationMs": null,
+        "height": 48,
+        "mediaType": "image/png",
+        "width": 65
+      }
+    }
+  },
+  "response": {
+    "status": 409,
+    "body": {
+      "error": {
+        "code": "preparation_mismatch",
+        "message": "requestId was already prepared with different metadata",
+        "details": {
+          "requestDigest": "14cf82585531afe71e20e507c8b9be01465be9c32fc5b440911bf7056e5454ef"
+        }
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

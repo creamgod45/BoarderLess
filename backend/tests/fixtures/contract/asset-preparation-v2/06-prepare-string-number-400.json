@@ -1,0 +1,40 @@
+{
+  "description": "不做型別轉換：\"442\" 不是數字",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/assets/preparations",
+    "body": {
+      "schema": "boarderless.asset-prepare.v1",
+      "requestId": "88888888-8888-4888-8888-888888888888",
+      "metadata": {
+        "byteSize": "442",
+        "checksum": "sha256:15b8da68f777d7caaab816ede7dc7364cc979cc9bffaab4e93d39e24b624d49d",
+        "durationMs": null,
+        "height": 48,
+        "mediaType": "image/png",
+        "width": 64
+      }
+    }
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": {
+        "code": "validation_error",
+        "message": "body/metadata/byteSize must be integer",
+        "details": [
+          {
+            "keyword": "type",
+            "schemaPath": "#/properties/metadata/properties/byteSize",
+            "instancePath": "/metadata/byteSize",
+            "params": {
+              "type": "integer"
+            },
+            "message": "must be integer"
+          }
+        ]
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

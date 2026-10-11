@@ -1,5 +1,6 @@
 import type { AssetMediaType } from '../models/asset.ts'
 import type { MediaTools } from './ffmpeg.ts'
+import { isQuarterTurnOrientation, isQuarterTurnRotation, readExifOrientation } from './orientation.ts'
 import { readHead } from './files.ts'
 import { SNIFF_BYTES, sniffMediaType } from './sniff.ts'
 
@@ -21,6 +22,7 @@ export type RejectionReason =
   | 'dimensions_exceeded'
   | 'invalid_duration'
   | 'duration_exceeded'
+  | 'declared_metadata_mismatch'
 
 export type InspectionResult =
   | { ok: true; width: number; height: number; durationMs: number | null }
@@ -30,6 +32,7 @@ const ANIMATED_OR_VIDEO = new Set<AssetMediaType>(['image/gif', 'video/mp4', 'vi
 
 /**
  * 依實際內容驗證格式、可解碼性、尺寸與 duration（§4.2）。
+ * 回傳的 width / height 是顯示尺寸：已套用影像 EXIF orientation 或影片 display matrix rotation。
  * MediaToolUnavailableError 會往外拋，讓 job 重試而不是誤判素材不合法。
  */
 export async function inspectMedia(path: string, declared: AssetMediaType, tools: MediaTools): Promise<InspectionResult> {
@@ -55,10 +58,13 @@ export async function inspectMedia(path: string, declared: AssetMediaType, tools
   // 尺寸檢查通過後才實際解碼，避免 decompression bomb
   if (!(await tools.canDecode(path))) return { ok: false, reason: 'undecodable_media' }
 
+  const quarterTurn = isVideo
+    ? isQuarterTurnRotation(probe.video.rotationDegrees)
+    : isQuarterTurnOrientation(await readExifOrientation(path, declared))
   return {
     ok: true,
-    width,
-    height,
+    width: quarterTurn ? height : width,
+    height: quarterTurn ? width : height,
     durationMs: ANIMATED_OR_VIDEO.has(declared) ? probe.durationMs : null,
   }
 }

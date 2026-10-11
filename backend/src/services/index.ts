@@ -1,5 +1,6 @@
 import type { Database } from '../repositories/index.ts'
 import type { ObjectStorage } from '../storage/types.ts'
+import { AssetPreparationService } from './asset-preparation.service.ts'
 import { AssetService, type AssetServiceOptions } from './asset.service.ts'
 import { MemberService } from './member.service.ts'
 import { OperationService } from './operation.service.ts'
@@ -17,6 +18,7 @@ export interface Services {
   receipts: ReceiptService
   snapshots: SnapshotService
   assets: AssetService
+  preparations: AssetPreparationService
   status: StatusService
 }
 
@@ -36,6 +38,7 @@ export function createServices({ db, storage, version, assets }: ServiceDependen
     receipts: new ReceiptService(db),
     snapshots: new SnapshotService(db),
     assets: new AssetService(db, storage, assets),
+    preparations: new AssetPreparationService(db, storage, assets),
     status: new StatusService(db, version, storage.driver),
   }
 }

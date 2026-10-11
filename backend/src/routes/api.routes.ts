@@ -1,11 +1,13 @@
 import type { FastifyInstance } from 'fastify'
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox'
+import { AssetPreparationController } from '../controllers/asset-preparation.controller.ts'
 import { AssetController } from '../controllers/asset.controller.ts'
 import { MemberController } from '../controllers/member.controller.ts'
 import { OperationController } from '../controllers/operation.controller.ts'
 import { SnapshotController } from '../controllers/snapshot.controller.ts'
 import { UserController } from '../controllers/user.controller.ts'
 import { WorkspaceController } from '../controllers/workspace.controller.ts'
+import * as preparation from '../schemas/asset-preparation.schema.ts'
 import * as asset from '../schemas/asset.schema.ts'
 import * as operation from '../schemas/operation.schema.ts'
 import * as snapshot from '../schemas/snapshot.schema.ts'
@@ -52,5 +54,13 @@ export function apiRoutes(services: Services) {
     app.post('/workspaces/:workspaceId/assets/:assetId/complete', { schema: asset.completeAssetSchema }, assets.complete)
     app.get('/workspaces/:workspaceId/assets/:assetId/content', { schema: asset.assetContentSchema }, assets.content)
     app.delete('/workspaces/:workspaceId/assets/:assetId', { schema: asset.abandonAssetSchema }, assets.abandon)
+
+    const preparations = new AssetPreparationController(services.preparations)
+    const prepBase = '/workspaces/:workspaceId/assets/preparations'
+    app.get('/capabilities', { schema: preparation.capabilitiesSchema }, preparations.capabilities)
+    app.post(prepBase, { schema: preparation.createPreparationSchema }, preparations.prepare)
+    app.get(`${prepBase}/:requestId`, { schema: preparation.getPreparationSchema }, preparations.get)
+    app.post(`${prepBase}/:requestId/upload-tickets`, { schema: preparation.issueTicketSchema }, preparations.issueTicket)
+    app.post(`${prepBase}/:requestId/complete`, { schema: preparation.completePreparationSchema }, preparations.complete)
   }
 }

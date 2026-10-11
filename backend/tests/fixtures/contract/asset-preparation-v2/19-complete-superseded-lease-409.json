@@ -1,0 +1,27 @@
+{
+  "description": "以被取代的 lease complete：409",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/assets/preparations/ffffffff-ffff-4fff-8fff-ffffffffffff/complete",
+    "body": {
+      "requestId": "ffffffff-ffff-4fff-8fff-ffffffffffff",
+      "leaseId": "00000000-0000-4000-8000-000000000016",
+      "byteSize": 442,
+      "checksum": "sha256:15b8da68f777d7caaab816ede7dc7364cc979cc9bffaab4e93d39e24b624d49d"
+    }
+  },
+  "response": {
+    "status": 409,
+    "body": {
+      "error": {
+        "code": "upload_lease_superseded",
+        "message": "A newer upload lease replaced this one",
+        "details": {
+          "leaseId": "00000000-0000-4000-8000-000000000016",
+          "currentLeaseId": "00000000-0000-4000-8000-000000000019"
+        }
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

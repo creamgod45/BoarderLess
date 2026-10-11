@@ -1,0 +1,196 @@
+{
+  "contract": "Asset preparation v2",
+  "generatedBy": "scripts/generate-preparation-fixtures.ts",
+  "fixtures": [
+    {
+      "name": "00-capabilities-200",
+      "description": "能力宣告：APP 只在此存在時使用 preparation v2",
+      "status": 200
+    },
+    {
+      "name": "01-prepare-201",
+      "description": "首次 prepare：201，伺服器生成獨立 asset UUID，phase=prepared、lease=null、無 upload",
+      "status": 201
+    },
+    {
+      "name": "02-prepare-retry-200",
+      "description": "相同 key + 相同 metadata 重送：200，同一 identity",
+      "status": 200
+    },
+    {
+      "name": "03-prepare-metadata-changed-409",
+      "description": "同 key 不同 metadata：409 preparation_mismatch，不另建資產",
+      "status": 409
+    },
+    {
+      "name": "04-prepare-golden-vector-201",
+      "description": "跨端 golden vector：requestDigest = 32d5f0d5…02ee",
+      "status": 201
+    },
+    {
+      "name": "05-prepare-unknown-field-400",
+      "description": "未知欄位（不信任 body owner）：400 validation_error",
+      "status": 400
+    },
+    {
+      "name": "06-prepare-string-number-400",
+      "description": "不做型別轉換：\"442\" 不是數字",
+      "status": 400
+    },
+    {
+      "name": "07-prepare-unsupported-media-415",
+      "description": "非 canonical / allowlist MIME：415",
+      "status": 415
+    },
+    {
+      "name": "08-receipt-200-prepared",
+      "description": "查原 prepare：200 同 identity",
+      "status": 200
+    },
+    {
+      "name": "09-receipt-404-unknown",
+      "description": "真 absent：404 preparation_not_found",
+      "status": 404
+    },
+    {
+      "name": "10-receipt-404-other-actor",
+      "description": "其他 actor 查同 requestId：404，不洩漏他人 request",
+      "status": 404
+    },
+    {
+      "name": "11-receipt-404-wrong-workspace",
+      "description": "同 requestId 換 Workspace：404",
+      "status": 404
+    },
+    {
+      "name": "12-receipt-403-demoted",
+      "description": "本人 request 但已降為 viewer：每次重新授權，403",
+      "status": 403
+    },
+    {
+      "name": "13-ticket-201",
+      "description": "簽發 lease：generation 1、獨立 staging key；upload directive 只在此回應",
+      "status": 201
+    },
+    {
+      "name": "14-ticket-retry-200",
+      "description": "同 ticketRequestId 重送：同一 lease（重新簽名同 staging key、同到期時間）",
+      "status": 200
+    },
+    {
+      "name": "15-upload-put",
+      "description": "Signed PUT：只帶 upload.headers、原始 binary；2xx 不等同 accepted / ready",
+      "status": 200
+    },
+    {
+      "name": "16-ticket-expired-409",
+      "description": "過期 lease 的同 ticketRequestId：409 upload_lease_expired，不自動 renew",
+      "status": 409
+    },
+    {
+      "name": "17-ticket-new-generation-201",
+      "description": "另一個先保存的 ticketRequestId：generation 2",
+      "status": 201
+    },
+    {
+      "name": "18-ticket-superseded-409",
+      "description": "舊 ticketRequestId 已被取代：409 upload_lease_superseded",
+      "status": 409
+    },
+    {
+      "name": "19-complete-superseded-lease-409",
+      "description": "以被取代的 lease complete：409",
+      "status": 409
+    },
+    {
+      "name": "20-complete-wrong-lease-409",
+      "description": "不屬於此 preparation 的 leaseId：409 upload_lease_mismatch",
+      "status": 409
+    },
+    {
+      "name": "21-complete-checksum-mismatch-409",
+      "description": "不同 checksum：409 completion_mismatch",
+      "status": 409
+    },
+    {
+      "name": "22-complete-request-id-mismatch-400",
+      "description": "body requestId 必須等於 path",
+      "status": 400
+    },
+    {
+      "name": "23-complete-202-accepted",
+      "description": "durable 接受：202 phase=completionAccepted（asset.status 仍 pending）",
+      "status": 202
+    },
+    {
+      "name": "24-receipt-completion-accepted",
+      "description": "worker 處理中：phase=completionAccepted，與未完成 prepare 區分",
+      "status": 200
+    },
+    {
+      "name": "25-complete-retry-202",
+      "description": "同 lease 重送：回目前 phase，不重建工作",
+      "status": 202
+    },
+    {
+      "name": "26-ticket-after-accepted-409",
+      "description": "已 accepted 不可再取得 PUT",
+      "status": 409
+    },
+    {
+      "name": "27-receipt-ready",
+      "description": "ready：伺服器驗證後的尺寸，lease 為被接受的 lease",
+      "status": 200
+    },
+    {
+      "name": "28-ticket-ready-409",
+      "description": "ready 禁止 PUT：409 upload_not_allowed",
+      "status": 409
+    },
+    {
+      "name": "29-complete-ready-200",
+      "description": "ready 後重送 complete：200 phase=ready",
+      "status": 200
+    },
+    {
+      "name": "30-receipt-rejected",
+      "description": "內容與宣告 checksum 不符：phase=rejected（identity 保留）",
+      "status": 200
+    },
+    {
+      "name": "31-receipt-missing",
+      "description": "ready 後原檔遺失：phase=missing",
+      "status": 200
+    },
+    {
+      "name": "32-receipt-abandoned",
+      "description": "abandon 後：tombstone identity 保留，phase=abandoned",
+      "status": 200
+    },
+    {
+      "name": "33-prepare-abandoned-retry-200",
+      "description": "晚到的原 prepare：200 同 identity，不復活不重建",
+      "status": 200
+    },
+    {
+      "name": "34-complete-abandoned-409",
+      "description": "abandoned 後 complete：409 asset_abandoned",
+      "status": 409
+    },
+    {
+      "name": "35-v1-complete-409",
+      "description": "v1 complete 不能繞過 v2 lease：409 preparation_v2_required",
+      "status": 409
+    },
+    {
+      "name": "36-receipt-ready-declared-null",
+      "description": "declared 為 null：不比較、永不改寫；verified 為伺服器解析的顯示尺寸",
+      "status": 200
+    },
+    {
+      "name": "37-receipt-rejected-declared-mismatch",
+      "description": "宣告尺寸與實際不符：rejected declared_metadata_mismatch，declared 保留、verified 保存實際值",
+      "status": 200
+    }
+  ]
+}

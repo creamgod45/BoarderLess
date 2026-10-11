@@ -1,0 +1,26 @@
+{
+  "description": "abandoned 後 complete：409 asset_abandoned",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/assets/preparations/00000000-0000-4000-8000-000000000032/complete",
+    "body": {
+      "requestId": "00000000-0000-4000-8000-000000000032",
+      "leaseId": "00000000-0000-4000-8000-000000000034",
+      "byteSize": 442,
+      "checksum": "sha256:15b8da68f777d7caaab816ede7dc7364cc979cc9bffaab4e93d39e24b624d49d"
+    }
+  },
+  "response": {
+    "status": 409,
+    "body": {
+      "error": {
+        "code": "asset_abandoned",
+        "message": "The preparation was abandoned and can no longer be completed",
+        "details": {
+          "phase": "abandoned"
+        }
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

@@ -11,6 +11,7 @@ import { Database } from './repositories/index.ts'
 import { apiRoutes } from './routes/api.routes.ts'
 import { pageRoutes } from './routes/page.routes.ts'
 import { localStorageRoutes } from './routes/storage.routes.ts'
+import { requestValidatorCompiler } from './schemas/validator.ts'
 import { createServices } from './services/index.ts'
 import { LocalObjectStorage } from './storage/local.storage.ts'
 import type { ObjectStorage } from './storage/types.ts'
@@ -45,7 +46,6 @@ export async function buildApp({ config, sql, storage, logger = true }: BuildApp
       serializers: { req: serializeRequest },
     },
     genReqId: () => crypto.randomUUID(),
-    ajv: { customOptions: { removeAdditional: false, coerceTypes: 'array', useDefaults: true } },
   })
 
   const db = new Database(sql)
@@ -66,6 +66,7 @@ export async function buildApp({ config, sql, storage, logger = true }: BuildApp
     }
   })
 
+  app.setValidatorCompiler(requestValidatorCompiler)
   registerErrorHandler(app)
   registerDevAuth(app, services.users)
 

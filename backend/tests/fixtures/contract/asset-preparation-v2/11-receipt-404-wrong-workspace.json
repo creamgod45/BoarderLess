@@ -1,0 +1,17 @@
+{
+  "description": "同 requestId 換 Workspace：404",
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/workspaces/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/assets/preparations/33333333-3333-4333-8333-333333333333"
+  },
+  "response": {
+    "status": 404,
+    "body": {
+      "error": {
+        "code": "preparation_not_found",
+        "message": "Preparation not found"
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

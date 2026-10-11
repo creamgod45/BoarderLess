@@ -1,4 +1,5 @@
 export * from './asset.ts'
+export * from './asset-preparation.ts'
 export * from './canvas.ts'
 export * from './operation.ts'
 export * from './snapshot.ts'

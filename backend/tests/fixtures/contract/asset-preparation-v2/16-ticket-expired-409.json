@@ -1,0 +1,24 @@
+{
+  "description": "過期 lease 的同 ticketRequestId：409 upload_lease_expired，不自動 renew",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/assets/preparations/ffffffff-ffff-4fff-8fff-ffffffffffff/upload-tickets",
+    "body": {
+      "ticketRequestId": "00000000-0000-4000-8000-000000000015"
+    }
+  },
+  "response": {
+    "status": 409,
+    "body": {
+      "error": {
+        "code": "upload_lease_expired",
+        "message": "The upload lease has expired; request a new ticket with a new ticketRequestId",
+        "details": {
+          "leaseId": "00000000-0000-4000-8000-000000000016",
+          "expiresAt": "2026-10-02T00:15:00.000Z"
+        }
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

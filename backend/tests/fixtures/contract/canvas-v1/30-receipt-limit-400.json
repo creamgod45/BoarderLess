@@ -214,16 +214,16 @@
     "body": {
       "error": {
         "code": "validation_error",
-        "message": "body/operationIds must NOT have more than 200 items",
+        "message": "body/operationIds must not have more than 200 items",
         "details": [
           {
-            "instancePath": "/operationIds",
-            "schemaPath": "#/properties/operationIds/maxItems",
             "keyword": "maxItems",
+            "schemaPath": "#/properties/operationIds",
+            "instancePath": "/operationIds",
             "params": {
               "limit": 200
             },
-            "message": "must NOT have more than 200 items"
+            "message": "must not have more than 200 items"
           }
         ]
       },

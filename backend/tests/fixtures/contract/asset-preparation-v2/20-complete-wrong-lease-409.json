@@ -1,0 +1,23 @@
+{
+  "description": "不屬於此 preparation 的 leaseId：409 upload_lease_mismatch",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/assets/preparations/33333333-3333-4333-8333-333333333333/complete",
+    "body": {
+      "requestId": "33333333-3333-4333-8333-333333333333",
+      "leaseId": "00000000-0000-4000-8000-000000000020",
+      "byteSize": 442,
+      "checksum": "sha256:15b8da68f777d7caaab816ede7dc7364cc979cc9bffaab4e93d39e24b624d49d"
+    }
+  },
+  "response": {
+    "status": 409,
+    "body": {
+      "error": {
+        "code": "upload_lease_mismatch",
+        "message": "leaseId does not belong to this preparation"
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

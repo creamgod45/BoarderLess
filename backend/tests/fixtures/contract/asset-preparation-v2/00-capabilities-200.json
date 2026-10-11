@@ -1,0 +1,25 @@
+{
+  "description": "能力宣告：APP 只在此存在時使用 preparation v2",
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/capabilities"
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "assetPreparation": {
+        "requestSchema": "boarderless.asset-prepare.v1",
+        "responseSchema": "boarderless.asset-preparation.v1",
+        "maxByteSize": 209715200,
+        "mediaTypes": [
+          "image/png",
+          "image/jpeg",
+          "image/webp",
+          "image/gif",
+          "video/mp4",
+          "video/webm"
+        ]
+      }
+    }
+  }
+}

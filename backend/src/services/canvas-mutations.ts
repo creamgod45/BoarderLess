@@ -40,6 +40,7 @@ const rejected = (code: string, message: string, details?: unknown) => unprocess
 const GROUP = 'group'
 const MEDIA = 'media'
 const MEDIA_KEYS = ['assetId', 'mediaKind', 'thumbnailAssetId']
+const MEDIA_REF_KEYS = ['assetId', 'thumbnailAssetId'] as const
 
 /** 以 expectedObjectVersions 偵測同物件的並行修改；不靜默 last-write-wins（§6.4） */
 export async function checkExpectedVersions(
@@ -103,7 +104,7 @@ export async function applyOperation(
       const properties = p.properties ?? {}
       assertValidState(p.objectType, transform, properties)
       if (p.parentId) await assertValidParent(repos, workspaceId, p.objectId, p.parentId)
-      if (p.objectType === MEDIA) await validateMediaReferences(repos, workspaceId, properties)
+      if (p.objectType === MEDIA) await validateMediaReferences(repos, workspaceId, properties, { requireReady: 'all' })
       await canvas.insertObject(workspaceId, actorId, {
         objectId: p.objectId,
         objectType: p.objectType,
@@ -133,7 +134,9 @@ export async function applyOperation(
       assertValidState(obj!.objectType, transform ?? obj!.transform, properties)
       if (p.parentId) await assertValidParent(repos, workspaceId, p.objectId, p.parentId)
       if (obj!.objectType === MEDIA && p.properties && MEDIA_KEYS.some((k) => k in p.properties!)) {
-        await validateMediaReferences(repos, workspaceId, properties)
+        // 替換素材時新引用必須 ready；只改 mediaKind / 其他欄位時沿用既有引用
+        const changed = MEDIA_REF_KEYS.filter((k) => k in p.properties! && p.properties![k] !== obj!.properties[k])
+        await validateMediaReferences(repos, workspaceId, properties, { requireReady: changed })
       }
       await canvas.updateObject(workspaceId, p.objectId, actorId, {
         parentId: p.parentId,
@@ -202,7 +205,8 @@ export async function applyOperation(
       for (const obj of restored) {
         assertValidState(obj.objectType, obj.transform, obj.properties)
         if (obj.parentId) await assertValidParent(repos, workspaceId, obj.objectId, obj.parentId)
-        if (obj.objectType === MEDIA) await validateMediaReferences(repos, workspaceId, obj.properties)
+        // 還原原本的引用：不要求 ready（素材可能已 missing / rejected，由 APP 顯示不可用），也不讓素材復活
+        if (obj.objectType === MEDIA) await validateMediaReferences(repos, workspaceId, obj.properties, { requireReady: [] })
       }
       return { ...p, restoredVersions: Object.fromEntries(restored.map((o) => [o.objectId, o.objectVersion])) }
     }
@@ -280,6 +284,7 @@ export async function applyOperation(
       const restored = await canvas.restoreRelations(workspaceId, ids)
       return { ...p, restoredVersions: Object.fromEntries(restored.map((r) => [r.relationId, r.relationVersion])) }
     }
+
   }
 }
 
@@ -323,9 +328,15 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 /**
  * MediaNode 只能引用同一 Workspace 的 asset（BACKEND_MEDIA_API_SPEC §4.4、§7）。
- * 不要求 ready：undo / 還原既有 Node 時，引用的素材可能已轉為 missing。
+ * ASSET-07：新建 Node 與替換素材的新引用必須 ready；restore_objects 還原原引用不要求 ready
+ * （素材可能已 missing / rejected，還原不是重新授權，也不讓素材復活）。
  */
-async function validateMediaReferences(repos: Repositories, workspaceId: string, properties: JsonObject) {
+async function validateMediaReferences(
+  repos: Repositories,
+  workspaceId: string,
+  properties: JsonObject,
+  options: { requireReady: 'all' | readonly (typeof MEDIA_REF_KEYS)[number][] },
+) {
   const { assetId, mediaKind, thumbnailAssetId } = properties
   if (typeof assetId !== 'string' || !UUID_RE.test(assetId)) {
     throw rejected('invalid_media_reference', 'Media nodes require properties.assetId (UUID)')
@@ -342,6 +353,14 @@ async function validateMediaReferences(repos: Repositories, workspaceId: string,
   }
   if (mediaKind !== mediaKindOf(asset.mediaType)) {
     throw rejected('media_kind_mismatch', `mediaKind must be "${mediaKindOf(asset.mediaType)}" for ${asset.mediaType}`)
+  }
+  const keys = options.requireReady === 'all' ? MEDIA_REF_KEYS : options.requireReady
+  const mustBeReady = keys.map((k) => properties[k]).filter((id): id is string => typeof id === 'string')
+  const notReady = assets.filter((a) => mustBeReady.includes(a.id) && a.status !== 'ready')
+  if (notReady.length > 0) {
+    throw rejected('asset_not_ready', 'New media references must point to ready assets', {
+      assets: notReady.map((a) => ({ assetId: a.id, status: a.status })),
+    })
   }
 }
 
