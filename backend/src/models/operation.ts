@@ -18,14 +18,3 @@ export interface CommittedOperation {
   requestDigest: string | null
   committedAt: Date
 }
-
-export interface OutboxEvent {
-  id: number
-  workspaceId: string
-  serverSeq: number
-  eventType: string
-  payload: JsonObject
-  createdAt: Date
-  publishedAt: Date | null
-  attemptCount: number
-}

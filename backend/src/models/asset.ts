@@ -17,8 +17,6 @@ export const ASSET_MEDIA_TYPES = {
 export type AssetMediaType = keyof typeof ASSET_MEDIA_TYPES
 
 export const MAX_ASSET_BYTES = 209_715_200 // 200 MiB
-export const CHECKSUM_PATTERN = /^sha256:[0-9a-f]{64}$/
-
 export function isAssetMediaType(value: string): value is AssetMediaType {
   return Object.hasOwn(ASSET_MEDIA_TYPES, value)
 }

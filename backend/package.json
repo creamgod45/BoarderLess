@@ -14,6 +14,7 @@
     "db:down": "docker compose down",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
+    "deadcode": "tsc --noEmit --noUnusedLocals --noUnusedParameters && bunx knip@5 --no-progress --include files,dependencies,unlisted,unresolved,classMembers,enumMembers,duplicates",
     "fixtures:media": "bun scripts/generate-media-fixtures.ts",
     "fixtures:contract": "bun scripts/generate-contract-fixtures.ts",
     "fixtures:canvas": "bun scripts/generate-canvas-fixtures.ts",

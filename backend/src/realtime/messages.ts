@@ -138,13 +138,6 @@ export const SubmitOperationsMessage = Type.Object(
   strict,
 )
 
-export const ClientMessage = Type.Union([
-  JoinWorkspaceMessage,
-  CatchUpAppliedMessage,
-  HeartbeatMessage,
-  PresenceUpdateMessage,
-  SubmitOperationsMessage,
-])
 export type JoinWorkspace = Static<typeof JoinWorkspaceMessage>
 export type CatchUpApplied = Static<typeof CatchUpAppliedMessage>
 export type Heartbeat = Static<typeof HeartbeatMessage>

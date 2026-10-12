@@ -103,10 +103,6 @@ export class RealtimeHub {
     this.all.add(connection)
   }
 
-  get connectionCount(): number {
-    return this.all.size
-  }
-
   private register(connection: RealtimeConnection): void {
     const set = this.byWorkspace.get(connection.workspaceId!) ?? new Set()
     set.add(connection)
