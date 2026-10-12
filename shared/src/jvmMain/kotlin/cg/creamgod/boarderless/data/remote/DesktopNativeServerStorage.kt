@@ -393,6 +393,11 @@ internal class DesktopNativeServerStorage private constructor(
 fun desktopNativeBackendWorkspaceRepository(root: Path, submission: AwaitedSubmissionRuntime? = null): BackendWorkspaceRepository =
     BackendWorkspaceRepository(preferences = DesktopNativeServerStorage(root).preferences,
         awaitedSubmissionRuntime = submission,
+        legacyQuickSchemeReader = {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                cg.creamgod.boarderless.data.persistence.QuickSchemeStore().listForRecovery()
+            }
+        },
         quickSchemeRepository = cg.creamgod.boarderless.data.persistence.DesktopFileQuickSchemeStore(root.resolve("schemes")) {
             DesktopAtomicDraftStore(root) // Validate/create the private native parent, not Settings fallback.
             Unit

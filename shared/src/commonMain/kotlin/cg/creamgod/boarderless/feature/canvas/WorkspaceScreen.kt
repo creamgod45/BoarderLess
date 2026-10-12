@@ -1261,6 +1261,7 @@ fun WorkspaceScreen(
     var showAiUnderstanding by scopedModalFlags.showAiUnderstanding
     var showAiDiagram by scopedModalFlags.showAiDiagram
     var showCloudSchemes by remember(draftReviewScopeId) { mutableStateOf(false) }
+    var showLegacySchemeImport by remember(draftReviewScopeId) { mutableStateOf(false) }
     var showMigrationPreview by remember(draftReviewScopeId) { mutableStateOf(false) }
     var relationInsertion by remember(draftReviewScopeId) { mutableStateOf<RelationInsertionDraft?>(null) }
     var relationInsertionOwner by remember(draftReviewScopeId) { mutableStateOf<WorkspaceSession?>(null) }
@@ -1364,7 +1365,7 @@ fun WorkspaceScreen(
     var selectedSchemeId by remember { mutableStateOf<Int?>(schemes.lastOrNull()?.id) }
     var schemeNameDraft by remember { mutableStateOf(schemes.lastOrNull()?.name.orEmpty()) }
     val draftReviewVisible = showOriginalSubmissionReview ||
-        preparedMediaController != null || schemeTransferBusy || incomingScheme != null || showStoppedRecovery || showAiUnderstanding || showAiDiagram || showCloudSchemes || showMigrationPreview ||
+        preparedMediaController != null || schemeTransferBusy || incomingScheme != null || showStoppedRecovery || showAiUnderstanding || showAiDiagram || showCloudSchemes || showLegacySchemeImport || showMigrationPreview ||
             relationInsertion != null || pendingClipboardPaste != null ||
             showSequenceCreation || showCanvasGridStyle || showSchemeBundleImport || exportSchemeBundle != null ||
             showPenDraft || showCanvasExport ||
@@ -7253,6 +7254,10 @@ fun WorkspaceScreen(
                     if (quickSchemeStore.cloudSyncRuntime != null && repository.cloudQuickSchemeServer != null)
                         ShellButton(Strings.cloudSchemes.title(), enabled = !inputBlocked && session != null,
                             onClick = { showCloudSchemes = true })
+                    if (repository.legacyQuickSchemeReader != null && quickSchemeStore.supportsIdentifiedSave)
+                        ShellButton(Strings.schemes.legacyTitle(),
+                            enabled = !inputBlocked && !schemesBusy && session != null,
+                            onClick = { showLegacySchemeImport = true })
                     if (schemeBundleRuntime.chooseSource != null) ShellButton(Strings.bundle.importTitle(),
                         enabled = !inputBlocked && submissionQueue.isEmpty && !syncInProgress && session?.canEditContent == true,
                         onClick = { showSchemeBundleImport = true })
@@ -8747,6 +8752,26 @@ fun WorkspaceScreen(
                 canContinue = { session?.userId == owner.userId && session?.clientId == owner.clientId &&
                     session?.workspace?.id == owner.workspace.id && !connectionFailed && !workspaceSwitchInProgress && !syncInProgress },
                 onDismiss = { showMigrationPreview = false })
+        }
+        if (showLegacySchemeImport && session != null && repository.legacyQuickSchemeReader != null) {
+            val owner = checkNotNull(session)
+            val ownerScope = draftReviewScopeId
+            LegacyQuickSchemeImportDialog(checkNotNull(repository.legacyQuickSchemeReader), quickSchemeStore,
+                canContinue = { session?.userId == owner.userId && session?.clientId == owner.clientId &&
+                    session?.workspace?.id == owner.workspace.id && !connectionFailed && !workspaceSwitchInProgress && !syncInProgress },
+                onSaved = { saved ->
+                    uiScope.launch {
+                        val loaded = refreshSchemes()
+                        if (ownerScope != latestDraftReviewScopeId) return@launch
+                        loaded.onSuccess {
+                            schemes = it
+                            schemesUnavailable = false
+                            selectedSchemeId = saved.id
+                            schemeNameDraft = saved.name
+                        }.onFailure { schemesUnavailable = true }
+                    }
+                },
+                onDismiss = { showLegacySchemeImport = false })
         }
         if (showCloudSchemes && session != null) {
             val owner = checkNotNull(session)

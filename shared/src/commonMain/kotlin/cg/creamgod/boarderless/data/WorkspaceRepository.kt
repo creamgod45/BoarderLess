@@ -351,6 +351,8 @@ interface CanvasWorkspaceRepository :
     AssetRepository {
     val localSyncStore: LocalWorkspaceSyncStore? get() = null
     val quickSchemeRepository: cg.creamgod.boarderless.data.persistence.QuickSchemeRepository? get() = null
+    /** Explicit legacy metadata recovery only; never called during ordinary library startup. */
+    val legacyQuickSchemeReader: (suspend () -> List<cg.creamgod.boarderless.data.persistence.QuickScheme>)? get() = null
     val localAssetGateway: AssetTransferGateway? get() = null
     /** Owned remote gateway from this repository's exact endpoint configuration. */
     val syncAssetGatewayFactory: (() -> AssetTransferGateway)? get() = null

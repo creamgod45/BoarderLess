@@ -1,5 +1,11 @@
 # 當前 loop 剩餘目標
 
+## 2026-10-13：Desktop 舊方案簿逐筆審閱匯入（源碼已接、未驗證）
+
+- server native library 增加明確舊 Settings 唯讀入口；開窗不自動讀取。讀取已索引記錄有 count／單筆與總 UTF-8 限額，缺 payload 但殘留 metadata 拒絕，不把半寫入記錄視為刪除；不宣稱涵蓋所有無索引 key。
+- 逐筆顯示結構預覽、原 JSON 與明確版本的副本 JSON，分頁顯示完整內容；未知 schema／素材缺來源拒絕，不猜 workspace、不下載素材、不插畫布。保存前重讀來源比對，使用者明確授權後 stage／save 同一 requestId。首次寫入起凍結再送，未知結果保留原 ID，交既有 pending identified import 恢復；關窗不撤銷，不刪舊內容。
+- 目前僅 Desktop server 宿主提供 reader，Local 與其他平台未自動接舊 Settings。來源比對不是 all-writer 排他／快照證據。未 compile／test／launch；六主線保持 active，全部功能完成後集中驗收、效能最後。
+
 ## 2026-10-13：Desktop 共用儲存宿主與server方案簿（源碼已接、未驗證）
 
 - Desktop改傳WorkspaceStorageRuntime，Local／Server與media runtime走共用App交接，補Desktop activated factory。普通啟動Local，明確 --server 以initialMode保留原行為，外部request的mode優先；不採上次Server偏好自動連線。相同模式選擇no-op，不重建repo。

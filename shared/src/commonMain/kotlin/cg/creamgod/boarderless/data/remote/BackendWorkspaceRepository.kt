@@ -97,6 +97,7 @@ class BackendWorkspaceRepository(
     private val serverWriterOperations: ServerWriterOperationLease? = null,
     private val mediaReferenceProofRuntime: MediaReferenceProofRuntime? = null,
     override val quickSchemeRepository: cg.creamgod.boarderless.data.persistence.QuickSchemeRepository? = null,
+    override val legacyQuickSchemeReader: (suspend () -> List<cg.creamgod.boarderless.data.persistence.QuickScheme>)? = null,
 ) : cg.creamgod.boarderless.data.CanvasWorkspaceRepository {
     override val collaborationTransport = cg.creamgod.boarderless.data.WorkspaceCollaborationTransport.RestPolling
     override val maximumAtomicOperations: Int get() = BackendMaximumAtomicOperations

@@ -1,5 +1,11 @@
 # BoarderLess 產品 QA 品質檢驗 SOP
 
+## Desktop 舊方案簿恢復（最後集中驗收）
+
+Desktop server 方案簿開「恢復 Desktop 舊方案簿」：開窗不讀取、不 HTTP；手動讀取後每頁 8 筆。審閱原始／副本完整分頁 JSON、結構預覽及來源 workspace，確認後才保存一份定義副本。舊 Settings、素材及畫布都不得變更，雲端上傳另走獨立授權流程。
+
+驗缺 payload 殘留 metadata、超 count／單筆或總 UTF-8 限額、非法字元、未知 schema、媒體缺來源；應拒絕，不猜目前 workspace、不自動修復。來源變更／消失須重新讀取審閱。stage／save 取消、scope 切換、保存後回應遺失時保留同 requestId、不再送新 ID；關窗後用待完成的本機匯入查原任務。新 namespace 空白、舊索引空白都不得宣稱沒有舊資料。此來源重讀仍不是同 process／跨 process all-writer 排他證明，完整遷移另驗。視覺可讀性與遮擋由使用者判斷；目前未執行驗收。
+
 ## Desktop 儲存模式與雲端方案簿宿主（最後集中驗收）
 
 普通Desktop啟動Local，即使上次Server；--server明確啟動仍Server，external launch mode優先。模式UI切換準備repo／media後才交接，失敗保留原畫布，不遷移内容；同模式no-op不重建client／storage。Local素材缺gateway不得HTTP fallback；Server素材用已選repo endpoint，不回預設其他服務。

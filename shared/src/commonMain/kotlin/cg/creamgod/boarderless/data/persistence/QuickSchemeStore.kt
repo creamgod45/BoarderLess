@@ -68,6 +68,36 @@ class QuickSchemeStore(
 
     override fun list(): List<QuickScheme> = (1..settings.getInt(CountKey, 0)).mapNotNull(::read)
 
+    /** Explicit read-only recovery of the legacy indexed catalog. Does not claim unindexed
+     * keys are absent, repair partial records, normalize payloads or delete old content. */
+    internal fun listForRecovery(): List<QuickScheme> {
+        val count = settings.getInt(CountKey, 0)
+        require(count in 0..10_000)
+        var bytes = 0L
+        val result = (1..count).mapNotNull { index ->
+            val prefix = "$ItemPrefix$index."
+            val payload = settings.getStringOrNull(prefix + "payload")
+            if (payload == null) {
+                require(listOf("name", "schemaVersion", "sourceWorkspaceId").none { settings.hasKey(prefix + it) }) {
+                    "Legacy scheme record is partial"
+                }
+                return@mapNotNull null
+            }
+            require(payload.length <= 4 * 1024 * 1024)
+            val item = requireNotNull(read(index))
+            require(item.payload == payload)
+            val size = payload.encodeToByteArray(throwOnInvalidSequence = true).size
+            require(size <= 4 * 1024 * 1024)
+            bytes += size
+            require(bytes <= 32L * 1024 * 1024)
+            require(item.name.encodeToByteArray(throwOnInvalidSequence = true).size <= 4096)
+            require(item.sourceWorkspaceId?.encodeToByteArray(throwOnInvalidSequence = true)?.size?.let { it <= 4096 } != false)
+            item
+        }
+        require(settings.getInt(CountKey, 0) == count) { "Legacy scheme catalog changed" }
+        return result
+    }
+
     override fun latest(): QuickScheme? = list().lastOrNull()
 
     override fun rename(
