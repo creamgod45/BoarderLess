@@ -1,5 +1,11 @@
 # BoarderLess 產品 QA 品質檢驗 SOP
 
+## 雲端方案本機匯入回饋（最後集中驗收）
+
+選取雲端原 resource，審完整定義／來源／availability 後按本機匯入。stage 起凍結原 requestId；取消、CAS 未確認、save 後回應遺失不得重新選另一份或產生新匯入 ID。固定區保留 ID 與指引，關窗後以「待完成的本機匯入」審原 intent。可翻完整原 payload，不下載素材、不做 materialization、不自動插畫布。
+
+確認 save 回覆後，本機方案簿立即刷新並選副本，不必靠關窗；scope 切換後晚到清單不得套至新工作區。outbox task 重讀失敗不能把已確認本機保存當成未保存或再次送出。明確「匯入已確認・繼續瀏覽」才解除凍結並清舊 selected／review；新的雲端選取另行核對。此流程不證明跨 workspace 素材已搬移，視覺／遮擋由使用者驗收，尚未執行。
+
 ## 連線插入節點保存不明（最後集中驗收）
 
 插入節點僅明確 consent＋Apply 才送原 split transaction；首次 attempt 起欄位與 consent／Apply 凍結。只有 executeAwaited 前拒絕可解除凍結、重新授權；queue 接受不是 server ACK。false／timeout cancellation／exception／scope 切換不得讓使用者再次套用原交易。

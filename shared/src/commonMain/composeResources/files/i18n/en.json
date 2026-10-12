@@ -1592,6 +1592,8 @@
       "preferenceFailed": "Could not open storage or save the choice. Existing data is retained. Check storage access and other running instances."
   },
   "cloudSchemes": {
+    "localImportUnconfirmed": "Local import is unconfirmed. Close this window and find pending local imports using this original request ID. Do not select another copy or start a new import; closing does not undo a save.",
+    "continueBrowsing": "Import confirmed · continue browsing",
     "title": "Cloud quick schemes",
     "warning": "Uses the selected server and account. No automatic sync. Review → save task → confirm send. Delete is permanent. Asset availability is not permission; importing saves a local scheme, never inserts canvas objects. Uncertain requests require explicit recovery within the original retention window.",
     "working": "Working…",

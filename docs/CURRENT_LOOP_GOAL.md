@@ -1,5 +1,11 @@
 # 當前 loop 剩餘目標
 
+## 2026-10-13：雲端方案匯入本機結果與即時清單回饋（源碼已接、未驗證）
+
+- CloudSchemeDialog 在 stageIdentifiedSave 前凍結原 QuickSchemeSaveIntent／requestId；保存不明時固定區顯示原 ID 與 pending import 恢復指引，禁止切換 resource／新匯入／雲端 mutation。關窗不撤銷／刪除原 intent。純原 payload 與 availability 審閱分頁仍可用。
+- saveIdentified 回覆並核 scope 後才標 localImportSaved，立即回呼 Workspace 刷新方案簿並選新副本；清單 refresh 與關窗 refresh 皆核原 draftReviewScopeId。確認保存後明確繼續瀏覽，清 selected／review，不沿舊選取重配原 requestId。outbox tasks read 失敗不抹掉 local import 的獨立確認状态。
+- 僅定義副本，不下載／materialize 素材或插畫布，多 source 限制與來源 authority 不變。未 compile／test／HTTP／跨裝置實測，六主線 active；全部業務完成後集中驗收，效能最後。
+
 ## 2026-10-13：連線插入節點原交易恢復入口（源碼已接、未驗證）
 
 - RelationInsertionDialog 不再以 Boolean 混用 preflight 拒絕與送出不明；Rejected 只來自 executeAwaited 前已確認不送出，需重新 consent。Queued 只代表原操作已交 queue，不是 server ACK；false／取消／exception／跨 scope 回饋為 Unconfirmed，固定原 plan IDs 並凍結欄位與再次 consent／Apply。

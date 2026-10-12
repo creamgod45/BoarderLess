@@ -28,7 +28,8 @@ import kotlinx.serialization.json.Json
  * durably staged, then approved for sending. Opening performs no HTTP. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable internal fun CloudSchemeDialog(repository: CanvasWorkspaceRepository, library: AwaitedQuickSchemeRepository,
-    owner: WorkspaceSession, localScheme: QuickScheme?, canContinue: () -> Boolean, onDismiss: () -> Unit) {
+    owner: WorkspaceSession, localScheme: QuickScheme?, canContinue: () -> Boolean, onDismiss: () -> Unit,
+    onLocalSaved: ((QuickScheme) -> Unit)? = null) {
     val runtime = library.cloudSyncRuntime ?: return
     val server = repository.cloudQuickSchemeServer ?: return
     val gateway = remember(server, owner.userId) { server.gateway(owner.userId) }
@@ -50,6 +51,9 @@ import kotlinx.serialization.json.Json
     var conflict by remember { mutableStateOf<CloudSchemeConflictReview?>(null) }
     var status by remember { mutableStateOf<String?>(null) }
     var importRequestId by remember { mutableStateOf(randomUuid()) }
+    var localImportAttempt by remember { mutableStateOf<QuickSchemeSaveIntent?>(null) }
+    var localImportSaved by remember { mutableStateOf(false) }
+    val localSavedCallback by rememberUpdatedState(onLocalSaved)
     var taskPage by remember { mutableStateOf(0) }
     var mutationReviewPage by remember { mutableStateOf(0) }
     LaunchedEffect(review) { mutationReviewPage = 0 }
@@ -107,7 +111,7 @@ import kotlinx.serialization.json.Json
     }
     fun close() { open = false; job?.cancel(); onDismiss() }
     DisposableEffect(gateway) { onDispose { open = false; job?.cancel(); gateway.close() } }
-    val enabled = valid() && !busy && !tasksNeedRefresh
+    val enabled = valid() && !busy && !tasksNeedRefresh && localImportAttempt == null
     Dialog(onDismissRequest = { close() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).imePadding(), contentAlignment = Alignment.Center) {
             GlassSurface(Modifier.widthIn(max = 760.dp).fillMaxWidth(.94f).fillMaxHeight(.9f)) {
@@ -115,6 +119,17 @@ import kotlinx.serialization.json.Json
                     BasicText(Strings.cloudSchemes.title(), style = TextStyle(color = colors.contentText, fontSize = 18.sp))
                     BasicText(Strings.cloudSchemes.warning(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
                     status?.let { BasicText(it, style = TextStyle(color = colors.contentText, fontSize = 12.sp)) }
+                    localImportAttempt?.let { intent ->
+                        BasicText(if (localImportSaved) Strings.cloudSchemes.imported() else Strings.cloudSchemes.localImportUnconfirmed(),
+                            style = TextStyle(color = colors.contentText, fontSize = 12.sp))
+                        BasicText(intent.requestId, style = TextStyle(color = colors.contentMuted, fontSize = 11.sp))
+                        if (localImportSaved) ShellButton(Strings.cloudSchemes.continueBrowsing(), enabled = valid() && !busy,
+                            onClick = {
+                                localImportAttempt = null; localImportSaved = false
+                                selected = null; review = null; conflict = null
+                                status = Strings.cloudSchemes.imported()
+                            })
+                    }
                     if (tasksNeedRefresh) BasicText(Strings.cloudSchemes.tasksMustReload(),
                         style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
                     ShellButton(Strings.cloudSchemes.tasks(), enabled = valid() && !busy, onClick = { run {
@@ -152,8 +167,8 @@ import kotlinx.serialization.json.Json
                     } }) }
                     selected?.let { resource ->
                         BasicText("${resource.id} · ${resource.revision}", style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
-                        CloudSchemeVisualReview(resource, enabled)
-                        CloudSchemePayloadReview(resource.payload.toString(), enabled)
+                        CloudSchemeVisualReview(resource, valid() && !busy)
+                        CloudSchemePayloadReview(resource.payload.toString(), valid() && !busy)
                         BasicTextField(name, { name = it.take(160); review = null }, enabled = enabled,
                             modifier = Modifier.fillMaxWidth(), textStyle = TextStyle(color = colors.contentText, fontSize = 14.sp))
                         ShellButton(Strings.cloudSchemes.reviewRename(), enabled = enabled && name.trim().isNotEmpty(), onClick = { run {
@@ -181,9 +196,16 @@ import kotlinx.serialization.json.Json
                             onClick = { run {
                                 check(valid())
                                 val copy = cloudSchemeLocalCopy(resource)
-                                library.stageIdentifiedSave(QuickSchemeSaveIntent(importRequestId, copy))
+                                val intent = QuickSchemeSaveIntent(importRequestId, copy)
+                                // Freeze before staging: cancellation or a local write error
+                                // can leave this original intent or saved copy durable.
+                                localImportAttempt = intent; localImportSaved = false
+                                library.stageIdentifiedSave(intent)
                                 check(valid())
-                                library.saveIdentified(importRequestId, copy.payload, copy.name, copy.schemaVersion, copy.sourceWorkspaceId)
+                                val saved = library.saveIdentified(intent.requestId, copy.payload, copy.name, copy.schemaVersion, copy.sourceWorkspaceId)
+                                check(valid())
+                                localImportSaved = true
+                                localSavedCallback?.invoke(saved)
                                 status = Strings.cloudSchemes.imported()
                             } })
                     }

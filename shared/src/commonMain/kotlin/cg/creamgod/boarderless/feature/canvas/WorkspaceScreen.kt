@@ -8784,13 +8784,26 @@ fun WorkspaceScreen(
         }
         if (showCloudSchemes && session != null) {
             val owner = checkNotNull(session)
+            val cloudLibraryScope = draftReviewScopeId
             CloudSchemeDialog(repository, quickSchemeStore, owner,
                 schemes.firstOrNull { it.id == selectedSchemeId },
                 canContinue = { session?.userId == owner.userId && session?.clientId == owner.clientId &&
                     session?.workspace?.id == owner.workspace.id && !connectionFailed && !workspaceSwitchInProgress && !syncInProgress },
                 onDismiss = {
                     showCloudSchemes = false
-                    runSchemeAction { schemes = quickSchemeStore.list() }
+                    runSchemeAction {
+                        val loaded = quickSchemeStore.list()
+                        if (cloudLibraryScope == latestDraftReviewScopeId) schemes = loaded
+                    }
+                }, onLocalSaved = { saved ->
+                    uiScope.launch {
+                        val loaded = refreshSchemes()
+                        if (cloudLibraryScope != latestDraftReviewScopeId) return@launch
+                        loaded.onSuccess {
+                            schemes = it; schemesUnavailable = false
+                            selectedSchemeId = saved.id; schemeNameDraft = saved.name
+                        }.onFailure { schemesUnavailable = true }
+                    }
                 })
         }
         if ((showSchemeBundleImport || exportSchemeBundle != null) && session != null) {
