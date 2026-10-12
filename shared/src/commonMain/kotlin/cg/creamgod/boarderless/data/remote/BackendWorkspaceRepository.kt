@@ -98,7 +98,29 @@ class BackendWorkspaceRepository(
     private val mediaReferenceProofRuntime: MediaReferenceProofRuntime? = null,
     override val quickSchemeRepository: cg.creamgod.boarderless.data.persistence.QuickSchemeRepository? = null,
     override val legacyQuickSchemeReader: (suspend () -> List<cg.creamgod.boarderless.data.persistence.QuickScheme>)? = null,
+    /** Drain of this factory's accounted storage operations only; no empty fallback. */
+    private val awaitServerWriterDrain: (suspend () -> Unit)? = null,
+    private val retryServerWriterRelease: (() -> Unit)? = null,
 ) : cg.creamgod.boarderless.data.CanvasWorkspaceRepository {
+    private val closeRequested = kotlinx.coroutines.flow.MutableStateFlow(false)
+    internal val supportsOwnedWriterDrain: Boolean get() = awaitServerWriterDrain != null
+
+    /** Host calls close first, then waits on the ORIGINAL writer. Cancellation does not
+     * prove drain and never creates another owner. Not all-writer exclusion, network-task
+     * drain, activation-call drain or permission to publish a migration by itself. */
+    internal suspend fun awaitOwnedWriterDrain() {
+        check(closeRequested.value) { "Close the original repository before awaiting its writer" }
+        currentCoroutineContext().ensureActive()
+        requireNotNull(awaitServerWriterDrain) { "Accounted writer drain unavailable" }.invoke()
+        currentCoroutineContext().ensureActive()
+    }
+
+    /** Explicit retry of this closed owner's failed release callback. Does not reopen
+     * repository work or retry HTTP/storage mutations. Caller must await drain afterward. */
+    internal fun retryOwnedWriterRelease() {
+        check(closeRequested.value)
+        requireNotNull(retryServerWriterRelease) { "Original writer release recovery unavailable" }.invoke()
+    }
     override val collaborationTransport = cg.creamgod.boarderless.data.WorkspaceCollaborationTransport.RestPolling
     override val maximumAtomicOperations: Int get() = BackendMaximumAtomicOperations
     override fun submissionOperationCount(operation: WorkspaceOperation): Int = operation.backendOperationCount()
@@ -1230,14 +1252,17 @@ class BackendWorkspaceRepository(
     }
 
     override fun close() {
+        closeRequested.value = true
         try { activeRealtimeOwner?.close(); activeRealtimeOwner = null }
         finally { try { client.close() } finally { releaseServerWriter() } }
     }
 
     private suspend fun prepareWriter() {
         currentCoroutineContext().ensureActive()
+        check(!closeRequested.value) { "Repository is closing" }
         prepareServerWriter()
         currentCoroutineContext().ensureActive()
+        check(!closeRequested.value) { "Repository closed during writer preparation" }
         requireServerWriterActive()
     }
 

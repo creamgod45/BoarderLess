@@ -1,5 +1,11 @@
 # 當前 loop 剩餘目標
 
+## 2026-10-13：原 repository writer drain 與釋放恢復介面（源碼已接平台、未接遷移宿主）
+
+- BackendWorkspaceRepository 提供 awaitOwnedWriterDrain／retryOwnedWriterRelease，必須先 close 原 repository，且 factory 必須提供原 owner callback；沒有空成功 fallback，不建立新 owner、不重試 HTTP／mutation。closeRequested 阻止關閉後的 prepareWriter，含 await 後再核對。
+- Android／iOS／Web factory 綁原 ServerRepositoryWriterCoordinator owner，await 等既有 operation accounting 完成與釋放成功；Web 沿既有 IDB physical ticket，取消 continuation 不冒充實體交易終止。重試只針對該 owner 已失敗的釋放 callback，之後仍須 await。Desktop 未提供此 capability，不假造空 drain。
+- 此介面不是 activation logical-call drain、HTTP task drain 或所有 Settings／舊版 writer 排他證明。真正 capture／排他／publication／activation／scope 註冊／App cutover 宿主仍未完成。未 compile／test／launch／HTTP，六主線 active；業務完成後集中验收，效能最後。
+
 ## 2026-10-13：Desktop 舊方案簿逐筆審閱匯入（源碼已接、未驗證）
 
 - server native library 增加明確舊 Settings 唯讀入口；開窗不自動讀取。讀取已索引記錄有 count／單筆與總 UTF-8 限額，缺 payload 但殘留 metadata 拒絕，不把半寫入記錄視為刪除；不宣稱涵蓋所有無索引 key。

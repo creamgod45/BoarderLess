@@ -32,6 +32,8 @@ private fun browserServerRepository(submission: cg.creamgod.boarderless.data.rem
             prepareServerWriter = { lease.acquire(); owner.claimAfterDrain(); lease.requireActive() },
             requireServerWriterActive = { lease.requireActive(); owner.requireActive() },
             releaseServerWriter = { owner.close(lease::close) },
+            awaitServerWriterDrain = { owner.awaitClosedAndDrained() },
+            retryServerWriterRelease = { owner.retryFailedRelease() },
             serverWriterOperations = operations,
             mediaReferenceProofRuntime = cg.creamgod.boarderless.data.remote.MediaReferenceProofRuntime {
                 lease.requireActive(); owner.requireActive()

@@ -1,5 +1,11 @@
 # BoarderLess 產品 QA 品質檢驗 SOP
 
+## Repository 原 writer 排空與釋放恢復（最後集中驗收）
+
+Android／iOS／Web 的原 repository 必須先 close，再 awaitOwnedWriterDrain；未關閉或沒有原 factory capability 應拒絕。關閉後新 prepareWriter 不可開始，await 中關閉也不可繼續採用 owner。已有背景操作完成前不得宣告 drain 或建立替代 owner。
+
+Web 測 Kotlin cancellation 早於 IDB complete／abort：原實體 ticket 應保留直到終止，await 不可提早返回。釋放 callback 失敗後僅明確 retryOwnedWriterRelease 重試原 owner 原 callback，不能恢復寫入、重送交易或清空計數；重試後再 await。取消／timeout 保留原 owner，不自動 takeover。Desktop 缺 capability 須拒絕，不空成功。這些只證明已 accounting 的 writer，all-writer 排他與 activation／HTTP 全生命週期仍須分別驗收。目前未執行。
+
 ## Desktop 舊方案簿恢復（最後集中驗收）
 
 Desktop server 方案簿開「恢復 Desktop 舊方案簿」：開窗不讀取、不 HTTP；手動讀取後每頁 8 筆。審閱原始／副本完整分頁 JSON、結構預覽及來源 workspace，確認後才保存一份定義副本。舊 Settings、素材及畫布都不得變更，雲端上傳另走獨立授權流程。

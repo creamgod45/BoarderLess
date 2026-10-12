@@ -17,6 +17,8 @@ fun androidRealtimeBackendRepository(context: Context, submission: AwaitedSubmis
         prepareServerWriter = { lease.requireActive(); owner.claimAfterDrain(); lease.requireActive() },
         requireServerWriterActive = { lease.requireActive(); owner.requireActive() },
         releaseServerWriter = { owner.close() },
+        awaitServerWriterDrain = { owner.awaitClosedAndDrained() },
+        retryServerWriterRelease = { owner.retryFailedRelease() },
         serverWriterOperations = operations,
         mediaReferenceProofRuntime = MediaReferenceProofRuntime {
             lease.requireActive(); owner.requireActive()
