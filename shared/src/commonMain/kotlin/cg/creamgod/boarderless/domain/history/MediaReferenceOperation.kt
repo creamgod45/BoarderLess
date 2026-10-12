@@ -2,6 +2,20 @@ package cg.creamgod.boarderless.domain.history
 
 import cg.creamgod.boarderless.domain.model.*
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
+
+/** Immutable original transaction identity. Local metadata, NOT server authorization. */
+@Serializable
+data class MediaReferenceHistoryOrigin(val workspaceId: String, val actorId: String,
+    val transactionId: String, val wireOperationId: String, val objectId: CanvasObjectId,
+    val before: MediaReference, val after: MediaReference, val objectVersionBefore: Long) {
+    init {
+        require(listOf(workspaceId, actorId, transactionId, wireOperationId, objectId.value).all { it.isNotBlank() })
+        require(before != after && before.mediaKind == after.mediaKind)
+        require(objectVersionBefore in 1 until 9_007_199_254_740_991L)
+    }
+}
 
 /** Stable asset references only; availability and workspace ACL must be validated separately. */
 @Serializable
@@ -18,14 +32,27 @@ data class MediaReference(
 
 fun MediaNode.mediaReference() = MediaReference(assetId, mediaKind, thumbnailAssetId)
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class MediaReferenceChange(
     val objectId: CanvasObjectId,
     val expectedVersion: Long,
     val before: MediaReference,
     val after: MediaReference,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val historyOrigin: MediaReferenceHistoryOrigin? = null,
 ) {
     fun inverse() = copy(expectedVersion = expectedVersion + 1, before = after, after = before)
+}
+
+fun MediaReferenceChange.historyTargetSide(): String {
+    val origin = requireNotNull(historyOrigin)
+    require(origin.objectId == objectId)
+    return when {
+        before == origin.after && after == origin.before -> "before"
+        before == origin.before && after == origin.after -> "after"
+        else -> error("Historical media references no longer match their original transaction")
+    }
 }
 
 @Serializable

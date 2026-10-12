@@ -41,6 +41,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
@@ -141,6 +142,7 @@ import cg.creamgod.boarderless.data.WorkspaceMember
 import cg.creamgod.boarderless.data.WorkspaceMemberRole
 import cg.creamgod.boarderless.data.WorkspacePresenceState
 import cg.creamgod.boarderless.data.WorkspaceSession
+import cg.creamgod.boarderless.data.WorkspaceCollaborationTransport
 import cg.creamgod.boarderless.data.WorkspaceSubmissionQueue
 import cg.creamgod.boarderless.data.WorkspaceSubmissionStep
 import cg.creamgod.boarderless.data.WorkspaceSummary
@@ -169,7 +171,11 @@ import cg.creamgod.boarderless.data.remote.BackendAssetTransferGateway
 import cg.creamgod.boarderless.data.remote.BackendContractException
 import cg.creamgod.boarderless.data.remote.BackendHttpException
 import cg.creamgod.boarderless.data.remote.BackendWorkspaceRepository
+import cg.creamgod.boarderless.data.remote.BackendRealtimeOwner
+import cg.creamgod.boarderless.data.remote.BackendRealtimeStatus
 import cg.creamgod.boarderless.data.remote.isWorkspaceAccessLoss
+import cg.creamgod.boarderless.data.remote.GiphyClient
+import cg.creamgod.boarderless.data.remote.durableReference
 import cg.creamgod.boarderless.data.remote.randomUuid
 import cg.creamgod.boarderless.data.remote.requiresWorkspaceReconnectAfterFailedSubmission
 import cg.creamgod.boarderless.data.selectWorkspaceDraftBackup
@@ -247,7 +253,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -1060,7 +1068,10 @@ private fun builtInComponents(density: Float): List<BuiltInComponent> {
 @Composable
 fun WorkspaceScreen(
     workspaceRepository: cg.creamgod.boarderless.data.CanvasWorkspaceRepository? = null,
+    syncServerRepository: (() -> cg.creamgod.boarderless.data.CanvasWorkspaceRepository)? = null,
     onChooseStorageMode: (() -> Unit)? = null,
+    workspaceStorageMode: cg.creamgod.boarderless.data.WorkspaceStorageMode? = null,
+    onRequestStorageMode: ((cg.creamgod.boarderless.data.WorkspaceStorageMode) -> Boolean)? = null,
     mediaImportRuntime: MediaImportRuntime = MediaImportRuntime.Unavailable,
     reduceTransparency: Boolean = false,
     onReduceTransparencyChange: (Boolean) -> Unit = {},
@@ -1086,7 +1097,7 @@ fun WorkspaceScreen(
     val uiScope = rememberCoroutineScope()
     val canvasFocusRequester = remember { FocusRequester() }
     val repository = remember(workspaceRepository) { workspaceRepository ?: BackendWorkspaceRepository() }
-    val recentWorkspaces = remember { RecentWorkspaceStore() }
+    val recentWorkspaces = remember(workspaceStorageMode) { RecentWorkspaceStore(storageMode = workspaceStorageMode) }
 
     fun publishRecentWorkspaces() = recentWorkspacesPublisher.publish(recentWorkspaces.items)
     LaunchedEffect(recentWorkspacesPublisher) { publishRecentWorkspaces() }
@@ -1104,6 +1115,10 @@ fun WorkspaceScreen(
     var mediaImportBusy by remember { mutableStateOf(false) }
     var mediaImportJob by remember { mutableStateOf<Job?>(null) }
     var mediaImportLabel by remember { mutableStateOf("") }
+    var preparedMediaController by remember(repository) {
+        mutableStateOf<cg.creamgod.boarderless.data.PreparedMediaImportController?>(null)
+    }
+    var pendingPreparedAsset by remember(repository) { mutableStateOf<WorkspaceAsset?>(null) }
     val canvasPreferences = remember { CanvasPreferences() }
     val quickSchemeStore = remember(repository, quickSchemeRepository, awaitedQuickSchemeRepository) { awaitedQuickSchemeRepository ?: (quickSchemeRepository ?: repository.quickSchemeRepository ?: QuickSchemeStore()).awaited() }
     val libraryPreferences =
@@ -1142,8 +1157,11 @@ fun WorkspaceScreen(
     }
     var displaySettings by remember { mutableStateOf(CanvasDisplaySettings()) }
     val canvasBackgroundToken = if (repository.supportsCanvasStyle) history.workspace.canvasStyle.backgroundToken else displaySettings.backgroundToken
+    var canvasGridPreview by remember { mutableStateOf<cg.creamgod.boarderless.domain.model.CanvasGridStyle?>(null) }
+    var showCanvasGridStyle by remember { mutableStateOf(false) }
+    var canvasGridScope by remember { mutableStateOf<CanvasStyleDraft?>(null) }
     val canvasGridStyle =
-        if (repository.supportsCanvasStyle) {
+        canvasGridPreview ?: if (repository.supportsCanvasStyle) {
             history.workspace.canvasStyle.gridStyle
         } else {
             cg.creamgod.boarderless.domain.model
@@ -1177,9 +1195,11 @@ fun WorkspaceScreen(
     var canvasBackgroundPreview by remember { mutableStateOf<String?>(null) }
     var canvasBackgroundDraft by remember { mutableStateOf<CanvasStyleDraft?>(null) }
     var canvasBackgroundApply by remember { mutableStateOf<cg.creamgod.boarderless.domain.history.UpdateCanvasStyleOperation?>(null) }
+    var canvasBackgroundProblem by remember { mutableStateOf<String?>(null) }
     var workspaceFormEditing by remember { mutableStateOf(false) }
     var componentLibraryFocused by remember { mutableStateOf(false) }
     var giphyTextEditing by remember { mutableStateOf(false) }
+    var externalGiphyKey by remember { mutableStateOf(mediaImportRuntime.giphyApiKey.orEmpty()) }
     var editingId by remember { mutableStateOf<CanvasObjectId?>(null) }
     var pendingNewNode by remember { mutableStateOf<TextNode?>(null) }
     var dragPreviews by remember { mutableStateOf<Map<CanvasObjectId, Vec2>>(emptyMap()) }
@@ -1194,8 +1214,14 @@ fun WorkspaceScreen(
     }
     var submissionQueue by remember { mutableStateOf(WorkspaceSubmissionQueue()) }
     var syncInProgress by remember { mutableStateOf(false) }
+    var draftPublicationBusy by remember { mutableStateOf(false) }
     var connectionFailed by remember { mutableStateOf(false) }
     var presenceState by remember { mutableStateOf(WorkspacePresenceState()) }
+    var realtimeOwner by remember { mutableStateOf<BackendRealtimeOwner?>(null) }
+    var realtimeStatus by remember { mutableStateOf(BackendRealtimeStatus.Idle) }
+    var realtimeDiagnostic by remember { mutableStateOf<String?>(null) }
+    var realtimeStarting by remember { mutableStateOf(false) }
+    var realtimeStartJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     val presenceClock = remember { TimeSource.Monotonic.markNow() }
     var pendingRecovery by remember { mutableStateOf<PendingWorkspaceChange?>(null) }
     var pendingReceiptStatus by remember { mutableStateOf<PendingReceiptStatus?>(null) }
@@ -1203,6 +1229,7 @@ fun WorkspaceScreen(
     var pendingDraftRecovery by remember { mutableStateOf<PendingWorkspaceDraft?>(null) }
     val draftReviewScopeId = remember(session?.userId, session?.clientId, session?.workspace?.id, connectionFailed) { randomUuid() }
     val latestDraftReviewScopeId by rememberUpdatedState(draftReviewScopeId)
+    var showLocalSync by remember(draftReviewScopeId) { mutableStateOf(false) }
     val scopedModalFlags = remember(draftReviewScopeId) { WorkspaceScopedModalFlags() }
     var stoppedRecovery by remember(draftReviewScopeId) {
         mutableStateOf<List<cg.creamgod.boarderless.data.StoppedWorkspaceChange>>(emptyList())
@@ -1215,6 +1242,7 @@ fun WorkspaceScreen(
     var draftReview by remember(draftReviewScopeId) { mutableStateOf<WorkspaceDraftReview?>(null) }
     var draftReviewOwner by remember(draftReviewScopeId) { mutableStateOf<WorkspaceSession?>(null) }
     var draftReviewMessage by remember(draftReviewScopeId) { mutableStateOf<String?>(null) }
+    var showOriginalSubmissionReview by remember(draftReviewScopeId) { mutableStateOf(false) }
     var schemeTransferBusy by scopedModalFlags.schemeTransferBusy
     var incomingScheme by remember(draftReviewScopeId) { mutableStateOf<cg.creamgod.boarderless.data.persistence.QuickScheme?>(null) }
     var incomingSchemeConfirmed by scopedModalFlags.incomingSchemeConfirmed
@@ -1225,12 +1253,15 @@ fun WorkspaceScreen(
     var showDraftImport by scopedModalFlags.showDraftImport
     var pendingClipboardPaste by scopedModalFlags.pendingClipboardPaste
     var showSequenceCreation by scopedModalFlags.showSequenceCreation
+    var sequenceEditTarget by remember(draftReviewScopeId) { mutableStateOf<CanvasObjectId?>(null) }
     var brushMode by scopedModalFlags.brushMode
     val brushUi = rememberCanvasBrushState(draftReviewScopeId)
     var showCanvasExport by scopedModalFlags.showCanvasExport
     var showPenDraft by scopedModalFlags.showPenDraft
     var showAiUnderstanding by scopedModalFlags.showAiUnderstanding
     var showAiDiagram by scopedModalFlags.showAiDiagram
+    var showCloudSchemes by remember(draftReviewScopeId) { mutableStateOf(false) }
+    var showMigrationPreview by remember(draftReviewScopeId) { mutableStateOf(false) }
     var relationInsertion by remember(draftReviewScopeId) { mutableStateOf<RelationInsertionDraft?>(null) }
     var relationInsertionOwner by remember(draftReviewScopeId) { mutableStateOf<WorkspaceSession?>(null) }
     LaunchedEffect(showPenDraft, showSequenceCreation, brushMode, session?.canEditContent) {
@@ -1257,7 +1288,7 @@ fun WorkspaceScreen(
         ) { randomUuid() }
     // Gate synchronously in composition, before cancellation/reset effects run for a new owner.
     val visiblePresence =
-        if (connectionFailed) {
+        if (connectionFailed || (realtimeOwner != null && realtimeStatus != BackendRealtimeStatus.Live)) {
             WorkspacePresenceState()
         } else {
             presenceState.visibleFor(session, presenceSubscriptionId, presenceClock.elapsedNow().inWholeMilliseconds)
@@ -1283,6 +1314,10 @@ fun WorkspaceScreen(
     var schemesUnavailable by remember(quickSchemeStore) { mutableStateOf(false) }
     var schemes by remember(quickSchemeStore) { mutableStateOf<List<QuickScheme>>(emptyList()) }
     var schemeImportJob by remember { mutableStateOf<Job?>(null) }
+    var incomingSchemeRequestId by remember { mutableStateOf<String?>(null) }
+    var recoverableSchemeImports by remember(quickSchemeStore) {
+        mutableStateOf<List<cg.creamgod.boarderless.data.persistence.QuickSchemeSaveIntent>>(emptyList())
+    }
     var schemeLibraryJob by remember(quickSchemeStore) { mutableStateOf<Job?>(null) }
     var schemeLibraryEpoch by remember(quickSchemeStore) { mutableStateOf(0L) }
     var schemesBusy by remember(quickSchemeStore) { mutableStateOf(true) }
@@ -1328,10 +1363,10 @@ fun WorkspaceScreen(
     var commandPaletteQuery by remember { mutableStateOf("") }
     var selectedSchemeId by remember { mutableStateOf<Int?>(schemes.lastOrNull()?.id) }
     var schemeNameDraft by remember { mutableStateOf(schemes.lastOrNull()?.name.orEmpty()) }
-    val draftReviewVisible =
-        schemeTransferBusy || incomingScheme != null || showStoppedRecovery || showAiUnderstanding || showAiDiagram ||
+    val draftReviewVisible = showOriginalSubmissionReview ||
+        preparedMediaController != null || schemeTransferBusy || incomingScheme != null || showStoppedRecovery || showAiUnderstanding || showAiDiagram || showCloudSchemes || showMigrationPreview ||
             relationInsertion != null || pendingClipboardPaste != null ||
-            showSequenceCreation || showSchemeBundleImport || exportSchemeBundle != null ||
+            showSequenceCreation || showCanvasGridStyle || showSchemeBundleImport || exportSchemeBundle != null ||
             showPenDraft || showCanvasExport ||
             showDraftImport ||
             (
@@ -1341,7 +1376,7 @@ fun WorkspaceScreen(
             )
     val latestDraftImportAllowed by rememberUpdatedState(showDraftImport && !connectionFailed && !workspaceSwitchInProgress)
     val canvasInteractionBlocked =
-        session == null || connectionFailed || workspaceSwitchInProgress || draftReviewVisible ||
+        session == null || connectionFailed || workspaceSwitchInProgress || draftPublicationBusy || draftReviewVisible ||
             pendingRecovery != null || pendingDraftRecovery != null || pendingRecoveryChecking || pendingRecoveryBusy
     val relationMutationBarrier =
         canvasInteractionBlocked || session?.canEditContent != true || mediaImportBusy ||
@@ -1349,7 +1384,9 @@ fun WorkspaceScreen(
     val sequenceMembership = SequenceCanvasMembership(history.workspace)
     val sequenceInternalIds = sequenceMembership.internalIds
     val inputBlocked =
-        relationMutationBarrier || brushMode || relationGeometryDrag != null || sequenceMembership.blocksMutation(selectedIds, selectedRelationId)
+        relationMutationBarrier || brushMode || relationGeometryDrag != null ||
+            (repository.awaitsDraftPublication && (syncInProgress || !submissionQueue.isEmpty)) ||
+            sequenceMembership.blocksMutation(selectedIds, selectedRelationId)
     val renderingRelations =
         sequenceMembership.visibleRelations(history.workspace).map { relation ->
             val gesture = relationGeometryDrag?.takeIf { it.relation.id == relation.id && it.displacement != Vec2.Zero }
@@ -1405,6 +1442,9 @@ fun WorkspaceScreen(
         if (!compactLayout || editingId != null) multiSelectionMode = false
     }
     val latestSession by rememberUpdatedState(session)
+    val latestRealtimeRepository by rememberUpdatedState(repository)
+    val latestRealtimeSwitching by rememberUpdatedState(workspaceSwitchInProgress)
+    val latestSyncApplyHistory by rememberUpdatedState(history)
     val latestPresenceSubscriptionId by rememberUpdatedState(presenceSubscriptionId)
     val latestPresencePublicationOwnerId by rememberUpdatedState(presencePublicationOwnerId)
     val latestPresenceState by rememberUpdatedState(presenceState)
@@ -1420,6 +1460,7 @@ fun WorkspaceScreen(
             )
         },
     )
+    val latestRealtimeSharing by rememberUpdatedState(sharePresence)
     LaunchedEffect(
         repository,
         session?.userId,
@@ -1486,6 +1527,7 @@ fun WorkspaceScreen(
             !workspaceSwitchInProgress &&
             !mediaImportBusy &&
             !pendingRecoveryBusy &&
+            !draftPublicationBusy &&
             !syncInProgress &&
             submissionQueue.isEmpty &&
             editingId == null &&
@@ -1503,7 +1545,7 @@ fun WorkspaceScreen(
             sessionAvailable = session != null,
             connectionFailed = connectionFailed,
             switchInProgress = workspaceSwitchInProgress,
-            syncInProgress = syncInProgress || pendingRecoveryBusy,
+            syncInProgress = syncInProgress || pendingRecoveryBusy || draftPublicationBusy,
             pendingSaveCount = submissionQueue.size,
             nodeEditing = editingId != null,
             contentInspectorEditing = inspectorTextEditing,
@@ -1519,12 +1561,19 @@ fun WorkspaceScreen(
     val currentWorkspaceCanDelete = session?.role == WorkspaceMemberRole.Owner
     val currentWorkspaceCanManageMembers = session?.role == WorkspaceMemberRole.Owner
 
-    fun adoptWorkspace(
+    suspend fun adoptWorkspace(
         opened: WorkspaceSession,
         message: String,
+        confirmedHistory: WorkspaceHistory? = null,
     ) {
+        val localSync = repository.localSyncStore?.readSyncSnapshot(opened)
+        require(localSync == null || localSync.local.workspace == opened.workspace) { "Local document changed; reopen" }
+        val restoredHistory = localSync?.let { cg.creamgod.boarderless.data.restoredLocalSyncHistory(it) }
+            ?: confirmedHistory ?: repository.restoreConfirmedHistory(opened) ?: WorkspaceHistory(opened.workspace)
+        require(restoredHistory.workspace == opened.workspace) { "History does not match the opened canvas" }
+        currentCoroutineContext().ensureActive()
         session = opened
-        history = WorkspaceHistory(opened.workspace)
+        history = restoredHistory
         submissionQueue = submissionQueue.clear()
         selectedIds = emptySet()
         selectedRelationId = null
@@ -1639,20 +1688,30 @@ fun WorkspaceScreen(
         pendingRecoveryBusy = true
         uiScope.launch {
             try {
+                val receipt = when {
+                    dismiss -> null
+                    confirmReceipt -> repository.confirmPendingReceiptWithHistory(opened, pending.transactionId)
+                    else -> repository.retryPendingChangeWithHistory(opened, pending.transactionId)
+                }
                 val refreshed =
                     if (dismiss) {
                         repository.dismissPendingChange(opened, pending.transactionId)
-                    } else if (confirmReceipt) {
-                        repository.confirmPendingReceipt(opened, pending.transactionId)
+                    } else if (receipt != null) {
+                        receipt.session
                     } else {
-                        repository.retryPendingChange(opened, pending.transactionId)
+                        error("Recovery result is missing")
                     }
                 currentCoroutineContext().ensureActive()
                 val current = latestSession
                 if (current != null && current.userId == opened.userId && current.clientId == opened.clientId &&
                     current.workspace.id == opened.workspace.id
                 ) {
-                    adoptWorkspace(refreshed, Strings.status.pendingRecoveryReviewed())
+                    adoptWorkspace(refreshed, Strings.status.pendingRecoveryReviewed(), receipt?.confirmedHistory)
+                    if (receipt?.confirmedHistory == null && !history.canUndo && !history.canRedo) {
+                        receipt?.originalOperation?.let { original ->
+                            history = history.withRecoveredCommit(original, receipt.mediaReferenceOrigins, receipt.historyIntent)
+                        }
+                    }
                     pendingRecoveryRevision++
                 }
             } catch (
@@ -1666,6 +1725,16 @@ fun WorkspaceScreen(
             } finally {
                 pendingRecoveryBusy = false
             }
+        }
+    }
+
+    fun openOriginalSubmissionReviewFor(owner: WorkspaceSession) {
+        val current = latestSession
+        if (current != null && current.userId == owner.userId && current.clientId == owner.clientId &&
+            current.workspace.id == owner.workspace.id && !connectionFailed && !workspaceSwitchInProgress) {
+            showOriginalSubmissionReview = true
+            if (submissionQueue.isEmpty) pendingRecoveryChecking = true
+            pendingRecoveryRevision++
         }
     }
 
@@ -1781,7 +1850,7 @@ fun WorkspaceScreen(
                             restoredQueue = restoredQueue.enqueue(operation, restoredHistory.workspace)
                         }
                         adoptWorkspace(restored.session, Strings.status.queuedChanges(restoredQueue.size))
-                        history = restoredHistory
+                        history = restored.history ?: restoredHistory
                         submissionQueue = restoredQueue
                         pendingDraftRecovery = null
                         pendingRecoveryRevision++
@@ -2036,11 +2105,18 @@ fun WorkspaceScreen(
         }
     }
 
+    fun storageModeChangeAllowed(): Boolean =
+        submissionQueue.isEmpty && !syncInProgress && !workspaceSwitchInProgress && !draftPublicationBusy &&
+            pendingRecovery == null && pendingDraftRecovery == null && !pendingRecoveryChecking && !pendingRecoveryBusy &&
+            !mediaImportBusy && editingId == null && !inspectorTextEditing && !workspaceFormEditing && pendingNewNode == null &&
+            dragPreviews.isEmpty() && transformPreviews.isEmpty() && relationGeometryDrag == null && connectionDragPreview == null &&
+            marquee == null && libraryDragPreview == null && !brushMode
+
     LaunchedEffect(repository, connectionAttempt) {
         connectionFailed = false
         statusMessage = Strings.status.connectingToWorkspace()
         try {
-            val opened = repository.openOrCreateWorkspace(WorkspaceLaunchRequests.pending.value)
+            val opened = repository.openOrCreateWorkspace(WorkspaceLaunchRequests.pending.value?.takeIf { it.matches(workspaceStorageMode) }?.workspaceId)
             adoptWorkspace(
                 opened,
                 if (repository.isLocalOnly) {
@@ -2068,10 +2144,18 @@ fun WorkspaceScreen(
     // Opens workspaces requested from outside the app (Dock menu, jump list, launcher shortcut).
     val launchRequest by WorkspaceLaunchRequests.pending.collectAsState()
     LaunchedEffect(launchRequest, session?.workspace?.id, workspaceSwitchInProgress) {
-        val requested = launchRequest ?: return@LaunchedEffect
+        val request = launchRequest ?: return@LaunchedEffect
+        if (!request.matches(workspaceStorageMode)) {
+            val canChange = storageModeChangeAllowed()
+            if (canChange && onRequestStorageMode?.invoke(requireNotNull(request.storageMode)) == true) return@LaunchedEffect
+            WorkspaceLaunchRequests.consume(request)
+            statusMessage = if (canChange) Strings.workspaceStorage.preferenceFailed() else Strings.workspaces.finishEditingAndWaitFor()
+            return@LaunchedEffect
+        }
+        val requested = request.workspaceId
         val activeSession = session ?: return@LaunchedEffect
         if (workspaceSwitchInProgress) return@LaunchedEffect
-        WorkspaceLaunchRequests.consume(requested)
+        WorkspaceLaunchRequests.consume(request)
         if (requested == activeSession.workspace.id) return@LaunchedEffect
         val title =
             workspaceSummaries.firstOrNull { it.id == requested }?.title
@@ -2178,7 +2262,45 @@ fun WorkspaceScreen(
         }
     }
 
-    LaunchedEffect(repository, presenceSubscriptionId) {
+    DisposableEffect(repository, presenceSubscriptionId, presenceActivity.epoch) {
+        onDispose {
+            (repository as? BackendWorkspaceRepository)?.unregisterRealtimeOwner(realtimeOwner)
+            realtimeStartJob?.cancel(); realtimeOwner?.close(); realtimeOwner = null
+            realtimeStarting = false; realtimeStatus = BackendRealtimeStatus.Disconnected
+            realtimeDiagnostic = null
+        }
+    }
+    LaunchedEffect(realtimeOwner) {
+        val owner = realtimeOwner ?: return@LaunchedEffect
+        coroutineScope {
+            val statuses = launch {
+                owner.status.collect { value ->
+                    if (realtimeOwner === owner) {
+                        realtimeStatus = value
+                        if (value != BackendRealtimeStatus.Live) presenceState = WorkspacePresenceState()
+                    }
+                }
+            }
+            val diagnostics = launch {
+                owner.diagnostic.collect { value ->
+                    if (realtimeOwner === owner && value != null) realtimeDiagnostic = realtimeDiagnosticText(value)
+                }
+            }
+            try { owner.run() }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) {
+                if (realtimeOwner === owner) statusMessage = Strings.presence.realtimeFailedHint()
+            } finally {
+                statuses.cancel(); diagnostics.cancel(); (repository as? BackendWorkspaceRepository)?.unregisterRealtimeOwner(owner); owner.close()
+                if (realtimeOwner === owner) {
+                    realtimeStatus = owner.status.value; presenceState = WorkspacePresenceState()
+                    owner.diagnostic.value?.let { realtimeDiagnostic = realtimeDiagnosticText(it) }
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(repository, presenceSubscriptionId, realtimeOwner) {
         presenceState = WorkspacePresenceState()
         val opened = session ?: return@LaunchedEffect
         if (connectionFailed) return@LaunchedEffect
@@ -2194,7 +2316,10 @@ fun WorkspaceScreen(
                     }
                 }
             try {
-                collectActiveWorkspacePresence({ repository.observePresence(opened, subscriptionId) }) { snapshot ->
+                val owner = realtimeOwner
+                collectActiveWorkspacePresence({ owner?.presence?.filterNotNull() ?: repository.observePresence(opened, subscriptionId) }) { snapshot ->
+                    if (owner != null && (realtimeOwner !== owner || owner.status.value != BackendRealtimeStatus.Live))
+                        return@collectActiveWorkspacePresence
                     acceptWorkspacePresence(
                         opened,
                         subscriptionId,
@@ -2216,18 +2341,20 @@ fun WorkspaceScreen(
         }
     }
 
-    LaunchedEffect(repository, presencePublicationOwnerId) {
+    LaunchedEffect(repository, presencePublicationOwnerId, realtimeOwner) {
         val opened = session ?: return@LaunchedEffect
         val subscriptionId = presenceSubscriptionId
         val roomEpoch = visiblePresence.roomEpoch ?: return@LaunchedEffect
         val ownerId = presencePublicationOwnerId
         val activityEpoch = presenceActivity.epoch
+        val owner = realtimeOwner
 
         // Read the StateFlow directly: a backgrounded UI may not have recomposed yet.
         fun liveOwner(): Boolean =
             !latestPresenceConnectionFailed &&
                 mediaActivityAllowsPublication(presenceActivityFlow.value, activityEpoch) &&
                 ownerId == latestPresencePublicationOwnerId &&
+                (owner == null || (realtimeOwner === owner && owner.status.value == BackendRealtimeStatus.Live)) &&
                 presencePublicationIsLive(
                     opened,
                     latestSession,
@@ -2240,12 +2367,14 @@ fun WorkspaceScreen(
         if (!liveOwner()) return@LaunchedEffect
         try {
             currentCoroutineContext().ensureActive()
-            val publisher = repository.openPresencePublisher(opened, subscriptionId, roomEpoch) ?: return@LaunchedEffect
+            val publisher = if (owner != null) owner.openPresencePublisher(opened, subscriptionId, roomEpoch, ::liveOwner) { latestRealtimeSharing }
+                else repository.openPresencePublisher(opened, subscriptionId, roomEpoch)
+            if (publisher == null) return@LaunchedEffect
             // Runner always takes ownership of cleanup, including a now-cancelled coroutine.
             presencePublisherReady = liveOwner()
             publishWorkspacePresence(publisher, {
                 if (liveOwner()) latestPresenceIntent else null
-            }, { presenceClock.elapsedNow().inWholeMilliseconds })
+            }, { presenceClock.elapsedNow().inWholeMilliseconds }, forceInitialPublication = owner != null)
         } catch (
             cancelled: CancellationException,
         ) {
@@ -2254,16 +2383,17 @@ fun WorkspaceScreen(
             _: Exception,
         ) {
             // No retry or false "sharing" state on a failed transport.
+            owner?.stopPublication()
         } finally {
             presencePublisherReady = false
         }
     }
 
-    LaunchedEffect(repository, session?.userId, session?.clientId, session?.workspace?.id, connectionAttempt) {
+    LaunchedEffect(repository, session?.userId, session?.clientId, session?.workspace?.id, connectionAttempt, realtimeOwner) {
         if (repository.isLocalOnly) return@LaunchedEffect
         val observedSession = session ?: return@LaunchedEffect
         var consecutiveFailures = 0
-        workspaceCatchUpRequests(observedSession, repository.observeRemoteChanges(observedSession)).collect {
+        workspaceCatchUpRequests(observedSession, realtimeOwner?.notifications() ?: repository.observeRemoteChanges(observedSession)).collect {
             if (!remoteCatchUpAllowed) return@collect
             val requestedFrom = latestSession ?: return@collect
             try {
@@ -2275,7 +2405,7 @@ fun WorkspaceScreen(
                     shouldApplyRemoteRefresh(requestedFrom, current, refreshed)
                 ) {
                     session = refreshed
-                    history = WorkspaceHistory(refreshed.workspace)
+                    history = history.copy(workspace = refreshed.workspace)
                     workspaceSummaries =
                         workspaceSummaries.map { summary ->
                             if (summary.id == refreshed.workspace.id) {
@@ -2333,6 +2463,7 @@ fun WorkspaceScreen(
 
     LaunchedEffect(repository, session?.workspace?.id, submissionQueue.first?.token) {
         if (submissionQueue.first == null) return@LaunchedEffect
+        snapshotFlow { draftPublicationBusy }.first { !it }
         val activeSession = session ?: return@LaunchedEffect
         syncInProgress = true
         statusMessage = Strings.status.savingChanges(submissionQueue.size)
@@ -2343,6 +2474,9 @@ fun WorkspaceScreen(
                 }
 
                 is WorkspaceSubmissionStep.Accepted -> {
+                    step.submittedOperation?.let {
+                        history = history.withCommittedMediaReferences(it, step.mediaReferenceOrigins)
+                    }
                     session = step.session
                     submissionQueue = submissionQueue.accept(step.acceptedToken)
                     statusMessage =
@@ -2408,29 +2542,107 @@ fun WorkspaceScreen(
         }
     }
 
+    fun publishRetainedHistory(result: HistoryResult, operation: WorkspaceOperation) {
+        history = result.history
+        workspaceDeleteArmed = false
+        submissionQueue = submissionQueue.enqueue(operation, result.history.workspace)
+        statusMessage = Strings.status.queuedChanges(submissionQueue.size)
+    }
+
+    fun withinAtomicOperationBudget(operation: WorkspaceOperation): Boolean {
+        val limit = repository.maximumAtomicOperations ?: return true
+        val count = repository.submissionOperationCount(operation)
+        if (count == null || count !in 1..limit) {
+            statusMessage = Strings.status.atomicOperationLimit(count ?: "—", limit)
+            return false
+        }
+        return true
+    }
+
     fun synchronize(result: HistoryResult): Boolean {
+        if (draftPublicationBusy) return false
         val operation = result.appliedOperation
         if (!result.succeeded || operation == null || session == null) {
             statusMessage = if (result.succeeded) statusMessage else Strings.status.thatChangeCouldNotBe()
             return false
         }
+        if (!withinAtomicOperationBudget(operation)) return false
+        if (!repository.supportsExternalMedia && result.history.workspace.objects.values.any { it is cg.creamgod.boarderless.domain.model.ExternalMediaNode }) {
+            statusMessage = Strings.giphy.unsupportedWorkspace()
+            return false
+        }
         try {
-            repository.retainDraft(checkNotNull(session), history.workspace, operation)
+            repository.retainHistoryDraft(checkNotNull(session), history.workspace, operation,
+                cg.creamgod.boarderless.domain.history.WorkspaceHistoryIntent.Edit, history)
         } catch (_: Exception) {
             statusMessage = Strings.status.pendingDraftSaveFailed()
             return false
         }
-        history = result.history
-        workspaceDeleteArmed = false
-        submissionQueue = submissionQueue.enqueue(operation, result.history.workspace)
-        statusMessage = Strings.status.queuedChanges(submissionQueue.size)
+        publishRetainedHistory(result, operation)
         return true
     }
+
+    suspend fun synchronizeAwaited(
+        result: HistoryResult,
+        beforeHistory: WorkspaceHistory = history,
+        ownerSession: WorkspaceSession? = session,
+        intent: cg.creamgod.boarderless.domain.history.WorkspaceHistoryIntent = cg.creamgod.boarderless.domain.history.WorkspaceHistoryIntent.Edit,
+    ): Boolean {
+        val owner = ownerSession ?: return false
+        if (connectionFailed || workspaceSwitchInProgress || draftPublicationBusy) return false
+        if (repository.awaitsDraftPublication && (syncInProgress || !submissionQueue.isEmpty)) return false
+        val before = beforeHistory
+        val operation = result.appliedOperation ?: return false
+        if (!withinAtomicOperationBudget(operation)) return false
+        if (!result.succeeded || (!repository.supportsExternalMedia && result.history.workspace.objects.values.any {
+                it is cg.creamgod.boarderless.domain.model.ExternalMediaNode
+            })) return false
+        draftPublicationBusy = true
+        statusMessage = Strings.status.savingChanges(submissionQueue.size + 1)
+        try {
+            return when (awaitDraftPublication(repository, owner, before, result, readLive = {
+                DraftPublicationLive(session, history, !connectionFailed && !workspaceSwitchInProgress &&
+                    pendingRecovery == null && pendingDraftRecovery == null && !pendingRecoveryBusy)
+            }, intent = intent)) {
+                DraftPublicationOutcome.Ready -> { publishRetainedHistory(result, operation); true }
+                DraftPublicationOutcome.Unconfirmed -> {
+                    statusMessage = Strings.status.awaitedDraftSaveUnconfirmed()
+                    false
+                }
+                DraftPublicationOutcome.ScopeChanged -> {
+                    statusMessage = Strings.status.awaitedDraftScopeChanged()
+                    false
+                }
+                DraftPublicationOutcome.Rejected -> false
+            }
+        } finally { draftPublicationBusy = false }
+    }
+
+    suspend fun executeAwaited(operation: WorkspaceOperation): Boolean = synchronizeAwaited(history.execute(operation))
 
     fun execute(operation: WorkspaceOperation): Boolean {
         if (session == null || connectionFailed) return false
         val result = history.execute(operation)
         return synchronize(result)
+    }
+
+    fun dispatchOperation(operation: WorkspaceOperation, onSaved: () -> Unit = {}, onFailed: () -> Unit = {}) {
+        if (!repository.awaitsDraftPublication) {
+            if (execute(operation)) onSaved() else onFailed()
+            return
+        }
+        val owner = session ?: run { onFailed(); return }
+        if (connectionFailed || workspaceSwitchInProgress || draftPublicationBusy || syncInProgress || !submissionQueue.isEmpty) {
+            onFailed()
+            return
+        }
+        val before = history
+        val result = before.execute(operation)
+        uiScope.launch {
+            if (synchronizeAwaited(result, before, owner)) onSaved()
+            else if (session?.userId == owner.userId && session?.clientId == owner.clientId &&
+                session?.workspace?.id == owner.workspace.id && history == before) onFailed()
+        }
     }
 
     fun addTextNode(
@@ -2476,8 +2688,8 @@ fun WorkspaceScreen(
         if (mediaImportBusy || assetId.isBlank()) return
         mediaImportBusy = true
         mediaImportLabel = Strings.media.checkingAsset()
-        mediaImportJob =
-            uiScope.launch {
+        val insertionJob =
+            uiScope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) {
                 try {
                     val asset = awaitActiveMediaRead { repository.getAsset(opened, assetId) }
                     val recovered = recoveredMediaAssetForSession(opened, latestSession, assetId, asset) ?: return@launch
@@ -2506,10 +2718,15 @@ fun WorkspaceScreen(
     fun insertStoredMedia(entry: MediaAssetLibraryEntry) {
         val openedSession = session ?: return
         if (inputBlocked || !workspaceChangeAllowed || connectionFailed || !entry.insertable) return
+        fun originalMediaScope(): Boolean = latestSession?.let {
+            it.userId == openedSession.userId && it.clientId == openedSession.clientId &&
+                it.workspace.id == openedSession.workspace.id
+        } == true
         mediaImportBusy = true
         mediaImportLabel = Strings.media.checkingAsset()
         mediaImportJob =
             uiScope.launch {
+                var publicationAttempted = false
                 try {
                     val asset = awaitActiveMediaRead { repository.getAsset(openedSession, entry.asset.id) }
                     coroutineContext.ensureActive()
@@ -2532,32 +2749,60 @@ fun WorkspaceScreen(
                             entry.title,
                             requestedAssetId = entry.asset.id,
                         )
-                    if (execute(CreateObjectsOperation("reuse-media-${node.id.value}", listOf(node)))) {
-                        selectedIds = setOf(node.id)
-                        selectedRelationId = null
-                        multiSelectionMode = false
-                    } else {
-                        statusMessage = Strings.media.assetInsertFailed()
+                    // Once this boundary is crossed, failure is not proof of rollback. The
+                    // retained draft/receipt owns this node ID; do not invite a new insertion.
+                    publicationAttempted = true
+                    val inserted = executeAwaited(CreateObjectsOperation("reuse-media-${node.id.value}", listOf(node)))
+                    if (originalMediaScope()) {
+                        if (inserted) {
+                            selectedIds = setOf(node.id)
+                            selectedRelationId = null
+                            multiSelectionMode = false
+                        } else {
+                            statusMessage = Strings.media.assetInsertUnconfirmed()
+                        }
                     }
                 } catch (
                     error: CancellationException,
                 ) {
+                    if (publicationAttempted && originalMediaScope()) statusMessage = Strings.media.assetInsertUnconfirmed()
                     throw error
                 } catch (_: Exception) {
-                    statusMessage = Strings.media.assetInsertFailed()
+                    if (originalMediaScope()) statusMessage = if (publicationAttempted) Strings.media.assetInsertUnconfirmed()
+                        else Strings.media.assetInsertFailed()
                 } finally {
-                    mediaImportBusy = false
-                    mediaImportJob = null
-                    mediaImportLabel = ""
+                    // A late callback from a cancelled read must not clear another import's UI.
+                    if (mediaImportJob === coroutineContext[Job]) {
+                        mediaImportBusy = false
+                        mediaImportJob = null
+                        mediaImportLabel = ""
+                    }
                 }
             }
+        // Install ownership before a local/in-memory GET can complete synchronously.
+        mediaImportJob = insertionJob
+        insertionJob.start()
     }
 
     fun startMediaImport() {
         val picker = mediaImportRuntime.selectSource ?: return
-        val gateway = assetGateway ?: return
         val importSession = session ?: return
         if (inputBlocked || !workspaceChangeAllowed) return
+        if (!repository.isLocalOnly) {
+            if (preparedMediaController != null) return
+            try {
+                preparedMediaController = repository.preparedMediaImport(importSession) {
+                    latestSession?.let {
+                        it.userId == importSession.userId && it.clientId == importSession.clientId &&
+                            it.workspace.id == importSession.workspace.id && it.canEditContent
+                    } == true && !connectionFailed
+                }
+                if (preparedMediaController == null) statusMessage = Strings.media.v2Unavailable()
+            } catch (_: Exception) { statusMessage = Strings.media.v2Unavailable() }
+            // Server imports must not silently fall back to non-durable v1 prepare.
+            return
+        }
+        val gateway = assetGateway ?: return
         workspaceDeleteArmed = false
         mediaImportBusy = true
         mediaImportLabel = Strings.media.selecting()
@@ -2572,6 +2817,18 @@ fun WorkspaceScreen(
                         it.userId == importSession.userId && it.clientId == importSession.clientId &&
                             it.workspace.id == importSession.workspace.id
                     } == true
+                suspend fun retainMediaRecovery(assetId: String) {
+                    mediaRecoveryWriteMutex.lock()
+                    try {
+                        withContext(kotlinx.coroutines.Dispatchers.Default) {
+                            // Read back an existing reminder instead of blindly retrying its write.
+                            if (assetId !in mediaRecoveryStore.list(importSession.userId, importSession.workspace.id.value)) {
+                                mediaRecoveryStore.record(importSession.userId, importSession.workspace.id.value, assetId)
+                            }
+                        }
+                    } finally { mediaRecoveryWriteMutex.unlock() }
+                    if (currentImportScope()) mediaRecoveryRevision++
+                }
                 try {
                     val source = picker()
                     selectedSource = source
@@ -2580,17 +2837,8 @@ fun WorkspaceScreen(
                         return@launch
                     }
                     val imported =
-                        AssetImportCoordinator(gateway, beforeComplete = { assetId ->
-                            mediaRecoveryWriteMutex.lock()
-                            try {
-                                withContext(kotlinx.coroutines.Dispatchers.Default) {
-                                    mediaRecoveryStore.record(importSession.userId, importSession.workspace.id.value, assetId)
-                                }
-                            } finally {
-                                mediaRecoveryWriteMutex.unlock()
-                            }
-                            mediaRecoveryRevision++
-                        }).import(importSession, source) { stage ->
+                        AssetImportCoordinator(gateway, beforeComplete = ::retainMediaRecovery,
+                            onRecoveryRequired = ::retainMediaRecovery).import(importSession, source) { stage ->
                             lastImportStage = stage
                             val label =
                                 when (stage) {
@@ -2647,7 +2895,7 @@ fun WorkspaceScreen(
                             imported.thumbnailAssetId ?: asset.thumbnailAssetId,
                         )
                     workspaceAssets = workspaceAssets + (asset.id to asset)
-                    if (execute(CreateObjectsOperation("import-${node.id.value}", listOf(node)))) {
+                    if (executeAwaited(CreateObjectsOperation("import-${node.id.value}", listOf(node)))) {
                         selectedIds = setOf(node.id)
                         selectedRelationId = null
                         multiSelectionMode = false
@@ -2696,9 +2944,18 @@ fun WorkspaceScreen(
         return true
     }
 
-    fun undo() {
-        if (inputBlocked || !history.canUndo) return
-        synchronize(history.undo(remoteRestoration = true))
+    suspend fun awaitHistoryPublicationTurn(owner: WorkspaceSession): Boolean {
+        if (repository.awaitsDraftPublication || repository.awaitsHistoryCommit) {
+            snapshotFlow {
+                (!syncInProgress && submissionQueue.isEmpty && !draftPublicationBusy) || connectionFailed ||
+                    session?.userId != owner.userId || session?.clientId != owner.clientId || session?.workspace?.id != owner.workspace.id
+            }.first { it }
+        }
+        return !connectionFailed && !workspaceSwitchInProgress && !draftPublicationBusy &&
+            session?.userId == owner.userId && session?.clientId == owner.clientId && session?.workspace?.id == owner.workspace.id
+    }
+
+    fun clearHistorySelection() {
         selectedIds = emptySet()
         selectedRelationId = null
         editingId = null
@@ -2707,24 +2964,35 @@ fun WorkspaceScreen(
         alignmentGuides = AlignmentGuides()
     }
 
+    fun undo() {
+        if (inputBlocked || !history.canUndo) return
+        val owner = session ?: return
+        uiScope.launch {
+            if (awaitHistoryPublicationTurn(owner) && history.canUndo && synchronizeAwaited(history.undo(remoteRestoration = true),
+                    intent = cg.creamgod.boarderless.domain.history.WorkspaceHistoryIntent.Undo)) {
+                clearHistorySelection()
+            }
+        }
+    }
+
     fun redo() {
         if (inputBlocked || !history.canRedo) return
-        synchronize(history.redo(remoteRestoration = true))
-        selectedIds = emptySet()
-        selectedRelationId = null
-        editingId = null
-        dragPreviews = emptyMap()
-        transformPreviews = emptyMap()
-        alignmentGuides = AlignmentGuides()
+        val owner = session ?: return
+        uiScope.launch {
+            if (awaitHistoryPublicationTurn(owner) && history.canRedo && synchronizeAwaited(history.redo(remoteRestoration = true),
+                    intent = cg.creamgod.boarderless.domain.history.WorkspaceHistoryIntent.Redo)) {
+                clearHistorySelection()
+            }
+        }
     }
 
     fun deleteSelection() {
         if (inputBlocked) return
         selectedRelationId?.let { relationId ->
             history.workspace.relationById(relationId)?.let { relation ->
-                execute(DeleteRelationsOperation("delete-relation-${relation.id.value}", listOf(relation)))
+                dispatchOperation(DeleteRelationsOperation("delete-relation-${relation.id.value}", listOf(relation)),
+                    onSaved = { selectedRelationId = null })
             }
-            selectedRelationId = null
             return
         }
         val selectedGroupIds =
@@ -2759,10 +3027,11 @@ fun WorkspaceScreen(
                         "delete-sequence-metadata-${history.workspace.version}",
                     )
                 }.getOrNull() ?: return
-            execute(operation)
+            dispatchOperation(operation, onSaved = ::clearHistorySelection)
+        } else {
+            selectedIds = emptySet()
+            editingId = null
         }
-        selectedIds = emptySet()
-        editingId = null
     }
 
     fun updateSelectedRelation(update: (RelationAttributes) -> RelationAttributes) {
@@ -2777,7 +3046,7 @@ fun WorkspaceScreen(
             )
         val after = update(before)
         if (before == after) return
-        execute(
+        dispatchOperation(
             UpdateRelationAttributesOperation(
                 operationId = "update-relation-${relation.id.value}-${history.workspace.version}",
                 changes =
@@ -2829,7 +3098,7 @@ fun WorkspaceScreen(
                 if (before == after) null else TextNodeAttributesChange(node.id, node.version, before, after)
             }
         if (changes.isNotEmpty()) {
-            execute(
+            dispatchOperation(
                 UpdateTextNodeAttributesOperation(
                     operationId = "$operationName-${history.workspace.version}",
                     changes = changes,
@@ -2853,7 +3122,7 @@ fun WorkspaceScreen(
                 if (before == after) null else GroupFrameAttributesChange(group.id, group.version, before, after)
             }
         if (changes.isNotEmpty()) {
-            execute(
+            dispatchOperation(
                 UpdateGroupFrameAttributesOperation(
                     operationId = "$operationName-${history.workspace.version}",
                     changes = changes,
@@ -2864,20 +3133,20 @@ fun WorkspaceScreen(
 
     fun updateSelectedMedia(
         operationName: String,
-        update: (node: MediaNode, index: Int) -> MediaNodeAttributes,
+        update: (node: CanvasObject, index: Int) -> MediaNodeAttributes,
     ) {
         val media =
             selectedIds
-                .mapNotNull { history.workspace.objectById(it) as? MediaNode }
+                .mapNotNull { history.workspace.objectById(it)?.takeIf { node -> node.isMediaObject } }
                 .sortedBy { it.zIndex }
         val changes =
             media.mapIndexedNotNull { index, node ->
-                val before = MediaNodeAttributes(node.zIndex, node.locked, node.altText)
+                val before = MediaNodeAttributes(node.zIndex, node.locked, node.mediaAltText)
                 val after = update(node, index)
                 if (before == after) null else MediaNodeAttributesChange(node.id, node.version, before, after)
             }
         if (changes.isNotEmpty()) {
-            execute(
+            dispatchOperation(
                 UpdateMediaNodeAttributesOperation(
                     operationId = "$operationName-${history.workspace.version}",
                     changes = changes,
@@ -2906,7 +3175,7 @@ fun WorkspaceScreen(
                 )
             }
         if (changes.isNotEmpty()) {
-            execute(
+            dispatchOperation(
                 UpdateTextNodeAttributesOperation(
                     operationId = "layer-node-${move.name.lowercase()}-${history.workspace.version}",
                     changes = changes,
@@ -2935,7 +3204,7 @@ fun WorkspaceScreen(
                 )
             }
         if (changes.isNotEmpty()) {
-            execute(
+            dispatchOperation(
                 UpdateGroupFrameAttributesOperation(
                     operationId = "layer-group-${move.name.lowercase()}-${history.workspace.version}",
                     changes = changes,
@@ -2947,10 +3216,10 @@ fun WorkspaceScreen(
     fun reorderSelectedMediaLayers(move: LayerMove) {
         val media =
             history.workspace.objects.values
-                .filterIsInstance<MediaNode>()
+                .filter { it.isMediaObject }
         val selectedMediaIds =
             selectedIds.filterTo(mutableSetOf()) { id ->
-                history.workspace.objectById(id) is MediaNode
+                history.workspace.objectById(id)?.isMediaObject == true
             }
         val updates = layerZIndexUpdates(media, selectedMediaIds, move)
         val changes =
@@ -2959,12 +3228,12 @@ fun WorkspaceScreen(
                 MediaNodeAttributesChange(
                     objectId = node.id,
                     expectedVersion = node.version,
-                    before = MediaNodeAttributes(node.zIndex, node.locked, node.altText),
-                    after = MediaNodeAttributes(nextZIndex, node.locked, node.altText),
+                    before = MediaNodeAttributes(node.zIndex, node.locked, node.mediaAltText),
+                    after = MediaNodeAttributes(nextZIndex, node.locked, node.mediaAltText),
                 )
             }
         if (changes.isNotEmpty()) {
-            execute(
+            dispatchOperation(
                 UpdateMediaNodeAttributesOperation(
                     operationId = "layer-media-${move.name.lowercase()}-${history.workspace.version}",
                     changes = changes,
@@ -2990,7 +3259,7 @@ fun WorkspaceScreen(
                 if (after == node.transform) null else TransformChange(id, node.version, node.transform, after)
             }
         if (changes.isNotEmpty()) {
-            execute(
+            dispatchOperation(
                 TransformObjectsOperation(
                     operationId = "$operationName-${history.workspace.version}",
                     changes = changes,
@@ -3004,19 +3273,19 @@ fun WorkspaceScreen(
         target: CanvasObject,
         intent: String,
         direction: RelationDirection,
-    ): RelationId? {
-        if (inputBlocked || source.id == target.id) return null
+        onConnected: (RelationId) -> Unit,
+    ) {
+        if (inputBlocked || source.id == target.id) return
         val duplicate =
             history.workspace.relations.values.any {
                 it.sourceObjectId == source.id && it.targetObjectId == target.id && it.intent == intent
             }
         if (duplicate && !repository.supportsRelationGeometry) {
             statusMessage = Strings.status.thoseNodesAlreadyHaveConnection(relationIntentLabel(intent).lowercase())
-            return null
+            return
         }
         val relationId = RelationId(randomUuid())
-        val applied =
-            execute(
+        dispatchOperation(
                 CreateRelationsOperation(
                     operationId = "connect-${history.workspace.version}",
                     relations =
@@ -3030,13 +3299,17 @@ fun WorkspaceScreen(
                             ),
                         ),
                 ),
+                onSaved = { onConnected(relationId) },
             )
-        return relationId.takeIf { applied }
     }
 
     fun createSelectedSelfLoop() {
         if (!repository.supportsRelationGeometry || inputBlocked) return
         val node = selectedIds.singleOrNull()?.let(history.workspace::objectById) ?: return
+        if (!relationEndpointsUnlocked(history.workspace, node.id, node.id)) {
+            statusMessage = Strings.relationGeometry.lockedHint()
+            return
+        }
         if (node !in
             history.workspace.objects.values
                 .connectableNodes() || node.transform.size.width <= 0 ||
@@ -3065,16 +3338,20 @@ fun WorkspaceScreen(
                     ),
             )
         if (runCatching { relationWorldRoute(relation, history.workspace.objects) }.getOrNull() == null) return
-        if (execute(CreateRelationsOperation(randomUuid(), listOf(relation)))) {
+        dispatchOperation(CreateRelationsOperation(randomUuid(), listOf(relation)), onSaved = {
             selectedRelationId = relation.id
             selectedIds = emptySet()
-        }
+        })
     }
 
     fun applyRelationGeometry(
         original: Relation,
         geometry: cg.creamgod.boarderless.domain.model.RelationGeometry,
     ) {
+        if (!relationEndpointsUnlocked(history.workspace, original.sourceObjectId, original.targetObjectId)) {
+            statusMessage = Strings.relationGeometry.lockedHint()
+            return
+        }
         if (!repository.supportsRelationGeometry || inputBlocked || selectedRelationId != original.id ||
             history.workspace.relations[original.id] != original
         ) {
@@ -3097,7 +3374,7 @@ fun WorkspaceScreen(
                 .connectableNodes()
                 .sortedBy { it.zIndex }
         if (nodes.size != 2) return
-        connectNodes(nodes[0], nodes[1], intent, direction)?.let { relationId ->
+        connectNodes(nodes[0], nodes[1], intent, direction) { relationId ->
             selectedIds = emptySet()
             selectedRelationId = relationId
         }
@@ -3109,7 +3386,7 @@ fun WorkspaceScreen(
         val payload = selectionClipboardPayload() ?: return null
         @Suppress("DEPRECATION")
         clipboardManager.setText(AnnotatedString(ClipboardJson.encodeToString(payload)))
-        val objectCount = payload.nodes.size + payload.groups.size + payload.media.size
+        val objectCount = payload.nodes.size + payload.groups.size + payload.media.size + payload.externalMedia.size
         statusMessage = Strings.status.copiedObjects(objectCount)
         return payload
     }
@@ -3129,6 +3406,10 @@ fun WorkspaceScreen(
         targetWorldPosition: Vec2? = null,
     ) {
         if (inputBlocked) return
+        if (!repository.supportsExternalMedia && payload.externalMedia.isNotEmpty()) {
+            statusMessage = Strings.giphy.unsupportedWorkspace()
+            return
+        }
         if (!repository.supportsSequenceDiagrams && payload.sequenceDiagrams.isNotEmpty()) {
             statusMessage = Strings.sequence.unavailable()
             return
@@ -3173,13 +3454,14 @@ fun WorkspaceScreen(
             return
         }
         val attempt = ClipboardPasteDraft(checkNotNull(session), history.workspace, payload, insertion)
-        if (execute(insertion.operation)) {
-            selectedIds = insertion.selectedIds
-            selectedRelationId = null
-            editingId = null
-        } else {
-            pendingClipboardPaste = attempt
-        }
+        dispatchOperation(insertion.operation,
+            onSaved = {
+                selectedIds = insertion.selectedIds
+                selectedRelationId = null
+                editingId = null
+            },
+            onFailed = { pendingClipboardPaste = attempt },
+        )
     }
 
     fun pasteFromClipboard() {
@@ -3362,6 +3644,7 @@ fun WorkspaceScreen(
                         val reviewed = QuickSchemeTransferCodec.decode(content)
                         if (current()) {
                             incomingScheme = reviewed
+                            incomingSchemeRequestId = randomUuid()
                             incomingSchemeConfirmed = false
                         }
                     }
@@ -3480,7 +3763,7 @@ fun WorkspaceScreen(
                             .count { it is GroupFrame } + 1,
                     ),
             )
-        execute(
+        dispatchOperation(
             TransactionOperation(
                 operationId = "group-${history.workspace.version}",
                 operations =
@@ -3495,11 +3778,14 @@ fun WorkspaceScreen(
                         ),
                     ),
             ),
+            onSaved = {
+                if (history.workspace.objectById(group.id) is GroupFrame) {
+                    selectedIds = setOf(group.id)
+                    selectedRelationId = null
+                    multiSelectionMode = false
+                }
+            },
         )
-        if (history.workspace.objectById(group.id) !is GroupFrame) return
-        selectedIds = setOf(group.id)
-        selectedRelationId = null
-        multiSelectionMode = false
     }
 
     fun ungroup(group: GroupFrame) {
@@ -3532,15 +3818,17 @@ fun WorkspaceScreen(
                     ),
                 )
             }
-        execute(
+        dispatchOperation(
             if (operations.size == 1) {
                 operations.single()
             } else {
                 TransactionOperation("ungroup-${history.workspace.version}", operations)
             },
+            onSaved = {
+                selectedIds = children.mapTo(mutableSetOf()) { it.id }
+                selectedRelationId = null
+            },
         )
-        selectedIds = children.mapTo(mutableSetOf()) { it.id }
-        selectedRelationId = null
     }
 
     fun fitGroupToContents(group: GroupFrame) {
@@ -3554,7 +3842,7 @@ fun WorkspaceScreen(
             return
         }
         if (after == group.transform) return
-        execute(
+        dispatchOperation(
             TransformObjectsOperation(
                 operationId = "fit-group-${group.id.value}-${history.workspace.version}",
                 changes =
@@ -3584,7 +3872,7 @@ fun WorkspaceScreen(
                 }
             }
         if (changes.isNotEmpty()) {
-            execute(
+            dispatchOperation(
                 TransformObjectsOperation(
                     operationId = "nudge-${history.workspace.version}",
                     changes = changes,
@@ -3628,7 +3916,7 @@ fun WorkspaceScreen(
                 }
             }
         if (changes.isNotEmpty()) {
-            execute(
+            dispatchOperation(
                 TransformObjectsOperation(
                     operationId = "auto-layout-${mode.name.lowercase()}-${history.workspace.version}",
                     changes = changes,
@@ -3651,7 +3939,7 @@ fun WorkspaceScreen(
                 if (after == node.transform) null else TransformChange(node.id, node.version, node.transform, after)
             }
         if (changes.isNotEmpty()) {
-            execute(
+            dispatchOperation(
                 TransformObjectsOperation(
                     operationId = "distribute-${axis.name.lowercase()}-${history.workspace.version}",
                     changes = changes,
@@ -3670,7 +3958,7 @@ fun WorkspaceScreen(
                 if (after == node.transform) null else TransformChange(node.id, node.version, node.transform, after)
             }
         if (changes.isNotEmpty()) {
-            execute(
+            dispatchOperation(
                 TransformObjectsOperation(
                     operationId = "align-${alignment.name.lowercase()}-${history.workspace.version}",
                     changes = changes,
@@ -3680,6 +3968,9 @@ fun WorkspaceScreen(
     }
 
     LaunchedEffect(session?.userId, session?.clientId, session?.workspace?.id, session?.role) {
+        if (canvasGridScope != null && session?.let(requireNotNull(canvasGridScope)::matches) != true) {
+            showCanvasGridStyle = false; canvasGridPreview = null; canvasGridScope = null
+        }
         val draft = canvasBackgroundDraft
         if (draft != null && session?.let(draft::matches) != true) {
             showCanvasBackgroundPicker = false
@@ -3692,6 +3983,7 @@ fun WorkspaceScreen(
 
     fun openCanvasBackgroundPicker() {
         canvasBackgroundApply = null
+        canvasBackgroundProblem = null
         if (repository.supportsCanvasStyle) {
             if (inputBlocked) return
             val opened = session ?: return
@@ -3701,6 +3993,12 @@ fun WorkspaceScreen(
         colorPreviewToken = null
         canvasBackgroundPreview = null
         showCanvasBackgroundPicker = true
+    }
+    fun openCanvasGridEditor() {
+        if (inputBlocked || !repository.supportsCanvasStyle) return
+        val opened = session ?: return
+        canvasGridScope = CanvasStyleDraft.capture(opened, history.workspace)
+        showCanvasGridStyle = true
     }
 
     val commandPaletteEntries =
@@ -3738,7 +4036,10 @@ fun WorkspaceScreen(
                 reduceMotion,
                 languagePreference,
             ),
-        ) + if (canvasExportRuntime.chooseDestination != null) listOf(
+        ) + listOf(PaletteEntry(id = "edit-sequence", title = Strings.sequence.editTitle(), subtitle = Strings.sequence.editHint(),
+            keywords = "sequence edit participant message 時序 編輯 參與者 訊息",
+            enabled = repository.supportsSequenceDiagrams && !inputBlocked && !mediaImportBusy && !syncInProgress && submissionQueue.isEmpty &&
+                selectedIds.singleOrNull() in history.workspace.sequenceDiagrams)) + if (canvasExportRuntime.chooseDestination != null) listOf(
             PaletteEntry(id = "export-canvas", title = Strings.canvasExport.title(), subtitle = Strings.canvasExport.hint(),
                 keywords = "export png pdf image 匯出 圖片", enabled = !canvasInteractionBlocked && !brushMode && editingId == null &&
                     !mediaImportBusy && !syncInProgress && submissionQueue.isEmpty && history.workspace.objects.isNotEmpty())
@@ -3754,6 +4055,11 @@ fun WorkspaceScreen(
             }
 
             "create-sequence" -> {
+                sequenceEditTarget = null
+                showSequenceCreation = true
+            }
+            "edit-sequence" -> if (entry.enabled) {
+                sequenceEditTarget = selectedIds.singleOrNull()
                 showSequenceCreation = true
             }
 
@@ -4004,11 +4310,11 @@ fun WorkspaceScreen(
                             selectedIds
                                 .singleOrNull()
                                 ?.let(history.workspace::objectById)
-                                ?.takeIf { it is TextNode || it is MediaNode }
+                                ?.takeIf { it is TextNode || it is MediaNode || it is cg.creamgod.boarderless.domain.model.ExternalMediaNode }
                         val targetId = CanvasObjectId(entry.id.removePrefix("connect-target:"))
-                        val target = history.workspace.objectById(targetId)?.takeIf { it is TextNode || it is MediaNode }
+                        val target = history.workspace.objectById(targetId)?.takeIf { it is TextNode || it is MediaNode || it is cg.creamgod.boarderless.domain.model.ExternalMediaNode }
                         if (source != null && target != null) {
-                            connectNodes(source, target, "relates", RelationDirection.Forward)?.let { relationId ->
+                            connectNodes(source, target, "relates", RelationDirection.Forward) { relationId ->
                                 selectedIds = emptySet()
                                 selectedRelationId = relationId
                             }
@@ -4413,6 +4719,40 @@ fun WorkspaceScreen(
                 onMarqueeChange = { start, end -> marquee = Marquee(start, end) },
                 onMarqueeCancel = { marquee = null },
                 onMarqueeCommit = ::commitCanvasMarquee,
+                lineDragEnabled = repository.supportsRelationGeometry && !relationMutationBarrier && !brushMode &&
+                    !sequenceMembership.blocksMutation(emptySet(), selectedRelationId) &&
+                    !areaSelectionMode && !multiSelectionMode && editingId == null && pendingNewNode == null &&
+                    dragPreviews.isEmpty() && transformPreviews.isEmpty() &&
+                    !(repository.awaitsDraftPublication && (syncInProgress || !submissionQueue.isEmpty)),
+                onLineBegin = line@{ point ->
+                    if (relationGeometryDrag != null) return@line null
+                    val opened = session ?: return@line null
+                    val relation = selectedRelationId?.let(history.workspace::relationById) ?: return@line null
+                    if (relation.sourceObjectId == relation.targetObjectId) return@line null
+                    val hit = findRelationAt(point, listOf(relation), history.workspace.objects, viewport,
+                        tolerance = 14f * density) ?: return@line null
+                    if (hit.id != relation.id) return@line null
+                    val route = relationWorldRoute(relation, history.workspace.objects) ?: return@line null
+                    val projected = relationSegmentProjection(route, viewport.screenToWorld(point)) ?: return@line null
+                    val gesture = runCatching { RelationGeometryGesture.begin(opened, history.workspace, relation, viewport,
+                        RelationGeometryHandle.InsertWaypoint(projected.first, projected.second)) }.getOrNull() ?: return@line null
+                    relationGeometryDrag = gesture
+                    gesture.operationId
+                },
+                onLineMove = { token, delta ->
+                    relationGeometryDrag?.takeIf { it.operationId == token }?.let { gesture ->
+                        relationGeometryDrag = if (gesture.matches(session, history.workspace, viewport))
+                            runCatching { gesture.move(delta) }.getOrNull() else null
+                    }
+                },
+                onLineEnd = { token ->
+                    val gesture = relationGeometryDrag?.takeIf { it.operationId == token }
+                    val operation = if (gesture != null && !relationMutationBarrier)
+                        runCatching { gesture.operation(session, history.workspace, viewport) }.getOrNull() else null
+                    if (relationGeometryDrag?.operationId == token) relationGeometryDrag = null
+                    if (operation != null) dispatchOperation(operation)
+                },
+                onLineCancel = { token -> if (relationGeometryDrag?.operationId == token) relationGeometryDrag = null },
             )
 
             if (session != null && history.workspace.objects.isEmpty() && pendingNewNode == null && !connectionFailed) {
@@ -4594,7 +4934,7 @@ fun WorkspaceScreen(
                                             )
                                         }
                                     }
-                                execute(TransformObjectsOperation("move-group-${group.id.value}", changes))
+                                dispatchOperation(TransformObjectsOperation("move-group-${group.id.value}", changes))
                             }
                         },
                     )
@@ -4805,7 +5145,7 @@ fun WorkspaceScreen(
                                         }
                                     }
                                 if (parentChanges.isNotEmpty()) {
-                                    execute(
+                                    dispatchOperation(
                                         TransactionOperation(
                                             operationId = "move-reparent-${node.id.value}-${history.workspace.version}",
                                             operations =
@@ -4819,16 +5159,16 @@ fun WorkspaceScreen(
                                         ),
                                     )
                                 } else {
-                                    execute(transformOperation)
+                                    dispatchOperation(transformOperation)
                                 }
                             }
                         },
                         onTextCommit = { text ->
-                            editingId = null
                             if (pendingNewNode?.id == node.id) {
                                 val committedNode = commitNewNodeDraft(node, text)
-                                pendingNewNode = null
                                 if (committedNode == null) {
+                                    pendingNewNode = null
+                                    editingId = null
                                     selectedIds = emptySet()
                                     statusMessage =
                                         if (submissionQueue.isEmpty) {
@@ -4837,29 +5177,79 @@ fun WorkspaceScreen(
                                             Strings.status.draftDiscardedSavingChanges(submissionQueue.size)
                                         }
                                 } else {
-                                    execute(CreateObjectsOperation("create-${node.id.value}", listOf(committedNode)))
-                                    selectedIds = setOf(node.id)
+                                    pendingNewNode = committedNode
+                                    dispatchOperation(CreateObjectsOperation("create-${node.id.value}", listOf(committedNode)),
+                                        onSaved = {
+                                            pendingNewNode = null
+                                            editingId = null
+                                            selectedIds = setOf(node.id)
+                                        },
+                                        onFailed = { editingId = node.id })
                                 }
                             } else if (text != node.text) {
-                                execute(
+                                dispatchOperation(
                                     EditTextOperation(
                                         operationId = "edit-${node.id.value}-${history.workspace.version}",
-                                        changes =
-                                            listOf(
-                                                TextChange(
-                                                    objectId = node.id,
-                                                    expectedVersion = node.version,
-                                                    before = node.text,
-                                                    after = text.ifBlank { Strings.content.untitledThought() },
-                                                ),
-                                            ),
+                                        changes = listOf(TextChange(node.id, node.version, node.text,
+                                            text.ifBlank { Strings.content.untitledThought() })),
                                     ),
+                                    onSaved = { editingId = null },
+                                    onFailed = { editingId = node.id },
                                 )
+                            } else {
+                                editingId = null
                             }
                             canvasFocusRequester.requestFocus()
                         },
                     )
                 }
+
+            val externalNodes = history.workspace.objects.values.filterIsInstance<cg.creamgod.boarderless.domain.model.ExternalMediaNode>()
+            val giphyReferences = remember(session?.userId, session?.clientId, session?.workspace?.id, externalGiphyKey, presenceActivity.epoch) { GiphyVisibleReferences() }
+            val giphyClient = remember(giphyReferences) { GiphyClient(externalGiphyKey) }
+            DisposableEffect(giphyClient) { onDispose { giphyClient.close() } }
+            val giphyOwner = session
+            val giphyKey = externalGiphyKey
+            val giphyEpoch = presenceActivity.epoch
+            fun giphyScopeCurrent(): Boolean = giphyOwner != null &&
+                session?.userId == giphyOwner.userId && session?.clientId == giphyOwner.clientId &&
+                session?.workspace?.id == giphyOwner.workspace.id && history.workspace.id == giphyOwner.workspace.id && externalGiphyKey == giphyKey &&
+                !connectionFailed && !workspaceSwitchInProgress && mediaActivityAllowsPublication(presenceActivityFlow.value, giphyEpoch)
+            val visibleReferences = visibleGiphyReferences(externalNodes, viewport, canvasSize, transformPreviews,
+                presenceActivity.copy(available = giphyScopeCurrent()), dragPreviews)
+            key(giphyReferences) {
+                val resolutions by giphyReferences.entries.collectAsState()
+                val retryRevision by giphyReferences.retryRevision.collectAsState()
+                LaunchedEffect(giphyReferences, visibleReferences, retryRevision) {
+                    giphyReferences.replaceVisible(visibleReferences)
+                    if (externalGiphyKey.isNotBlank() && giphyScopeCurrent()) {
+                        delay(150) // Coalesce viewport motion; a changed set cancels this wave.
+                        giphyReferences.resolvePendingWhenActive(::giphyScopeCurrent, giphyClient::resolveReferences)
+                    }
+                }
+                externalNodes.forEach { node -> key(giphyReferences, node.id) {
+                    ExternalMediaNodeCard(node, viewport, canvasSize, dragPreviews[node.id] ?: Vec2.Zero, transformPreviews[node.id], externalGiphyKey.isNotBlank(),
+                        resolutions[node.reference] ?: GiphyReferenceResolution.Pending, { giphyReferences.retry(node.reference) },
+                        mediaImportRuntime, reduceMotion, node.id in selectedIds, !canvasInteractionBlocked, !inputBlocked,
+                        canPublish = { giphyScopeCurrent() &&
+                            (history.workspace.objects[node.id] as? cg.creamgod.boarderless.domain.model.ExternalMediaNode)?.reference == node.reference &&
+                            giphyReferences.entries.value[node.reference] == resolutions[node.reference] },
+                        onSelect = { selectedRelationId = null; editingId = null; selectedIds = setOf(node.id) },
+                        onDragPreview = { delta ->
+                            val movingIds = movableSelectionObjectIds(history.workspace, setOf(node.id))
+                            dragPreviews = movingIds.associateWith { delta }
+                        },
+                        onDragCancel = { dragPreviews = emptyMap() },
+                        onDragCommit = commit@{ delta ->
+                            val committedDelta = dragPreviews[node.id] ?: delta
+                            dragPreviews = emptyMap()
+                            val current = history.workspace.objectById(node.id) ?: return@commit
+                            if (inputBlocked || current.locked || current.version != node.version || committedDelta == Vec2.Zero) return@commit
+                            dispatchOperation(TransformObjectsOperation("move-giphy-${node.id.value}-${history.workspace.version}",
+                                listOf(TransformChange(node.id, current.version, current.transform, current.transform.copy(position = current.transform.position + committedDelta)))))
+                        })
+                } }
+            }
 
             history.workspace.objects.values
                 .filterIsInstance<MediaNode>()
@@ -4927,7 +5317,7 @@ fun WorkspaceScreen(
                                         )
                                     }
                                 }
-                            execute(
+                            dispatchOperation(
                                 TransformObjectsOperation(
                                     operationId = "move-media-${node.id.value}-${history.workspace.version}",
                                     changes = changes,
@@ -4957,7 +5347,7 @@ fun WorkspaceScreen(
                             onResizeCommit = { after ->
                                 transformPreviews = emptyMap()
                                 if (after != node.transform) {
-                                    execute(
+                                    dispatchOperation(
                                         TransformObjectsOperation(
                                             operationId = "resize-handle-${node.id.value}-${history.workspace.version}",
                                             changes =
@@ -4971,7 +5361,7 @@ fun WorkspaceScreen(
                             onRotateCommit = { after ->
                                 transformPreviews = emptyMap()
                                 if (after != node.transform) {
-                                    execute(
+                                    dispatchOperation(
                                         TransformObjectsOperation(
                                             operationId = "rotate-handle-${node.id.value}-${history.workspace.version}",
                                             changes =
@@ -5026,7 +5416,7 @@ fun WorkspaceScreen(
                                 if (target == null) {
                                     statusMessage = Strings.status.dropConnectorOnAnotherThought()
                                 } else {
-                                    connectNodes(node, target, "relates", RelationDirection.Forward)?.let { relationId ->
+                                    connectNodes(node, target, "relates", RelationDirection.Forward) { relationId ->
                                         selectedIds = emptySet()
                                         selectedRelationId = relationId
                                     }
@@ -5038,14 +5428,16 @@ fun WorkspaceScreen(
                 selectedIds
                     .singleOrNull()
                     ?.let(history.workspace::objectById)
-                    ?.let { it as? MediaNode }
+                    ?.takeIf { it is MediaNode || it is cg.creamgod.boarderless.domain.model.ExternalMediaNode }
                     ?.takeUnless { it.locked || (compactLayout && multiSelectionMode) }
                     ?.let { node ->
                         NodeTransformHandles(
                             node = node,
-                            objectLabel = node.altText.ifBlank { node.mediaKind.name },
+                            objectLabel = node.connectionTitle,
                             connectionEnabled = true,
-                            previewTransform = transformPreviews[node.id] ?: node.transform,
+                            previewTransform = (transformPreviews[node.id] ?: node.transform).let { transform ->
+                                transform.copy(position = transform.position + (dragPreviews[node.id] ?: Vec2.Zero))
+                            },
                             viewport = viewport,
                             largeTouchTargets = compactLayout,
                             onPreview = { transformPreviews = mapOf(node.id to it) },
@@ -5053,7 +5445,7 @@ fun WorkspaceScreen(
                             onResizeCommit = { after ->
                                 transformPreviews = emptyMap()
                                 if (after != node.transform) {
-                                    execute(
+                                    dispatchOperation(
                                         TransformObjectsOperation(
                                             operationId = "resize-media-${node.id.value}-${history.workspace.version}",
                                             changes =
@@ -5067,7 +5459,7 @@ fun WorkspaceScreen(
                             onRotateCommit = { after ->
                                 transformPreviews = emptyMap()
                                 if (after != node.transform) {
-                                    execute(
+                                    dispatchOperation(
                                         TransformObjectsOperation(
                                             operationId = "rotate-media-${node.id.value}-${history.workspace.version}",
                                             changes =
@@ -5104,7 +5496,7 @@ fun WorkspaceScreen(
                                 if (target == null) {
                                     statusMessage = Strings.status.dropConnectorOnAnotherThought()
                                 } else {
-                                    connectNodes(node, target, "relates", RelationDirection.Forward)?.let { relationId ->
+                                    connectNodes(node, target, "relates", RelationDirection.Forward) { relationId ->
                                         selectedIds = emptySet()
                                         selectedRelationId = relationId
                                     }
@@ -5125,7 +5517,11 @@ fun WorkspaceScreen(
                         density,
                         selectedRelationLabelTarget,
                         enabled =
-                            !relationMutationBarrier && editingId == null && pendingNewNode == null && dragPreviews.isEmpty() &&
+                            relationEndpointsUnlocked(history.workspace, relation.sourceObjectId, relation.targetObjectId) &&
+                                !relationMutationBarrier && !brushMode && !areaSelectionMode && !multiSelectionMode &&
+                                !sequenceMembership.blocksMutation(emptySet(), selectedRelationId) &&
+                                !(repository.awaitsDraftPublication && (syncInProgress || !submissionQueue.isEmpty)) &&
+                                editingId == null && pendingNewNode == null && dragPreviews.isEmpty() &&
                                 transformPreviews.isEmpty(),
                         onBegin = { handle, token ->
                             val opened = session?.takeIf { relationGeometryDrag == null }
@@ -5172,7 +5568,7 @@ fun WorkspaceScreen(
                                     null
                                 }
                             if (relationGeometryDrag?.operationId == token) relationGeometryDrag = null
-                            if (operation != null) execute(operation)
+                            if (operation != null) dispatchOperation(operation)
                         },
                         onCancel = { token -> if (relationGeometryDrag?.operationId == token) relationGeometryDrag = null },
                     )
@@ -5190,7 +5586,7 @@ fun WorkspaceScreen(
                 readLive = { PenCanvasLive(session, history.workspace,
                     !canvasInteractionBlocked && session?.canEditContent == true && !mediaImportBusy && !syncInProgress && submissionQueue.isEmpty) },
                 commit = { operation, target ->
-                    if (execute(operation)) {
+                    if (executeAwaited(operation)) {
                         brushUi.lastObjectId = target; selectedIds = emptySet(); selectedRelationId = null; true
                     } else false
                 },
@@ -5476,6 +5872,8 @@ fun WorkspaceScreen(
                         accent = showCanvasBackgroundPicker,
                         onClick = { openCanvasBackgroundPicker() },
                     )
+                    ShellButton(Strings.canvasBackground.gridTitle(), icon = ShellIcon.Grid,
+                        enabled = repository.supportsCanvasStyle && !inputBlocked, onClick = { openCanvasGridEditor() })
                 }
             }
         }
@@ -5496,6 +5894,24 @@ fun WorkspaceScreen(
                         showLabel = false,
                         onClick = { showCompactMenu = true },
                     )
+                }
+            }
+        }
+
+        // Initial open failures have no session or draft; expose recovery without navigating a canvas menu.
+        if (connectionFailed && session == null) {
+            GlassSurface(
+                Modifier.align(Alignment.Center).windowInsetsPadding(WindowInsets.safeDrawing)
+                    .padding(20.dp).widthIn(max = 440.dp).fillMaxWidth(),
+            ) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    BasicText(statusMessage, style = TextStyle(color = colors.contentText, fontSize = 14.sp))
+                    ShellButton(Strings.toolbar.retryConnection(), icon = ShellIcon.Retry,
+                        onClick = { connectionAttempt += 1 }, modifier = Modifier.fillMaxWidth())
+                    onChooseStorageMode?.let { choose ->
+                        ShellButton(Strings.workspaceStorage.change(), enabled = storageModeChangeAllowed(),
+                            onClick = choose, modifier = Modifier.fillMaxWidth())
+                    }
                 }
             }
         }
@@ -5801,6 +6217,10 @@ fun WorkspaceScreen(
                             },
                             modifier = Modifier.width(inspectorWidth - 16.dp),
                         )
+                        ShellButton(Strings.canvasBackground.gridTitle(), icon = ShellIcon.Grid,
+                            enabled = repository.supportsCanvasStyle && !inputBlocked,
+                            onClick = { showCompactMenu = false; openCanvasGridEditor() },
+                            modifier = Modifier.width(inspectorWidth - 16.dp))
                     }
                     ShellButton(
                         label = Strings.common.close(),
@@ -5839,10 +6259,10 @@ fun WorkspaceScreen(
                         ).isNotEmpty()
                     }
 
-                    is MediaNode -> {
+                    is MediaNode, is cg.creamgod.boarderless.domain.model.ExternalMediaNode -> {
                         layerZIndexUpdates(
                             history.workspace.objects.values
-                                .filterIsInstance<MediaNode>(),
+                                .filter { it.isMediaObject },
                             setOf(selectedLayerObject.id),
                             move,
                         ).isNotEmpty()
@@ -5857,7 +6277,7 @@ fun WorkspaceScreen(
                 when (selectedLayerObject) {
                     is TextNode -> reorderSelectedNodeLayers(move)
                     is GroupFrame -> reorderSelectedGroupLayers(move)
-                    is MediaNode -> reorderSelectedMediaLayers(move)
+                    is MediaNode, is cg.creamgod.boarderless.domain.model.ExternalMediaNode -> reorderSelectedMediaLayers(move)
                     else -> Unit
                 }
             }
@@ -6187,13 +6607,12 @@ fun WorkspaceScreen(
                             ),
                     )
                     onChooseStorageMode?.let { choose ->
-                        ShellButton(Strings.workspaceStorage.change(), enabled =
-                            submissionQueue.isEmpty && !syncInProgress && !workspaceSwitchInProgress &&
-                            pendingRecovery == null && pendingDraftRecovery == null && !pendingRecoveryChecking && !pendingRecoveryBusy &&
-                            !mediaImportBusy && editingId == null && !inspectorTextEditing && !workspaceFormEditing && pendingNewNode == null &&
-                            dragPreviews.isEmpty() && transformPreviews.isEmpty() && relationGeometryDrag == null && connectionDragPreview == null &&
-                            marquee == null && libraryDragPreview == null && !brushMode,
+                        ShellButton(Strings.workspaceStorage.change(), enabled = storageModeChangeAllowed(),
                             onClick = choose, modifier = Modifier.width(inspectorWidth - 16.dp))
+                    }
+                    if (repository.localSyncStore != null && syncServerRepository != null) {
+                        ShellButton(Strings.localSync.open(), enabled = storageModeChangeAllowed() && !draftPublicationBusy,
+                            onClick = { showLocalSync = true }, modifier = Modifier.width(inspectorWidth - 16.dp))
                     }
                     workspaceSummaries
                         .sortedWith(compareBy<WorkspaceSummary>({ it.title.lowercase() }, { it.id.value }))
@@ -6384,6 +6803,84 @@ fun WorkspaceScreen(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
                         style = TextStyle(color = colors.contentMuted, fontSize = 11.sp),
                     )
+                    BasicText(
+                        if (realtimeOwner != null) Strings.presence.socketCapability() else when (repository.collaborationTransport) {
+                            WorkspaceCollaborationTransport.RestPolling -> Strings.presence.restOnly()
+                            WorkspaceCollaborationTransport.WebSocket -> Strings.presence.socketCapability()
+                            WorkspaceCollaborationTransport.Unavailable -> Strings.presence.noLiveTransport()
+                        },
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
+                        style = TextStyle(color = colors.contentMuted, fontSize = 11.sp),
+                    )
+                    val realtimeBackend = repository as? BackendWorkspaceRepository
+                    if (realtimeBackend?.canReviewLegacyMigration == true) {
+                        ShellButton(
+                            label = cg.creamgod.boarderless.i18n.tr("submissionMigration.openPreview", "Review local draft storage"),
+                            icon = ShellIcon.History,
+                            enabled = activeSession != null && !connectionFailed && !workspaceSwitchInProgress &&
+                                !syncInProgress && !draftPublicationBusy && submissionQueue.isEmpty && editingId == null &&
+                                !inspectorTextEditing && !workspaceFormEditing && !mediaImportBusy,
+                            onClick = { showMigrationPreview = true },
+                        )
+                    }
+                    if (realtimeBackend?.canOpenRealtime == true) {
+                        BasicText(realtimeStatusText(if (realtimeStarting) BackendRealtimeStatus.Preparing else realtimeStatus),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
+                            style = TextStyle(color = colors.contentMuted, fontSize = 11.sp))
+                        BasicText(if (realtimeOwner != null && realtimeStatus == BackendRealtimeStatus.Live && realtimeBackend.canSubmitRealtime)
+                            Strings.presence.realtimeSocketWrites() else Strings.presence.realtimeRestWrites(),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
+                            style = TextStyle(color = colors.contentMuted, fontSize = 11.sp))
+                        if (realtimeBackend.missingRealtimeWritePrerequisites.isNotEmpty()) BasicText(
+                            Strings.presence.writeMissingPrerequisites(realtimeWritePrerequisiteText(realtimeBackend.missingRealtimeWritePrerequisites)),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
+                            style = TextStyle(color = colors.contentMuted, fontSize = 11.sp))
+                        realtimeDiagnostic?.let { message -> BasicText(message,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
+                            style = TextStyle(color = colors.accent, fontSize = 11.sp)) }
+                        ShellButton(if (realtimeOwner != null || realtimeStarting) Strings.presence.disconnectRealtime() else Strings.presence.connectRealtime(),
+                            enabled = realtimeOwner != null || realtimeStarting || remoteCatchUpAllowed,
+                            onClick = {
+                                if (realtimeOwner != null || realtimeStarting) {
+                                    realtimeStartJob?.cancel(); realtimeStartJob = null; realtimeStarting = false
+                                    realtimeBackend.unregisterRealtimeOwner(realtimeOwner)
+                                    realtimeOwner?.close(); realtimeOwner = null; realtimeStatus = BackendRealtimeStatus.Disconnected
+                                    presenceState = WorkspacePresenceState(); sharePresence = false
+                                } else {
+                                    val opened = session
+                                    val subscription = presenceSubscriptionId
+                                    val activityEpoch = presenceActivity.epoch
+                                    if (opened != null && remoteCatchUpAllowed) {
+                                        realtimeStarting = true
+                                        realtimeDiagnostic = null
+                                        realtimeStartJob = uiScope.launch {
+                                            fun valid() = latestRealtimeRepository === realtimeBackend && !latestRealtimeSwitching &&
+                                                mediaActivityAllowsPublication(presenceActivityFlow.value, activityEpoch) &&
+                                                !latestPresenceConnectionFailed && latestPresenceSubscriptionId == subscription &&
+                                                latestSession?.let { it.userId == opened.userId && it.clientId == opened.clientId &&
+                                                    it.workspace.id == opened.workspace.id && it.role == opened.role } == true
+                                            var created: BackendRealtimeOwner? = null
+                                            try {
+                                                created = realtimeBackend.createRealtimeOwner(opened, subscription, ::valid)
+                                                currentCoroutineContext().ensureActive(); check(valid())
+                                                realtimeBackend.registerRealtimeOwner(checkNotNull(created), opened)
+                                                realtimeOwner = created; sharePresence = false
+                                            } catch (cancelled: CancellationException) {
+                                                created?.close(); throw cancelled
+                                            } catch (error: Exception) {
+                                                created?.close()
+                                                if (valid()) {
+                                                    realtimeStatus = BackendRealtimeStatus.Failed
+                                                    realtimeDiagnostic = realtimeFailureText(error); statusMessage = realtimeDiagnostic!!
+                                                }
+                                            } finally {
+                                                if (realtimeStartJob === currentCoroutineContext()[Job]) { realtimeStarting = false; realtimeStartJob = null }
+                                            }
+                                        }
+                                    }
+                                }
+                            })
+                    }
                     visiblePresence.peers.take(8).forEach { peer ->
                         BasicText(
                             peer.displayName,
@@ -6576,6 +7073,27 @@ fun WorkspaceScreen(
             }
         }
 
+        LaunchedEffect(pendingPreparedAsset, preparedMediaController, inputBlocked) {
+            val asset = pendingPreparedAsset
+            if (asset != null && preparedMediaController == null) {
+                pendingPreparedAsset = null
+                if (!inputBlocked && session?.workspace?.id == asset.workspaceId && session?.userId == asset.ownerId) {
+                    insertStoredMedia(MediaAssetLibraryEntry(asset, asset.id))
+                } else statusMessage = Strings.media.importNotInserted()
+            }
+        }
+        preparedMediaController?.let { controller ->
+            PreparedMediaImportDialog(controller, picker = checkNotNull(mediaImportRuntime.selectSource),
+                onReady = { asset ->
+                    if (controller.isActive()) {
+                        workspaceAssets = workspaceAssets + (asset.id to asset)
+                        workspaceAssetsRefreshAttempt++
+                        pendingPreparedAsset = asset
+                    } else statusMessage = Strings.media.importNotInserted()
+                },
+                onDismiss = { preparedMediaController = null })
+        }
+
         if (showComponentLibrary) {
             ComponentLibrary(
                 entries = libraryComponents.map(BuiltInComponent::entry),
@@ -6603,6 +7121,19 @@ fun WorkspaceScreen(
                         mediaImportRuntime,
                         reduceMotion,
                         onTextEditingChange = { giphyTextEditing = it },
+                        onKeyChange = { externalGiphyKey = it },
+                        onInsertReference = if (!repository.supportsExternalMedia || inputBlocked || history.workspace.objects.values.any { it.zIndex == Long.MAX_VALUE }) null else ({ item, key ->
+                            externalGiphyKey = key
+                            val node = cg.creamgod.boarderless.domain.model.ExternalMediaNode(
+                                id = CanvasObjectId(randomUuid()), reference = item.durableReference(),
+                                altText = item.alt_text.ifBlank { item.title }.take(8192),
+                                zIndex = (history.workspace.objects.values.maxOfOrNull { it.zIndex } ?: 0) + 1,
+                                transform = CanvasTransform(viewport.screenToWorld(Vec2(canvasSize.width / 2f, canvasSize.height / 2f)),
+                                    CanvasSize(240f * density, 360f * density)))
+                            dispatchOperation(CreateObjectsOperation("giphy-${node.id.value}", listOf(node)), onSaved = {
+                                selectedIds = setOf(node.id); showComponentLibrary = false
+                            })
+                        }),
                     )
                 },
                 workspaceMediaContent = {
@@ -6719,9 +7250,27 @@ fun WorkspaceScreen(
                                 fontWeight = FontWeight.SemiBold,
                             ),
                     )
+                    if (quickSchemeStore.cloudSyncRuntime != null && repository.cloudQuickSchemeServer != null)
+                        ShellButton(Strings.cloudSchemes.title(), enabled = !inputBlocked && session != null,
+                            onClick = { showCloudSchemes = true })
                     if (schemeBundleRuntime.chooseSource != null) ShellButton(Strings.bundle.importTitle(),
                         enabled = !inputBlocked && submissionQueue.isEmpty && !syncInProgress && session?.canEditContent == true,
                         onClick = { showSchemeBundleImport = true })
+                    if (quickSchemeStore.supportsIdentifiedSave) {
+                        ShellButton(Strings.schemes.recoverImports(), enabled = !schemesBusy && !schemeTransferBusy && incomingScheme == null && session != null,
+                            onClick = { runSchemeAction {
+                                recoverableSchemeImports = quickSchemeStore.pendingIdentifiedSaves()
+                            } })
+                        recoverableSchemeImports.forEach { intent ->
+                            ShellButton(Strings.schemes.reviewPendingImport(intent.scheme.name),
+                                enabled = !schemesBusy && !schemeTransferBusy && incomingScheme == null && session != null,
+                                onClick = {
+                                    incomingScheme = intent.scheme
+                                    incomingSchemeRequestId = intent.requestId
+                                    incomingSchemeConfirmed = false
+                                })
+                        }
+                    }
                     ShellButton(
                         label = Strings.schemes.importFile(),
                         icon = ShellIcon.Schemes,
@@ -6754,7 +7303,7 @@ fun WorkspaceScreen(
                         val preview = decodeQuickSchemePayload(scheme)
                         val summary =
                             preview?.let {
-                                val objectCount = it.nodes.size + it.groups.size + it.media.size
+                                val objectCount = it.nodes.size + it.groups.size + it.media.size + it.externalMedia.size
                                 val linkCount = it.relations.size
                                 Strings.schemes.objects(objectCount) + " • " +
                                     Strings.schemes.links(linkCount) + " • v${it.version}"
@@ -7044,10 +7593,14 @@ fun WorkspaceScreen(
                         )
                         if (!isRelationSectionCollapsed(InspectorSection.Reuse)) {
                             if (repository.supportsRelationGeometry) {
+                                val geometryUnlocked = relationEndpointsUnlocked(history.workspace,
+                                    relation.sourceObjectId, relation.targetObjectId)
+                                if (!geometryUnlocked) BasicText(Strings.relationGeometry.lockedHint(),
+                                    style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
                                 RelationGeometryControls(
                                     relation,
                                     history.workspace.objects,
-                                    !inputBlocked,
+                                    !inputBlocked && geometryUnlocked,
                                     onApply = { applyRelationGeometry(relation, it) },
                                     onEditingChange = { inspectorTextEditing = it },
                                 )
@@ -7094,7 +7647,7 @@ fun WorkspaceScreen(
         ) {
             val selectedNodes = selectedIds.mapNotNull { history.workspace.objectById(it) as? TextNode }
             val selectedGroups = selectedIds.mapNotNull { history.workspace.objectById(it) as? GroupFrame }
-            val selectedMedia = selectedIds.mapNotNull { history.workspace.objectById(it) as? MediaNode }
+            val selectedMedia = selectedIds.mapNotNull { history.workspace.objectById(it)?.takeIf { node -> node.isMediaObject } }
             val allLocked = selectedNodes.isNotEmpty() && selectedNodes.all { it.locked }
             val anyLocked = selectedNodes.any { it.locked }
             val allGroupsLocked = selectedGroups.isNotEmpty() && selectedGroups.all { it.locked }
@@ -7131,13 +7684,13 @@ fun WorkspaceScreen(
                 mutableStateOf(singleGroup?.title.orEmpty())
             }
             var mediaAltTextDraft by remember(singleMedia?.id, singleMedia?.version) {
-                mutableStateOf(singleMedia?.altText.orEmpty())
+                mutableStateOf(singleMedia?.mediaAltText.orEmpty())
             }
 
             fun submitMediaAltText() {
                 val media = singleMedia ?: return
                 val next = mediaAltTextDraft.trim().take(500)
-                if (next == media.altText) return
+                if (next == media.mediaAltText) return
                 updateSelectedMedia("media-alt-text") { node, _ ->
                     MediaNodeAttributes(node.zIndex, node.locked, next)
                 }
@@ -7189,7 +7742,7 @@ fun WorkspaceScreen(
                     return
                 }
                 if (after != node.transform) {
-                    execute(
+                    dispatchOperation(
                         TransformObjectsOperation(
                             operationId = "precise-transform-${node.id.value}-${history.workspace.version}",
                             changes = listOf(TransformChange(node.id, node.version, node.transform, after)),
@@ -7230,7 +7783,7 @@ fun WorkspaceScreen(
                     val inspectorTitle =
                         when {
                             selectedGroups.size == 1 -> selectedGroups.single().title
-                            selectedMedia.size == 1 -> selectedMedia.single().altText.ifBlank { Strings.objects.media() }
+                            selectedMedia.size == 1 -> selectedMedia.single().mediaAltText.ifBlank { Strings.objects.media() }
                             selectedIds.size == 1 -> Strings.objects.node()
                             else -> Strings.objects.nodeCount(selectedIds.size)
                         }
@@ -7281,6 +7834,11 @@ fun WorkspaceScreen(
                                 style = TextStyle(color = colors.contentMuted, fontSize = 11.sp),
                             )
                             singleGroup?.let {
+                                if (it.id in history.workspace.sequenceDiagrams) ShellButton(
+                                    Strings.sequence.editTitle(), enabled = repository.supportsSequenceDiagrams && !inputBlocked &&
+                                        !mediaImportBusy && !syncInProgress && submissionQueue.isEmpty,
+                                    onClick = { sequenceEditTarget = it.id; showSequenceCreation = true },
+                                )
                                 BasicTextField(
                                     value = groupTitleDraft,
                                     onValueChange = { groupTitleDraft = it.take(120) },
@@ -7376,11 +7934,15 @@ fun WorkspaceScreen(
                         if (!isSectionCollapsed(InspectorSection.Content)) {
                             singleMedia?.let { media ->
                                 BasicText(
-                                    text = "${when (media.mediaKind) {
-                                        MediaKind.Image -> Strings.objects.image()
-                                        MediaKind.Gif -> Strings.objects.gif()
-                                        MediaKind.Video -> Strings.objects.video()
-                                    }} • ${Strings.media.assetReference(media.assetId.take(12))}",
+                                    text = when (media) {
+                                        is MediaNode -> "${when (media.mediaKind) {
+                                            MediaKind.Image -> Strings.objects.image()
+                                            MediaKind.Gif -> Strings.objects.gif()
+                                            MediaKind.Video -> Strings.objects.video()
+                                        }} • ${Strings.media.assetReference(media.assetId.take(12))}"
+                                        is cg.creamgod.boarderless.domain.model.ExternalMediaNode -> "GIPHY • ${media.reference.id}"
+                                        else -> error("Unsupported media inspector object")
+                                    },
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
                                     style = TextStyle(color = colors.contentMuted, fontSize = 11.sp),
                                 )
@@ -7400,7 +7962,7 @@ fun WorkspaceScreen(
                                 )
                                 ShellButton(
                                     label = Strings.media.saveAlternativeText(),
-                                    enabled = !inputBlocked && mediaAltTextDraft.trim() != media.altText,
+                                    enabled = !inputBlocked && mediaAltTextDraft.trim() != media.mediaAltText,
                                     onClick = ::submitMediaAltText,
                                 )
                             }
@@ -7413,7 +7975,7 @@ fun WorkspaceScreen(
                                         MediaNodeAttributes(
                                             media.zIndex,
                                             !allMediaLocked,
-                                            media.altText,
+                                            media.mediaAltText,
                                         )
                                     }
                                 },
@@ -7876,7 +8438,7 @@ fun WorkspaceScreen(
             )
         }
 
-        if (shouldShowStatusOverlay(compactModalVisible || compactInspectorAvailable, showCommandPalette)) {
+        if (shouldShowStatusOverlay(compactModalVisible || compactInspectorAvailable || showOriginalSubmissionReview, showCommandPalette)) {
             CanvasStatusSurface(
                 modifier =
                     Modifier
@@ -7904,6 +8466,9 @@ fun WorkspaceScreen(
                     maxLines = if (compactLayout) 1 else Int.MAX_VALUE,
                     overflow = TextOverflow.Ellipsis,
                 )
+                if (pendingRecovery != null || pendingDraftRecovery != null) ShellButton(
+                    Strings.draftReview.originalTransactions(), enabled = !pendingRecoveryBusy && !connectionFailed,
+                    onClick = { showOriginalSubmissionReview = true })
                 if (stoppedRecovery.isNotEmpty()) {
                     ShellButton(
                         label = Strings.status.stoppedArchiveOpen(),
@@ -8176,6 +8741,24 @@ fun WorkspaceScreen(
             }
         }
 
+        if (showMigrationPreview && session != null && repository is BackendWorkspaceRepository) {
+            val owner = checkNotNull(session)
+            LegacyMigrationPreviewDialog(repository, owner,
+                canContinue = { session?.userId == owner.userId && session?.clientId == owner.clientId &&
+                    session?.workspace?.id == owner.workspace.id && !connectionFailed && !workspaceSwitchInProgress && !syncInProgress },
+                onDismiss = { showMigrationPreview = false })
+        }
+        if (showCloudSchemes && session != null) {
+            val owner = checkNotNull(session)
+            CloudSchemeDialog(repository, quickSchemeStore, owner,
+                schemes.firstOrNull { it.id == selectedSchemeId },
+                canContinue = { session?.userId == owner.userId && session?.clientId == owner.clientId &&
+                    session?.workspace?.id == owner.workspace.id && !connectionFailed && !workspaceSwitchInProgress && !syncInProgress },
+                onDismiss = {
+                    showCloudSchemes = false
+                    runSchemeAction { schemes = quickSchemeStore.list() }
+                })
+        }
         if ((showSchemeBundleImport || exportSchemeBundle != null) && session != null) {
             SchemeBundleDialog(schemeBundleRuntime, repository, quickSchemeStore, checkNotNull(session), history.workspace,
                 exportSchemeBundle,
@@ -8239,12 +8822,15 @@ fun WorkspaceScreen(
                             schemeImportJob = runSchemeAction {
                             try {
                                 val saved =
-                                    saveMaterializedBundle(quickSchemeStore, reviewed)
+                                    saveMaterializedBundle(quickSchemeStore, reviewed,
+                                        incomingSchemeRequestId ?: randomUuid().also { incomingSchemeRequestId = it })
                                 schemes = quickSchemeStore.list()
                                 schemesUnavailable = false
                                 selectedSchemeId = saved.id
                                 schemeNameDraft = saved.name
                                 incomingScheme = null
+                                recoverableSchemeImports = recoverableSchemeImports.filterNot { it.requestId == incomingSchemeRequestId }
+                                incomingSchemeRequestId = null
                                 incomingSchemeConfirmed = false
                                 statusMessage = Strings.status.saved(saved.name)
                             } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) {
@@ -8271,15 +8857,37 @@ fun WorkspaceScreen(
             }
         }
 
+        if (showCanvasGridStyle && session?.canEditContent == true && repository.supportsCanvasStyle) {
+            val gridOwner = requireNotNull(session)
+            CanvasGridStyleDialog(gridOwner, history.workspace, colorPickerModel,
+                onModelChange = { colorPickerModel = it; uiPreferences.colorPickerModel = it },
+                busy = draftPublicationBusy,
+                readLive = { PenCanvasLive(session, history.workspace,
+                    !connectionFailed && !workspaceSwitchInProgress && !draftPublicationBusy && submissionQueue.isEmpty &&
+                        pendingRecovery == null && pendingDraftRecovery == null && !syncInProgress) },
+                onPreview = { canvasGridPreview = it },
+                onApply = { operation, saved, failed -> dispatchOperation(operation, onSaved = saved, onFailed = failed) },
+                onDismiss = { showCanvasGridStyle = false; canvasGridPreview = null; canvasGridScope = null },
+                onReviewOriginalSubmission = { openOriginalSubmissionReviewFor(gridOwner) })
+        }
         if (showCanvasBackgroundPicker) {
+            val backgroundOwner = remember(canvasBackgroundDraft) { session }
             val closeBackgroundPicker = {
                 showCanvasBackgroundPicker = false
                 canvasBackgroundPreview = null
                 canvasBackgroundDraft = null
                 canvasBackgroundApply = null
+                canvasBackgroundProblem = null
                 inspectorTextEditing = false
             }
             ColorPickerWindow(
+                busy = draftPublicationBusy,
+                readOnly = canvasBackgroundApply != null,
+                statusText = canvasBackgroundProblem ?: canvasBackgroundApply?.let { Strings.canvasBackground.publicationPending() },
+                onReviewPending = {
+                    closeBackgroundPicker()
+                    backgroundOwner?.let(::openOriginalSubmissionReviewFor)
+                },
                 initialToken = canvasBackgroundToken,
                 initialColor =
                     canvasBackgroundColor(canvasBackgroundToken, colors)
@@ -8302,6 +8910,7 @@ fun WorkspaceScreen(
                 title = Strings.canvasBackground.title(),
                 onPreview = { token -> canvasBackgroundPreview = token },
                 onApply = { token ->
+                    if (canvasBackgroundApply != null) return@ColorPickerWindow
                     if (repository.supportsCanvasStyle) {
                         val operation =
                             try {
@@ -8315,13 +8924,18 @@ fun WorkspaceScreen(
                                 )
                             } catch (_: Exception) {
                                 statusMessage = Strings.canvasBackground.changedWhileEditing()
+                                canvasBackgroundProblem = Strings.canvasBackground.changedWhileEditing()
                                 return@ColorPickerWindow
                             }
                         if (operation == null) {
                             closeBackgroundPicker()
                         } else {
                             canvasBackgroundApply = operation
-                            if (execute(operation)) closeBackgroundPicker()
+                            dispatchOperation(operation, onSaved = closeBackgroundPicker,
+                                onFailed = {
+                                    canvasBackgroundProblem = Strings.canvasBackground.publicationUnconfirmed()
+                                    statusMessage = Strings.canvasBackground.publicationUnconfirmed()
+                                })
                         }
                     } else {
                         displaySettings = displaySettings.copy(backgroundToken = token)
@@ -8360,7 +8974,7 @@ fun WorkspaceScreen(
             RelationInsertionDialog(draft, isCurrent = { insertionCurrent() }, onConfirm = { plan ->
                 if (!insertionCurrent()) {
                     false
-                } else if (execute(plan.operation)) {
+                } else if (executeAwaited(plan.operation)) {
                     selectedRelationId = null
                     selectedIds = setOf(plan.node.id)
                     true
@@ -8428,13 +9042,13 @@ fun WorkspaceScreen(
                                 } else {
                                     when (val review = reviewAiDiagramApply(proposal, snapshot, history.workspace, opened, live, fresh)) {
                                         is AiDiagramApplyReview.Ready -> {
-                                            if (execute(
+                                            if (executeAwaited(
                                                     review.operation,
                                                 )
                                             ) {
                                                 AiDiagramApplyOutcome.Queued
                                             } else {
-                                                AiDiagramApplyOutcome.Rejected
+                                                AiDiagramApplyOutcome.Unconfirmed
                                             }
                                         }
 
@@ -8446,6 +9060,14 @@ fun WorkspaceScreen(
                             }
                         },
                         onDismiss = { showAiDiagram = false },
+                        onReviewOriginalSubmission = {
+                            openOriginalSubmissionReviewFor(opened)
+                        },
+                        initialChangesExpanded = PanelSection.AiChanges.token !in collapsedPanelSections,
+                        onChangesExpandedChange = { expanded ->
+                            val next = if (expanded) collapsedPanelSections - PanelSection.AiChanges.token else collapsedPanelSections + PanelSection.AiChanges.token
+                            collapsedPanelSections = next; uiPreferences.collapsedPanelSections = next
+                        },
                     )
                 } else {
                     AiUnderstandingDialog(
@@ -8496,19 +9118,21 @@ fun WorkspaceScreen(
                     selectionMediaAvailable(draft.payload, session?.workspace?.id, workspaceAssets))
             ClipboardPasteRetryDialog(draft, canRetry, onRetry = {
                 if (canRetry && draft.canRetry(session, history.workspace, !connectionFailed && !workspaceSwitchInProgress) &&
-                    execute(draft.insertion.operation)) {
+                    executeAwaited(draft.insertion.operation)) {
                     selectedIds = draft.insertion.selectedIds
                     selectedRelationId = null
                     editingId = null
                     pendingClipboardPaste = null
-                }
+                    true
+                } else false
             }, onDismiss = { pendingClipboardPaste = null })
         }
         if (showSequenceCreation && session?.canEditContent == true && repository.supportsSequenceDiagrams && !connectionFailed &&
             !workspaceSwitchInProgress
         ) {
+            val sequenceOwner = checkNotNull(session)
             SequenceCreationDialog(
-                checkNotNull(session),
+                sequenceOwner,
                 history.workspace,
                 viewport.screenToWorld(
                     Vec2(
@@ -8516,17 +9140,20 @@ fun WorkspaceScreen(
                         canvasSize.height / 2f,
                     ),
                 ),
+                editingContainerId = sequenceEditTarget,
+                maximumAtomicOperations = repository.maximumAtomicOperations,
+                submissionOperationCount = repository::submissionOperationCount,
                 readLive = {
                     PenCanvasLive(
                         session,
                         history.workspace,
-                        showSequenceCreation && !connectionFailed && !workspaceSwitchInProgress &&
+                        showSequenceCreation && !connectionFailed && !workspaceSwitchInProgress && !draftPublicationBusy &&
                             submissionQueue.isEmpty && pendingRecovery == null && pendingDraftRecovery == null && !syncInProgress &&
                             !mediaImportBusy,
                     )
                 },
                 commit = { operation, target ->
-                    if (execute(operation)) {
+                    if (executeAwaited(operation)) {
                         selectedIds = setOf(target)
                         selectedRelationId = null
                         history.workspace.objects[target]?.transform?.let { transform ->
@@ -8542,7 +9169,8 @@ fun WorkspaceScreen(
                         false
                     }
                 },
-                onDismiss = { showSequenceCreation = false },
+                onDismiss = { showSequenceCreation = false; sequenceEditTarget = null },
+                onReviewOriginalSubmission = { openOriginalSubmissionReviewFor(sequenceOwner) },
             )
         }
         if (showCanvasExport && session != null && !connectionFailed && !workspaceSwitchInProgress) {
@@ -8565,8 +9193,9 @@ fun WorkspaceScreen(
         }
 
         if (showPenDraft && session?.canEditContent == true && !connectionFailed && !workspaceSwitchInProgress) {
+            val penOwner = checkNotNull(session)
             PenCanvasDialog(
-                checkNotNull(session),
+                penOwner,
                 history.workspace,
                 viewport.screenToWorld(Vec2(canvasSize.width / 2f, canvasSize.height / 2f)),
                 selectedIds,
@@ -8575,12 +9204,12 @@ fun WorkspaceScreen(
                     PenCanvasLive(
                         session,
                         history.workspace,
-                        showPenDraft && !connectionFailed && !workspaceSwitchInProgress &&
-                            submissionQueue.isEmpty && pendingRecovery == null && pendingDraftRecovery == null,
+                        showPenDraft && !connectionFailed && !workspaceSwitchInProgress && !draftPublicationBusy &&
+                            !syncInProgress && !mediaImportBusy && submissionQueue.isEmpty && pendingRecovery == null && pendingDraftRecovery == null,
                     )
                 },
                 commit = { operation, target ->
-                    if (execute(operation)) {
+                    if (executeAwaited(operation)) {
                         selectedIds = setOf(target)
                         selectedRelationId = null
                         true
@@ -8589,7 +9218,18 @@ fun WorkspaceScreen(
                     }
                 },
                 onDismiss = { showPenDraft = false },
+                onReviewOriginalSubmission = { openOriginalSubmissionReviewFor(penOwner) },
             )
+        }
+        if (showOriginalSubmissionReview) {
+            OriginalSubmissionReviewDialog(pendingRecovery, pendingDraftRecovery,
+                busy = pendingRecoveryBusy || pendingRecoveryChecking || !submissionQueue.isEmpty || syncInProgress,
+                enabled = session != null && !connectionFailed && !workspaceSwitchInProgress,
+                message = pendingReceiptMessage ?: statusMessage,
+                onReadLocal = { pendingRecoveryRevision++ },
+                onReadReceipt = { inspectPendingReceipt(false) },
+                onReviewDraft = { showOriginalSubmissionReview = false; reviewPendingDraft() },
+                onDismiss = { showOriginalSubmissionReview = false })
         }
         if (showStoppedRecovery && !connectionFailed && !workspaceSwitchInProgress) {
             val opened = session
@@ -8725,6 +9365,48 @@ fun WorkspaceScreen(
             )
         }
 
+        if (showLocalSync && syncServerRepository != null) {
+            val opened = session
+            val ownerScope = draftReviewScopeId
+            if (opened != null) LocalWorkspaceSyncDialog(repository, opened, syncServerRepository,
+                backupRuntime = draftBackupRuntime,
+                canContinue = {
+                    showLocalSync && latestDraftReviewScopeId == ownerScope && !connectionFailed && !workspaceSwitchInProgress &&
+                        latestSession?.userId == opened.userId && latestSession?.clientId == opened.clientId &&
+                        latestSession?.workspace?.id == opened.workspace.id
+                }, onApply = { snapshot, operation, verification, materialized ->
+                    check(repository.isLocalOnly && latestDraftReviewScopeId == ownerScope && storageModeChangeAllowed())
+                    val before = latestSyncApplyHistory
+                    check(before.workspace == snapshot.local.workspace)
+                    val next = before.execute(operation)
+                    check(next.succeeded)
+                    draftPublicationBusy = true
+                    try {
+                        val rebase = snapshot.rebaseProposal
+                        if (materialized != null) check(materialized.reviewed == snapshot && materialized.localTarget == operation.after)
+                        else if (rebase != null) cg.creamgod.boarderless.data.validateLocalSyncTargetAssets(repository, snapshot.local, rebase.target)
+                        else cg.creamgod.boarderless.data.validateLocalSyncAssets(repository, snapshot)
+                        check(latestDraftReviewScopeId == ownerScope && latestSyncApplyHistory == before)
+                        val store = requireNotNull(repository.localSyncStore)
+                        val applied = if (rebase != null && materialized != null) store.applyMaterializedSyncRebaseProposal(materialized, operation, requireNotNull(verification))
+                            else if (rebase != null) store.applySyncRebaseProposal(snapshot.local, rebase.id, operation, requireNotNull(verification))
+                            else if (materialized != null) store.applyMaterializedSyncProposal(materialized, operation)
+                            else store.applySyncProposal(snapshot.local, requireNotNull(snapshot.proposal).id, operation)
+                        check(applied.snapshot.local.workspace == next.history.workspace)
+                        if (latestDraftReviewScopeId == ownerScope && latestSyncApplyHistory == before) {
+                            history = next.history
+                            session = applied.snapshot.local
+                            selectedIds = selectedIds.intersect(history.workspace.objects.keys)
+                            if (selectedRelationId !in history.workspace.relations) selectedRelationId = null
+                            workspaceSummaries = workspaceSummaries.map {
+                                if (it.id == history.workspace.id) it.copy(title = history.workspace.title, workspaceVersion = history.workspace.version) else it
+                            }
+                            statusMessage = if (rebase != null) Strings.localSync.rebaseApplied() else Strings.localSync.appliedLocal()
+                        }
+                        applied
+                    } finally { draftPublicationBusy = false }
+                }, onDismiss = { showLocalSync = false })
+        }
         if (showCommandPalette) {
             CommandPalette(
                 query = commandPaletteQuery,
@@ -9419,6 +10101,11 @@ private fun GridCanvas(
     onMarqueeChange: (start: Vec2, end: Vec2) -> Unit,
     onMarqueeCancel: () -> Unit,
     onMarqueeCommit: (start: Vec2, end: Vec2, additive: Boolean) -> Unit,
+    lineDragEnabled: Boolean = false,
+    onLineBegin: (Vec2) -> String? = { null },
+    onLineMove: (String, Vec2) -> Unit = { _, _ -> },
+    onLineEnd: (String) -> Unit = {},
+    onLineCancel: (String) -> Unit = {},
 ) {
     val colors = BoarderLessTheme.colors
     val currentViewport by rememberUpdatedState(viewport)
@@ -9432,6 +10119,7 @@ private fun GridCanvas(
         modifier =
             Modifier
                 .fillMaxSize()
+                .relationLineDrag(lineDragEnabled, onLineBegin, onLineMove, onLineEnd, onLineCancel)
                 .pointerInput(Unit) {
                     awaitPointerEventScope {
                         while (true) {
@@ -10135,7 +10823,7 @@ internal fun TextNodeCard(
         ) {
             if (editing) {
                 NodeTextEditor(
-                    value = draft, textColor = textColors.text, onValueChange = { draft = it },
+                    value = draft, textColor = textColors.text, onValueChange = { draft = it }, enabled = mutationEnabled,
                     onCommit = { onTextCommit(draft) }, horizontalPadding = 0.dp, verticalPadding = 0.dp,
                     fontScale = viewport.zoom, alignment = textAlignment,
                     appearanceStyle = labelTextStyle(node.textPlacement?.appearance, viewport.zoom, textColors.text, textAlignment),
@@ -10695,6 +11383,7 @@ private fun NodeTextEditor(
     value: String,
     onValueChange: (String) -> Unit,
     onCommit: () -> Unit,
+    enabled: Boolean = true,
     horizontalPadding: androidx.compose.ui.unit.Dp = 18.dp,
     verticalPadding: androidx.compose.ui.unit.Dp = 18.dp,
     centered: Boolean = false,
@@ -10710,7 +11399,7 @@ private fun NodeTextEditor(
     var commitRequested by remember { mutableStateOf(false) }
 
     fun commitOnce() {
-        if (!commitRequested) {
+        if (enabled && !commitRequested) {
             commitRequested = true
             onCommit()
         }
@@ -10718,7 +11407,8 @@ private fun NodeTextEditor(
 
     BasicTextField(
         value = value,
-        onValueChange = onValueChange,
+        onValueChange = { commitRequested = false; onValueChange(it) },
+        enabled = enabled,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { commitOnce() }),
         modifier =
@@ -10738,6 +11428,7 @@ private fun NodeTextEditor(
                 .onFocusChanged { state ->
                     if (state.isFocused) {
                         receivedFocus = true
+                        commitRequested = false
                     } else if (receivedFocus) {
                         commitOnce()
                     }

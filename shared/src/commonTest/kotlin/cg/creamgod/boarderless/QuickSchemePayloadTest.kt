@@ -49,7 +49,7 @@ class QuickSchemePayloadTest {
         assertEquals(2, decodeQuickSchemePayload(source.copy(schemaVersion = 1))?.version)
         assertNull(decodeQuickSchemePayload(source.copy(schemaVersion = 3)))
         assertNull(decodeQuickSchemePayload(source.copy(schemaVersion = 6)))
-        assertNull(decodeQuickSchemePayload(scheme(ClipboardPayload(version = 9, nodes = listOf(node)), 1)))
+        assertNull(decodeQuickSchemePayload(scheme(ClipboardPayload(version = 10, nodes = listOf(node)), 1)))
     }
 
     @Test

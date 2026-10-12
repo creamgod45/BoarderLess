@@ -1,5 +1,5 @@
 (() => {
-    let original, originalLibrary, api, database, mode, hold, putWaiter, committed, acknowledged, sawEarlySuccess, transactionMethod, putMethod;
+    let original, originalLibrary, originalDocuments, originalCatalog, documentApi, catalogApi, documentDatabase, catalogDatabase, api, database, mode, hold, putWaiter, committed, acknowledged, sawEarlySuccess, transactionMethod, putMethod;
     function open() {
         return new Promise((resolve, reject) => {
             const request = indexedDB.open(database, 1);
@@ -12,17 +12,21 @@
             mode = value; database = 'boarderless-receipt-fixture-' + crypto.randomUUID();
             original = globalThis.boarderlessDurableRecords;
             originalLibrary = globalThis.boarderlessQuickSchemeRecords;
+            originalDocuments = globalThis.boarderlessDocumentRecords;
+            originalCatalog = globalThis.boarderlessAssetCatalogRecords;
+            documentDatabase = database + '-documents';
+            catalogDatabase = database + '-catalog';
             committed = 0; acknowledged = 0; sawEarlySuccess = false; hold = mode === 'hold';
             transactionMethod = IDBDatabase.prototype.transaction;
             putMethod = IDBObjectStore.prototype.put;
             IDBDatabase.prototype.transaction = function (...args) {
                 const tx = transactionMethod.apply(this, args);
-                if (this.name === database && args[1] === 'readwrite') tx.addEventListener('complete', () => committed++);
+                if ([database, documentDatabase, catalogDatabase].includes(this.name) && args[1] === 'readwrite') tx.addEventListener('complete', () => committed++);
                 return tx;
             };
             IDBObjectStore.prototype.put = function (...args) {
                 const request = putMethod.apply(this, args);
-                if (this.transaction.db.name === database) {
+                if ([database, documentDatabase, catalogDatabase].includes(this.transaction.db.name)) {
                     const store = this, tx = this.transaction;
                     request.addEventListener('success', () => {
                         sawEarlySuccess = sawEarlySuccess || (acknowledged === 0 && committed === 0);
@@ -50,11 +54,33 @@
                 }, cancel: id => api.cancel(id)
             };
             globalThis.boarderlessQuickSchemeRecords = globalThis.boarderlessDurableRecords;
+            documentApi = globalThis.boarderlessCreateDurableRecords(documentDatabase, async () => mode !== 'denied', 4 * 1024 * 1024);
+            globalThis.boarderlessDocumentRecords = {
+                operate(id, action, key, expected, next, done) {
+                    documentApi.operate(id, action, key, expected, next, (value, error) => {
+                        if (action === 'cas' && !error) acknowledged++;
+                        done(value, error);
+                    });
+                }, cancel: id => documentApi.cancel(id)
+            };
+            catalogApi = globalThis.boarderlessCreateDurableRecords(catalogDatabase, async () => mode !== 'denied', 4 * 1024 * 1024);
+            globalThis.boarderlessAssetCatalogRecords = {
+                operate(id, action, key, expected, next, done) {
+                    catalogApi.operate(id, action, key, expected, next, (value, error) => {
+                        if (action === 'cas' && !error) acknowledged++;
+                        done(value, error);
+                    });
+                }, cancel: id => catalogApi.cancel(id)
+            };
         },
         reopen() {
             api = globalThis.boarderlessCreateDurableRecords(database, async () => true, 4 * 1024 * 1024);
             globalThis.boarderlessDurableRecords = api;
             globalThis.boarderlessQuickSchemeRecords = api;
+            documentApi = globalThis.boarderlessCreateDurableRecords(documentDatabase, async () => true, 4 * 1024 * 1024);
+            globalThis.boarderlessDocumentRecords = documentApi;
+            catalogApi = globalThis.boarderlessCreateDurableRecords(catalogDatabase, async () => true, 4 * 1024 * 1024);
+            globalThis.boarderlessAssetCatalogRecords = catalogApi;
             hold = false; mode = 'allow';
         },
         waitForPut(done) { putWaiter = done; },
@@ -70,9 +96,13 @@
             hold = false;
             globalThis.boarderlessDurableRecords = original;
             globalThis.boarderlessQuickSchemeRecords = originalLibrary;
+            globalThis.boarderlessDocumentRecords = originalDocuments;
+            globalThis.boarderlessAssetCatalogRecords = originalCatalog;
             IDBDatabase.prototype.transaction = transactionMethod;
             IDBObjectStore.prototype.put = putMethod;
             indexedDB.deleteDatabase(database);
+            indexedDB.deleteDatabase(documentDatabase);
+            indexedDB.deleteDatabase(catalogDatabase);
         }
     };
 })();

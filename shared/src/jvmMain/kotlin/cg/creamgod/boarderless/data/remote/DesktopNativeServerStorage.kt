@@ -10,6 +10,9 @@ import kotlinx.serialization.json.Json
 import java.nio.file.Path
 import java.security.MessageDigest
 import java.util.UUID
+import cg.creamgod.boarderless.data.persistence.DurableLocalRecordStore
+import cg.creamgod.boarderless.data.persistence.DurableLocalRecord
+import cg.creamgod.boarderless.data.persistence.backgroundAwaited
 
 /** Fresh prerelease namespace. No legacy import, sequence reset, Settings fallback or retry.
  * The Desktop lifetime storage lease excludes other application writers.
@@ -197,6 +200,12 @@ internal class DesktopNativeServerStorage private constructor(
             ) = drafts.append(scope, session, before, operation)
 
             override fun stage(entry: PendingWorkspaceSubmission) = drafts.stage(entry)
+            override fun appendWithIntent(scope: PendingSubmissionScope, session: WorkspaceSession, before: Workspace,
+                operation: WorkspaceOperation, intent: cg.creamgod.boarderless.domain.history.WorkspaceHistoryIntent,
+                beforeHistory: cg.creamgod.boarderless.domain.history.WorkspaceHistory?) =
+                drafts.appendWithIntent(scope, session, before, operation, intent, beforeHistory)
+            override fun acknowledgeWithHistory(entry: PendingWorkspaceSubmission, version: Long, seq: Long,
+                history: cg.creamgod.boarderless.domain.history.WorkspaceHistory?) = drafts.acknowledgeWithHistory(entry, version, seq, history)
 
             override fun acknowledge(
                 entry: PendingWorkspaceSubmission,
@@ -381,5 +390,21 @@ internal class DesktopNativeServerStorage private constructor(
     }
 }
 
-fun desktopNativeBackendWorkspaceRepository(root: Path): BackendWorkspaceRepository =
-    BackendWorkspaceRepository(preferences = DesktopNativeServerStorage(root).preferences)
+fun desktopNativeBackendWorkspaceRepository(root: Path, submission: AwaitedSubmissionRuntime? = null): BackendWorkspaceRepository =
+    BackendWorkspaceRepository(preferences = DesktopNativeServerStorage(root).preferences,
+        awaitedSubmissionRuntime = submission,
+        quickSchemeRepository = cg.creamgod.boarderless.data.persistence.DesktopFileQuickSchemeStore(root.resolve("schemes")) {
+            DesktopAtomicDraftStore(root) // Validate/create the private native parent, not Settings fallback.
+            Unit
+        },
+        realtimeRuntime = RealtimeCheckpointRuntime { desktopAwaitedServerRecords(root) },
+        mediaReferenceProofRuntime = MediaReferenceProofRuntime { desktopAwaitedServerRecords(root) })
+
+private fun desktopAwaitedServerRecords(root: Path): cg.creamgod.boarderless.data.persistence.AwaitedDurableLocalRecordStore {
+    val files = DesktopAtomicDraftStore(root)
+    return object : DurableLocalRecordStore {
+        override fun read(key: String) = files.read(key)?.let { DurableLocalRecord(it.generation, requireNotNull(it.payload)) }
+        override fun compareAndSet(key: String, generation: Long?, payload: ByteArray) { files.compareAndSet(key, generation, payload) }
+        override fun confirmDurable(key: String, generation: Long) { files.confirmDurable(key, generation) }
+    }.backgroundAwaited()
+}

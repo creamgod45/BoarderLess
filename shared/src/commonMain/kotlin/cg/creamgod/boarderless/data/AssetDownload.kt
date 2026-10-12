@@ -46,6 +46,8 @@ interface AssetDownloadSink {
 }
 
 interface AssetDownloadGateway {
+    /** Configured endpoint fingerprint for remote transfers; local original gateways return null. */
+    val downloadServerScope: String? get() = null
     suspend fun authorize(
         session: WorkspaceSession,
         assetId: String,

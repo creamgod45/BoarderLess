@@ -2,6 +2,8 @@ package cg.creamgod.boarderless.data.persistence
 
 import cg.creamgod.boarderless.data.parseStrictJsonObject
 import cg.creamgod.boarderless.data.remote.randomUuid
+import cg.creamgod.boarderless.data.remote.ServerWriterOperationLease
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -11,8 +13,11 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 /** Checksummed records. CAS compares the entire previously validated document in one IDB transaction. */
-internal class BrowserDurableLocalRecordStore(private val library: Boolean = false) : AwaitedDurableLocalRecordStore {
-    private val maximumBytes = if (library) 4 * 1024 * 1024 else 1024 * 1024
+internal enum class BrowserRecordScope { Receipts, Library, Documents, AssetCatalog }
+
+internal class BrowserDurableLocalRecordStore(private val scope: BrowserRecordScope = BrowserRecordScope.Receipts,
+    private val writerOperations: ServerWriterOperationLease? = null) : AwaitedDurableLocalRecordStore {
+    private val maximumBytes = if (scope == BrowserRecordScope.Receipts) 1024 * 1024 else 4 * 1024 * 1024
     @Serializable private data class Record(val generation: Long, val payload: String, val checksum: String)
     private val json = Json { encodeDefaults = true }
     private fun checksum(generation: Long, payload: ByteArray): String {
@@ -32,20 +37,35 @@ internal class BrowserDurableLocalRecordStore(private val library: Boolean = fal
     private suspend fun operation(action: String, key: String, expected: String? = null, next: String? = null): String? {
         require(key.matches(Regex("[0-9a-f]{64}")))
         val id = randomUuid()
+        val leave = writerOperations?.beginPhysicalOperation()
+        val settled = MutableStateFlow(false)
+        fun terminal() { if (settled.compareAndSet(false, true)) leave?.invoke() }
         return suspendCancellableCoroutine { waiter ->
-            fun cancel() { if (library) browserCancelLibraryRecordOperation(id) else browserCancelRecordOperation(id) }
+            fun cancel() { when (scope) {
+                BrowserRecordScope.Receipts -> browserCancelRecordOperation(id)
+                BrowserRecordScope.Library -> browserCancelLibraryRecordOperation(id)
+                BrowserRecordScope.Documents -> browserCancelDocumentRecordOperation(id)
+                BrowserRecordScope.AssetCatalog -> browserCancelAssetCatalogRecordOperation(id)
+            } }
             waiter.invokeOnCancellation { cancel() }
+            if (!waiter.isActive) { terminal(); return@suspendCancellableCoroutine }
             try {
                 val callback: (String?, String?) -> Unit = { value, error ->
-                    if (waiter.isActive) {
-                        if (error != null) waiter.resumeWithException(IllegalStateException("Browser durable storage failed"))
-                        else waiter.resume(value)
-                    }
+                    try {
+                        if (waiter.isActive) {
+                            if (error != null) waiter.resumeWithException(IllegalStateException("Browser durable storage failed"))
+                            else waiter.resume(value)
+                        }
+                    } finally { terminal() } // Also called for cancelled transactions' final event.
                 }
-                if (library) browserLibraryRecordOperation(id, action, key, expected, next, callback)
-                else browserRecordOperation(id, action, key, expected, next, callback)
+                when (scope) {
+                    BrowserRecordScope.Receipts -> browserRecordOperation(id, action, key, expected, next, callback)
+                    BrowserRecordScope.Library -> browserLibraryRecordOperation(id, action, key, expected, next, callback)
+                    BrowserRecordScope.Documents -> browserDocumentRecordOperation(id, action, key, expected, next, callback)
+                    BrowserRecordScope.AssetCatalog -> browserAssetCatalogRecordOperation(id, action, key, expected, next, callback)
+                }
             } catch (_: Exception) {
-                cancel()
+                try { cancel() } finally { terminal() }
                 if (waiter.isActive) waiter.resumeWithException(IllegalStateException("Browser durable storage unavailable"))
             }
         }
@@ -72,3 +92,9 @@ internal expect fun browserCancelRecordOperation(id: String)
 
 internal expect fun browserLibraryRecordOperation(id: String, action: String, key: String, expected: String?, next: String?, done: (String?, String?) -> Unit)
 internal expect fun browserCancelLibraryRecordOperation(id: String)
+
+internal expect fun browserDocumentRecordOperation(id: String, action: String, key: String, expected: String?, next: String?, done: (String?, String?) -> Unit)
+internal expect fun browserCancelDocumentRecordOperation(id: String)
+
+internal expect fun browserAssetCatalogRecordOperation(id: String, action: String, key: String, expected: String?, next: String?, done: (String?, String?) -> Unit)
+internal expect fun browserCancelAssetCatalogRecordOperation(id: String)

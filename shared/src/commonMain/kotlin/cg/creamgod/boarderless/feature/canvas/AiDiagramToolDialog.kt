@@ -33,7 +33,8 @@ import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
 
-/** Tool wizard, per-round consent and batch proposal review. Credentials remain memory-only. */
+/** Chat-style tool session: typed progress, per-round consent cards and batch proposal review.
+ * Credentials stay in memory; only the OS key vault may persist the token, and only on request. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun AiDiagramToolDialog(
@@ -44,6 +45,9 @@ internal fun AiDiagramToolDialog(
     isSessionCurrent: () -> Boolean,
     onApply: suspend (AiProposal) -> AiDiagramApplyOutcome,
     onDismiss: () -> Unit,
+    initialChangesExpanded: Boolean = true,
+    onChangesExpandedChange: (Boolean) -> Unit = {},
+    onReviewOriginalSubmission: (() -> Unit)? = null,
 ) {
     val colors = BoarderLessTheme.colors
     val scope = rememberCoroutineScope()
@@ -55,55 +59,61 @@ internal fun AiDiagramToolDialog(
     // This is the established APP wire subset, not an assertion of Router tool support.
     val caps = remember(supportsRelationGeometry) { aiCanvasToolCapabilities(supportsRelationGeometry) }
     var whole by remember { mutableStateOf(false) }
+    var showScope by remember { mutableStateOf(false) }
     val approved = if (whole) workspace.objects.keys.toSet() else selection
     val scopeReferences = remember(approved) { aiDiagramObjectReferences(approved) }
     val scopeRelations = remember(workspace, approved) { aiDiagramRelationReferences(workspace, approved) }
-    var endpoint by remember { mutableStateOf("") }
-    var model by remember { mutableStateOf("") }
-    var maxTokensText by remember { mutableStateOf("") }
-    var chatTokenLimitField by remember { mutableStateOf(AiChatTokenLimitField.MaxCompletionTokens) }
-    var temperatureText by remember { mutableStateOf("") }
-    val requestParameters = remember(maxTokensText, temperatureText) {
-        runCatching { parseAiRequestParameters(maxTokensText, temperatureText) }
-    }
+    val store = remember { aiSettingsStore() }
+    var conn by remember { mutableStateOf(AiConnectionSettings()) }
     var token by remember { mutableStateOf("") }
-    var version by remember { mutableStateOf("") }
-    var dialect by remember { mutableStateOf(AiRequestDialect.OpenAiChat) }
-    var auth by remember { mutableStateOf("Bearer") }
-    var localHttp by remember { mutableStateOf(false) }
+    var storedToken by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
+    var settingsProblem by remember { mutableStateOf<String?>(null) }
+    val requestParameters = remember(conn.maxTokens, conn.temperature) {
+        runCatching { parseAiRequestParameters(conn.maxTokens, conn.temperature) }
+    }
     var task by remember { mutableStateOf("") }
     var open by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
     var applying by remember { mutableStateOf(false) }
+    var appliedSuccessfully by remember { mutableStateOf(false) }
     var job by remember { mutableStateOf<Job?>(null) }
     var pending by remember { mutableStateOf<AiDiagramRequestReview?>(null) }
-    var consented by remember { mutableStateOf<AiDiagramRequestReview?>(null) }
+    val entries = remember { mutableStateListOf<AiChatEntry>() }
+    var nextEntryId by remember { mutableStateOf(0) }
     var references by remember { mutableStateOf<Map<String, CanvasObjectId>>(emptyMap()) }
     var plan by remember { mutableStateOf<AiProposal?>(null) }
+    var changesExpanded by remember { mutableStateOf(initialChangesExpanded) }
     var applyConsent by remember { mutableStateOf(false) }
     // A failed retainDraft can have published the journal before reporting failure. Never
     // reuse this proposal's transaction ID with different exclusions after that boundary.
     var frozenApplyPlan by remember { mutableStateOf<AiProposal?>(null) }
-    var answer by remember { mutableStateOf("") }
     var message by remember { mutableStateOf<String?>(null) }
-    var textRound by remember { mutableStateOf(0) }
     var round by remember { mutableStateOf(0) }
     var diagnostics by remember { mutableStateOf<List<AiProbeDiagnostic>>(emptyList()) }
     var localLogging by remember { mutableStateOf(false) }
     val gate =
         remember {
-            AiDiagramRoundApproval {
-                pending = it
-                consented = null
+            AiDiagramRoundApproval { review ->
+                pending = review
             }
         }
+
+    fun entryId() = nextEntryId++
+
+    fun setRequestState(
+        round: Int,
+        state: AiRequestState,
+    ) {
+        val index = entries.indexOfLast { it is AiChatEntry.Request && it.round == round }
+        if (index >= 0) entries[index] = (entries[index] as AiChatEntry.Request).copy(state = state)
+    }
 
     fun clearPlan() {
         references = emptyMap()
         plan = null
         frozenApplyPlan = null
         applyConsent = false
-        answer = ""
         message = null
     }
 
@@ -115,6 +125,14 @@ internal fun AiDiagramToolDialog(
         clearPlan()
         onDismiss()
     }
+    LaunchedEffect(Unit) {
+        store?.loadSettings()?.let { conn = it.toConnection() }
+        store?.loadToken()?.let {
+            token = it
+            storedToken = true
+        }
+        if (!conn.configured) showSettings = true
+    }
     DisposableEffect(Unit) {
         onDispose {
             open = false
@@ -123,7 +141,6 @@ internal fun AiDiagramToolDialog(
             token = ""
             plan = null
             frozenApplyPlan = null
-            answer = ""
         }
     }
     LaunchedEffect(isSessionCurrent()) {
@@ -131,74 +148,382 @@ internal fun AiDiagramToolDialog(
             gate.close()
             job?.cancel()
             clearPlan()
-            message =
-                Strings.aiProbe.debugHintWorkspace()
+            message = if (appliedSuccessfully) Strings.aiTools.queued() else Strings.aiProbe.debugHintWorkspace()
         }
     }
     val scopeValid = approved.size <= 128 && scopeRelations.size <= 256 && approved.all { it in workspace.objects }
     val preview = remember(plan, workspace) { plan?.preview(workspace) }
+    val canSend =
+        !busy && !applying && !appliedSuccessfully && plan == null && requestParameters.isSuccess && scopeValid && sessionCurrent() && task.isNotBlank() &&
+            conn.configured && (conn.authentication == "None" || token.isNotBlank())
+    val listState = rememberScrollState()
+    LaunchedEffect(entries.size, pending, plan, message) { listState.animateScrollTo(listState.maxValue) }
+
+    fun start() {
+        if (!canSend || !open) return
+        val server =
+            AiServerProfile(
+                conn.endpoint,
+                if (conn.allowInsecureLocalHttp) AiServerLocation.Local else AiServerLocation.Remote,
+                AiRequestBodyProfile(
+                    conn.dialect,
+                    conn.model,
+                    requestParameters.getOrThrow().maxOutputTokens,
+                    requestParameters.getOrThrow().temperature,
+                    conn.chatTokenLimitField,
+                ),
+                conn.anthropicVersion.takeIf { conn.dialect == AiRequestDialect.AnthropicMessages },
+                conn.allowInsecureLocalHttp,
+            )
+        val request = randomUuid()
+        val session = randomUuid()
+        val approvedScope = approved.toSet()
+        val credential = token
+        val mode = conn.authentication
+        val prompt = task
+        val trace = if (conn.traceToolCalls) aiToolTrace() else null
+        trace?.record("task", request, 0, mapOf("prompt" to prompt, "model" to conn.model, "dialect" to conn.dialect.name, "scopeObjects" to approvedScope.size.toString()))
+        entries += AiChatEntry.User(entryId(), prompt)
+        task = ""
+        clearPlan()
+        busy = true
+        appliedSuccessfully = false
+        message = null
+        round = 0
+        localLogging = false
+        diagnostics = emptyList()
+        job =
+            scope.launch {
+                var logger: AiProbeLocalLog? = null
+                var logRound = 0
+                var diagnosticTimeline: AiProbeDiagnosticTimeline? = null
+                // Round numbers restart for each task. Never locate a previous task's
+                // card by round alone (Preparing can arrive before this task has a card).
+                val requestEntries = mutableMapOf<Int, Int>()
+                fun recordTerminal(event: AiProbeDiagnostic) {
+                    if (diagnostics.lastOrNull()?.stage == AiProbeStage.Failed ||
+                        diagnostics.lastOrNull()?.stage == AiProbeStage.Cancelled) return
+                    val displayed = (diagnosticTimeline ?: AiProbeDiagnosticTimeline().also {
+                        diagnosticTimeline = it
+                    }).record(event) ?: return
+                    logger?.record(displayed)
+                    if (open) {
+                        diagnostics = (diagnostics + displayed).takeLast(24)
+                        val id = requestEntries[logRound]
+                        val index = entries.indexOfFirst { it is AiChatEntry.Request && it.id == id }
+                        if (index >= 0) {
+                            val entry = entries[index] as AiChatEntry.Request
+                            entries[index] = entry.copy(diagnostic = displayed)
+                        }
+                    }
+                }
+                try {
+                    when (
+                        val result =
+                            runAiDiagramToolLoop(
+                                server,
+                                request,
+                                session,
+                                prompt,
+                                workspace,
+                                approvedScope,
+                                caps,
+                                approve = { review ->
+                                    val id = entryId()
+                                    requestEntries[review.round] = id
+                                    entries +=
+                                        AiChatEntry.Request(
+                                            id, review.round, review.server.endpoint, review.server.body.model, review.body,
+                                            AiRequestState.Pending,
+                                        )
+                                    gate.await(review)
+                                },
+                                validateScope = { validate() },
+                                isSessionCurrent = { open && sessionCurrent() },
+                                credentialHeaders = {
+                                    aiCredentialHeaders(
+                                        when (mode) {
+                                            "Bearer" -> AiProbeAuthentication.Bearer
+                                            "x-api-key" -> AiProbeAuthentication.ApiKey
+                                            else -> AiProbeAuthentication.None
+                                        },
+                                        credential,
+                                    )
+                                },
+                                onProgress = { event ->
+                                    if (open) {
+                                        when (event) {
+                                            is AiDiagramLoopProgress.Text -> {
+                                                val last = entries.lastOrNull()
+                                                if (last is AiChatEntry.Assistant && last.round == event.round) {
+                                                    entries[entries.lastIndex] = last.copy(text = last.text + event.text)
+                                                } else {
+                                                    entries += AiChatEntry.Assistant(entryId(), event.round, event.text)
+                                                }
+                                            }
+
+                                            is AiDiagramLoopProgress.Tools -> {
+                                                event.calls.zip(event.results).forEach { (call, result) ->
+                                                    trace?.record(
+                                                        "tool", request, event.round,
+                                                        mapOf(
+                                                            "tool" to call.name,
+                                                            "status" to result.status.name,
+                                                            "failure" to result.failure?.name.orEmpty(),
+                                                            "arguments" to call.arguments,
+                                                            "result" to result.data.toString(),
+                                                        ),
+                                                    )
+                                                }
+                                                entries += AiChatEntry.Tools(entryId(), event.round, aiToolLines(event.calls, event.results))
+                                            }
+                                        }
+                                    }
+                                },
+                                onDiagnostic = { n, event ->
+                                    if (n != logRound) {
+                                        logRound = n
+                                        diagnosticTimeline = AiProbeDiagnosticTimeline()
+                                        logger =
+                                            aiProbeLocalLog(
+                                                server.body.dialect,
+                                                when (mode) {
+                                                    "Bearer" -> AiProbeAuthentication.Bearer
+                                                    "x-api-key" -> AiProbeAuthentication.ApiKey
+                                                    else -> AiProbeAuthentication.None
+                                                },
+                                            )
+                                        localLogging = logger != null
+                                    }
+                                    val displayed = (diagnosticTimeline ?: AiProbeDiagnosticTimeline().also {
+                                        diagnosticTimeline = it
+                                    }).record(event)
+                                    if (displayed != null) logger?.record(displayed)
+                                    if (open) {
+                                        round = n
+                                        if (displayed != null) diagnostics = (diagnostics + displayed).takeLast(24)
+                                        val activeEntryId = requestEntries[n]
+                                        val index = if (activeEntryId == null) -1 else entries.indexOfFirst {
+                                            it is AiChatEntry.Request && it.id == activeEntryId
+                                        }
+                                        if (index >= 0) {
+                                            val entry = entries[index] as AiChatEntry.Request
+                                            entries[index] = entry.copy(diagnostic = displayed ?: entry.diagnostic ?: event)
+                                        }
+                                    }
+                                },
+                            )
+                    ) {
+                        is AiDiagramLoopResult.Ready -> {
+                            ensureActive()
+                            if (open && sessionCurrent()) {
+                                plan = result.proposal
+                                references = result.localReferences.toMap()
+                                // A reply with no tool calls was already streamed into the transcript.
+                                trace?.record("final", request, round, mapOf("text" to result.text, "proposalItems" to (result.proposal?.items?.size ?: 0).toString()))
+                                if (entries.none { it is AiChatEntry.Assistant && it.text == result.text } && result.text.isNotBlank()) {
+                                    entries += AiChatEntry.Assistant(entryId(), round, result.text)
+                                }
+                                message = if (result.proposal == null) Strings.aiTools.noChanges() else Strings.aiTools.ready()
+                            }
+                        }
+
+                        is AiDiagramLoopResult.Failed -> {
+                            if (open) {
+                                clearPlan()
+                                message =
+                                    if (result.code == AiDiagramLoopFailure.ConsentDenied) {
+                                        Strings.aiProbe.consentDeclined()
+                                    } else {
+                                        Strings.aiTools.failed(result.code.name)
+                                    }
+                            }
+                        }
+                    }
+                } catch (cancelled: CancellationException) {
+                    recordTerminal(AiProbeDiagnostic(AiProbeStage.Cancelled))
+                    if (open) clearPlan()
+                    throw cancelled
+                } catch (failure: Exception) {
+                    recordTerminal(AiProbeDiagnostic(AiProbeStage.Failed,
+                        if (failure is AiRequestValidationException) AiProbeFailure.Configuration else AiProbeFailure.Unknown))
+                    if (open) {
+                        clearPlan()
+                        message = Strings.aiProbe.failed()
+                    }
+                } finally {
+                    busy = false
+                    pending = null
+                    applyConsent = false
+                    // A request that never got an answer (cancel, scope change) must not keep looking actionable.
+                    entries.forEachIndexed { index, entry ->
+                        if (entry is AiChatEntry.Request && entry.state == AiRequestState.Pending) {
+                            entries[index] = entry.copy(state = AiRequestState.Denied)
+                        }
+                    }
+                }
+            }
+    }
     Dialog(onDismissRequest = { if (!applying) close() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).imePadding(), contentAlignment = Alignment.Center) {
             GlassSurface(Modifier.widthIn(max = 920.dp).fillMaxWidth(.94f).fillMaxHeight(.92f)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     BasicText(Strings.aiTools.title(), style = TextStyle(color = colors.contentText, fontSize = 18.sp))
                     BasicText(Strings.aiTools.warning(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
-                    BasicText(
-                        aiProbeDiagnosticLabel(diagnostics.lastOrNull()) +
-                            (diagnostics.lastOrNull()?.httpStatus?.let { " · HTTP $it" } ?: ""),
-                        style = TextStyle(color = colors.contentText),
-                    )
-                    diagnostics
-                        .lastOrNull()
-                        ?.takeIf {
-                            it.stage == AiProbeStage.Failed
-                        }?.let { BasicText(aiProbeDiagnosticHint(it), style = TextStyle(color = colors.danger, fontSize = 12.sp)) }
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        ShellButton(Strings.aiProbe.debugCopy(), enabled = diagnostics.isNotEmpty(), onClick = {
+                    if (frozenApplyPlan != null && !applying) BasicText(Strings.aiTools.publicationUnconfirmed(),
+                        style = TextStyle(color = colors.contentText, fontSize = 12.sp))
+                    if (frozenApplyPlan != null && !applying) onReviewOriginalSubmission?.let { reviewOriginal ->
+                        ShellButton(Strings.draftReview.originalTransactions(), onClick = { close(); reviewOriginal() })
+                    }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        ShellButton(Strings.aiTools.settings(), compact = true, enabled = !busy && !applying && frozenApplyPlan == null,
+                            onClick = { showSettings = true })
+                        ShellButton(Strings.aiProbe.debugCopy(), compact = true, enabled = diagnostics.isNotEmpty(), onClick = {
                             clipboard.setText(
-                                AnnotatedString("BoarderLess AI tool probe\n" + diagnostics.joinToString("\n") { it.reportLine() }),
+                                AnnotatedString("BoarderLess AI tool probe\n" + diagnostics.joinToString("\n") { it.reportLine() } +
+                                    "\nRequest outcomes\n" + entries.filterIsInstance<AiChatEntry.Request>().joinToString("\n") {
+                                        "entry=${it.id} round=${it.round} approval=${it.state.name} " + (it.diagnostic?.reportLine() ?: "NoTransportResult")
+                                    }),
                             )
                         })
                         if (busy) {
-                            ShellButton(Strings.aiProbe.cancelRequest(), onClick = {
+                            ShellButton(Strings.aiProbe.cancelRequest(), compact = true, onClick = {
                                 job?.cancel()
-                                consented = null
                                 clearPlan()
                             })
                         }
+                        ShellButton(Strings.common.close(), compact = true, enabled = !applying, onClick = { close() })
                     }
-                    if (localLogging) {
-                        BasicText(
-                            Strings.aiProbe.localLog(),
-                            style = TextStyle(color = colors.contentMuted, fontSize = 11.sp),
+                    BasicText(
+                        aiProbeDiagnosticLabel(diagnostics.lastOrNull()) + (diagnostics.lastOrNull()?.httpStatus?.let { " · HTTP $it" } ?: ""),
+                        style = TextStyle(color = colors.contentMuted, fontSize = 11.sp),
+                    )
+                    diagnostics.lastOrNull()?.takeIf { it.stage == AiProbeStage.Failed }?.let {
+                        BasicText(aiProbeDiagnosticHint(it), style = TextStyle(color = colors.danger, fontSize = 12.sp))
+                    }
+                    diagnostics.lastOrNull()?.reply?.let {
+                        BasicText(Strings.aiProbe.replySummary(it.textBytes, it.toolCalls, it.argumentBytes),
+                            style = TextStyle(color = colors.contentMuted, fontSize = 11.sp))
+                    }
+                    if (localLogging) BasicText(Strings.aiProbe.localLog(), style = TextStyle(color = colors.contentMuted, fontSize = 10.sp))
+                    if (appliedSuccessfully) {
+                        BasicText(Strings.aiTools.appliedReviewInfo(), style = TextStyle(color = colors.contentText, fontSize = 12.sp))
+                    }
+                    Column(Modifier.weight(1f).verticalScroll(listState), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (!conn.configured) {
+                            BasicText(Strings.aiTools.notConfigured(), style = TextStyle(color = colors.contentText, fontSize = 13.sp))
+                        }
+                        entries.forEach { entry ->
+                            key(entry.id) {
+                                AiChatEntryView(
+                                    entry = entry,
+                                    pending = pending,
+                                    canRespond = sessionCurrent(),
+                                    onApprove = { review ->
+                                        if (gate.respond(review, true)) setRequestState(review.round, AiRequestState.Approved)
+                                    },
+                                    onDeny = { review ->
+                                        if (gate.respond(review, false)) setRequestState(review.round, AiRequestState.Denied)
+                                    },
+                                )
+                            }
+                        }
+                        message?.let { BasicText(it, style = TextStyle(color = colors.contentText, fontSize = 12.sp)) }
+                        plan?.let { proposal ->
+                            BasicText(Strings.aiTools.preview(), style = TextStyle(color = colors.contentText, fontSize = 15.sp))
+                            proposal.items.forEach { item ->
+                                ShellButton(
+                                    Strings.aiTools.include(aiToolLabel(item.summary)),
+                                    accent = item.included,
+                                    enabled = !applying && frozenApplyPlan == null,
+                                    onClick = {
+                                        if (!applying && frozenApplyPlan == null) {
+                                            plan = proposal.withItemIncluded(item.itemId, !item.included)
+                                            applyConsent = false
+                                        }
+                                    },
+                                )
+                            }
+                            if (frozenApplyPlan != null) {
+                                BasicText(Strings.aiTools.selectionFixed(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
+                            }
+                            when (val p = preview) {
+                                is AiProposalPreview.Ready -> {
+                                    AiDiagramDraftPreview(p.workspace, references)
+                                    AiProposalChangeReview(workspace, p.workspace, changesExpanded) {
+                                        changesExpanded = it
+                                        onChangesExpandedChange(it)
+                                    }
+                                }
+                                is AiProposalPreview.Conflict -> BasicText(Strings.aiTools.conflict(), style = TextStyle(color = colors.danger))
+                                else -> BasicText(Strings.aiTools.empty(), style = TextStyle(color = colors.contentMuted))
+                            }
+                            ShellButton(
+                                Strings.aiTools.applyConsent(),
+                                accent = applyConsent,
+                                enabled = !applying && frozenApplyPlan == null && preview is AiProposalPreview.Ready,
+                                onClick = { applyConsent = !applyConsent },
+                            )
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                ShellButton(
+                                    Strings.aiTools.apply(),
+                                    enabled = applyConsent && frozenApplyPlan == null && preview is AiProposalPreview.Ready && !applying && sessionCurrent(),
+                                    onClick = applyPlan@{
+                                        if (applying || busy || frozenApplyPlan != null || !applyConsent || !open || plan !== proposal) return@applyPlan
+                                        val reviewed =
+                                            frozenApplyPlan ?: proposal
+                                                .copy(items = proposal.items.toList())
+                                                .also { frozenApplyPlan = it }
+                                        applyConsent = false
+                                        applying = true
+                                        job =
+                                            scope.launch {
+                                                try {
+                                                    when (apply(reviewed)) {
+                                                        AiDiagramApplyOutcome.Queued -> {
+                                                            appliedSuccessfully = true
+                                                            message = Strings.aiTools.queued()
+                                                            plan = null
+                                                            frozenApplyPlan = null
+                                                            applyConsent = false
+                                                        }
+                                                        AiDiagramApplyOutcome.Rejected -> {
+                                                            frozenApplyPlan = null
+                                                            message = Strings.aiTools.applyFailed()
+                                                        }
+                                                        AiDiagramApplyOutcome.Unconfirmed -> {
+                                                            message = Strings.aiTools.publicationUnconfirmed()
+                                                        }
+                                                    }
+                                                } catch (cancelled: CancellationException) {
+                                                    message = Strings.aiTools.publicationUnconfirmed()
+                                                    throw cancelled
+                                                } catch (_: Exception) {
+                                                    message = Strings.aiTools.publicationUnconfirmed()
+                                                } finally {
+                                                    applying = false
+                                                }
+                                            }
+                                    },
+                                )
+                                ShellButton(Strings.aiTools.discardDraft(), enabled = !applying && frozenApplyPlan == null, onClick = { clearPlan() })
+                            }
+                        }
+                    }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        ShellButton(Strings.aiTools.scopeSelection(), compact = true, accent = !whole, enabled = !busy && plan == null, onClick = { whole = false })
+                        ShellButton(Strings.aiTools.scopeWhole(), compact = true, accent = whole, enabled = !busy && plan == null, onClick = { whole = true })
+                        ShellButton(
+                            if (showScope) Strings.aiTools.hideScope() else Strings.aiTools.showScope(),
+                            compact = true,
+                            onClick = { showScope = !showScope },
                         )
                     }
-                    message?.let { BasicText(it, style = TextStyle(color = colors.contentText, fontSize = 12.sp)) }
-                    Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (!busy && plan == null) {
-                            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                ShellButton(Strings.aiTools.scopeSelection(), accent = !whole, onClick = {
-                                    whole = false
-                                    clearPlan()
-                                })
-                                ShellButton(Strings.aiTools.scopeWhole(), accent = whole, onClick = {
-                                    whole = true
-                                    clearPlan()
-                                })
-                                ShellButton("OpenAI-compatible", accent = dialect == AiRequestDialect.OpenAiChat, onClick = {
-                                    dialect =
-                                        AiRequestDialect.OpenAiChat
-                                })
-                                ShellButton("Claude-compatible", accent = dialect == AiRequestDialect.AnthropicMessages, onClick = {
-                                    dialect =
-                                        AiRequestDialect.AnthropicMessages
-                                })
-                            }
-                            BasicText(
-                                Strings.aiTools.scope(approved.size),
-                                style = TextStyle(color = colors.contentMuted, fontSize = 12.sp),
-                            )
-                            BasicText(Strings.aiTools.dataShared(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
+                    BasicText(Strings.aiTools.scope(approved.size), style = TextStyle(color = colors.contentMuted, fontSize = 11.sp))
+                    if (!scopeValid) BasicText(Strings.aiTools.contextInvalid(), style = TextStyle(color = colors.danger, fontSize = 12.sp))
+                    if (showScope) {
+                        Column(Modifier.heightIn(max = 160.dp).verticalScroll(rememberScrollState())) {
+                            BasicText(Strings.aiTools.dataShared(), style = TextStyle(color = colors.contentMuted, fontSize = 11.sp))
                             // Let the user inspect every approved object before starting. No asset URLs.
                             SelectionContainer {
                                 BasicText(
@@ -208,359 +533,95 @@ internal fun AiDiagramToolDialog(
                                             ref + ": " + when (val node = workspace.objects.getValue(id)) {
                                                 is TextNode -> node.text
                                                 is GroupFrame -> node.title
+                                                is cg.creamgod.boarderless.domain.model.ExternalMediaNode -> node.altText
                                                 is MediaNode -> node.altText
                                             }
                                         },
                                     style = TextStyle(color = colors.contentText, fontSize = 12.sp),
                                 )
                             }
-                            if (scopeRelations.isNotEmpty()) SelectionContainer {
-                                val byId = scopeReferences.entries.associate { it.value to it.key }
-                                BasicText(scopeRelations.entries.joinToString("\n") { (ref, id) ->
-                                    val edge = workspace.relations.getValue(id)
-                                    val arrow = when (edge.direction) {
-                                        RelationDirection.Forward -> "→"
-                                        RelationDirection.Backward -> "←"
-                                        RelationDirection.Both -> "↔"
-                                        RelationDirection.None -> "—"
-                                    }
-                                    "$ref: ${byId.getValue(edge.sourceObjectId)} $arrow ${byId.getValue(edge.targetObjectId)}" +
-                                        (edge.label?.let { " · $it" } ?: "")
-                                }, style = TextStyle(color = colors.contentText, fontSize = 12.sp))
-                            }
-                            if (!scopeValid) BasicText(Strings.aiTools.contextInvalid(), style = TextStyle(color = colors.danger))
-                            AiProbeField(Strings.aiProbe.endpoint(), endpoint, { if (it.length <= 4096) endpoint = it })
-                            AiProbeField(Strings.aiProbe.model(), model, { if (it.length <= 256) model = it })
-                            if (aiChatToolsUseNoReasoning(dialect, model)) {
-                                BasicText(Strings.aiTools.chatReasoningNone(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
-                            }
-                            AiProbeField(Strings.aiProbe.maxTokens(), maxTokensText, { maxTokensText = it })
-                            if (dialect == AiRequestDialect.OpenAiChat) {
-                                AiTokenLimitFieldPicker(chatTokenLimitField) { chatTokenLimitField = it }
-                            }
-                            AiProbeField(Strings.aiProbe.temperature(), temperatureText, { temperatureText = it })
-                            if (requestParameters.isFailure) BasicText(Strings.aiProbe.invalidParameters(), style = TextStyle(color = colors.danger))
-                            if (dialect ==
-                                AiRequestDialect.AnthropicMessages
-                            ) {
-                                AiProbeField(Strings.aiProbe.version(), version, {
-                                    if (it.length <=
-                                        32
-                                    ) {
-                                        version = it
-                                    }
-                                })
-                            }
-                            AiProbeField(Strings.aiProbe.token(), token, { if (it.length <= 8192) token = it }, secret = true)
-                            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                listOf("Bearer", "x-api-key", "None").forEach { mode ->
-                                    ShellButton(
-                                        mode,
-                                        accent =
-                                            auth == mode,
-                                        onClick = { auth = mode },
+                            if (scopeRelations.isNotEmpty()) {
+                                SelectionContainer {
+                                    val byId = scopeReferences.entries.associate { it.value to it.key }
+                                    BasicText(
+                                        scopeRelations.entries.joinToString("\n") { (ref, id) ->
+                                            val edge = workspace.relations.getValue(id)
+                                            val arrow =
+                                                when (edge.direction) {
+                                                    RelationDirection.Forward -> "→"
+                                                    RelationDirection.Backward -> "←"
+                                                    RelationDirection.Both -> "↔"
+                                                    RelationDirection.None -> "—"
+                                                }
+                                            "$ref: ${byId.getValue(edge.sourceObjectId)} $arrow ${byId.getValue(edge.targetObjectId)}" +
+                                                (edge.label?.let { " · $it" } ?: "")
+                                        },
+                                        style = TextStyle(color = colors.contentText, fontSize = 12.sp),
                                     )
                                 }
                             }
-                            ShellButton(Strings.aiProbe.localHttp(), accent = localHttp, onClick = { localHttp = !localHttp })
+                        }
+                    }
+                    if (plan != null) BasicText(Strings.aiTools.finishDraftFirst(), style = TextStyle(color = colors.contentMuted, fontSize = 11.sp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
+                        Column(Modifier.weight(1f)) {
                             AiProbeField(
-                                Strings.aiTools.task(),
+                                if (task.isEmpty()) Strings.aiTools.composerHint() else Strings.aiTools.task(),
                                 task,
-                                { if (it.encodeToByteArray().size <= 65536) task = it },
+                                {
+                                    if (aiTextWithinUtf8Limit(it, 65536)) task = it
+                                    else message = Strings.aiTools.inputRejected()
+                                },
+                                enabled = !busy && plan == null,
                                 multiline = true,
                             )
-                            ShellButton(
-                                Strings.aiTools.start(),
-                                enabled =
-                                    requestParameters.isSuccess && scopeValid && sessionCurrent() && task.isNotBlank() && endpoint.isNotBlank() && model.isNotBlank() &&
-                                        (auth == "None" || token.isNotBlank()),
-                                onClick = startTask@{
-                                    if (busy || applying || !open) return@startTask
-                                    val server =
-                                        AiServerProfile(
-                                            endpoint,
-                                            if (localHttp) AiServerLocation.Local else AiServerLocation.Remote,
-                                            AiRequestBodyProfile(dialect, model, requestParameters.getOrThrow().maxOutputTokens, requestParameters.getOrThrow().temperature, chatTokenLimitField),
-                                            version.takeIf {
-                                                dialect ==
-                                                    AiRequestDialect.AnthropicMessages
-                                            },
-                                            localHttp,
-                                        )
-                                    val request = randomUuid()
-                                    val session = randomUuid()
-                                    val approvedScope = approved.toSet()
-                                    val credential = token
-                                    val mode = auth
-                                    clearPlan()
-                                    busy = true
-                                    diagnostics = emptyList()
-                                    job =
-                                        scope.launch {
-                                            var logger: AiProbeLocalLog? = null
-                                            var logRound = 0
-                                            try {
-                                                when (
-                                                    val result =
-                                                        runAiDiagramToolLoop(
-                                                            server,
-                                                            request,
-                                                            session,
-                                                            task,
-                                                            workspace,
-                                                            approvedScope,
-                                                            caps,
-                                                            approve = { gate.await(it) },
-                                                            validateScope = { validate() },
-                                                            isSessionCurrent = {
-                                                                open &&
-                                                                    sessionCurrent()
-                                                            },
-                                                            credentialHeaders = {
-                                                                aiCredentialHeaders(when (mode) {
-                                                                    "Bearer" -> AiProbeAuthentication.Bearer
-                                                                    "x-api-key" -> AiProbeAuthentication.ApiKey
-                                                                    else -> AiProbeAuthentication.None
-                                                                    }, credential)
-                                                            },
-                                                            onProgress = { event ->
-                                                                if (open) {
-                                                                    when (event) {
-                                                                        is AiDiagramLoopProgress.Text -> {
-                                                                            if (textRound !=
-                                                                                event.round
-                                                                            ) {
-                                                                                answer = ""
-                                                                            }
-                                                                            textRound = event.round
-                                                                            answer += event.text
-                                                                        }
-
-                                                                        is AiDiagramLoopProgress.Tools -> {
-                                                                            message =
-                                                                                Strings.aiTools.tools(event.round, event.results.size)
-                                                                        }
-                                                                    }
-                                                                }
-                                                            },
-                                                            onDiagnostic = { n, event ->
-                                                                if (n !=
-                                                                    logRound
-                                                                ) {
-                                                                    logRound = n
-                                                                    logger =
-                                                                        aiProbeLocalLog(
-                                                                            server.body.dialect,
-                                                                            when (mode) {
-                                                                                "Bearer" -> AiProbeAuthentication.Bearer
-                                                                                "x-api-key" -> AiProbeAuthentication.ApiKey
-                                                                                else -> AiProbeAuthentication.None
-                                                                            },
-                                                                        )
-                                                                    localLogging =
-                                                                        logger != null
-                                                                }
-                                                                logger?.record(event)
-                                                                if (open) {
-                                                                    round = n
-                                                                    diagnostics = (diagnostics + event).takeLast(24)
-                                                                }
-                                                            },
-                                                        )
-                                                ) {
-                                                    is AiDiagramLoopResult.Ready -> {
-                                                        ensureActive()
-                                                        if (open &&
-                                                            sessionCurrent()
-                                                        ) {
-                                                            plan = result.proposal
-                                                            references = result.localReferences.toMap()
-                                                            answer =
-                                                                result.text
-                                                            message =
-                                                                if (result.proposal ==
-                                                                    null
-                                                                ) {
-                                                                    Strings.aiTools.noChanges()
-                                                                } else {
-                                                                    Strings.aiTools.ready()
-                                                                }
-                                                        }
-                                                    }
-
-                                                    is AiDiagramLoopResult.Failed -> {
-                                                        if (open) {
-                                                            clearPlan()
-                                                            message =
-                                                                if (result.code == AiDiagramLoopFailure.ConsentDenied) Strings.aiProbe.consentDeclined()
-                                                                else Strings.aiTools.failed(result.code.name)
-                                                        }
-                                                    }
-                                                }
-                                            } catch (
-                                                cancelled: CancellationException,
-                                            ) {
-                                                if (open) clearPlan()
-                                                throw cancelled
-                                            } catch (
-                                                _: Exception,
-                                            ) {
-                                                if (open) {
-                                                    clearPlan()
-                                                    message = Strings.aiProbe.failed()
-                                                }
-                                            } finally {
-                                                busy = false
-                                                pending = null
-                                                consented = null
-                                                applyConsent = false
-                                            }
-                                        }
-                                },
-                            )
                         }
-                        pending?.let { review ->
-                            BasicText(Strings.aiTools.round(review.round), style = TextStyle(color = colors.contentText, fontSize = 15.sp))
-                            BasicText(Strings.aiTools.waiting(), style = TextStyle(color = colors.contentMuted))
-                            SelectionContainer {
-                                BasicText(
-                                    "${review.server.endpoint}\n${review.server.body.model}\n${review.body}",
-                                    Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState()),
-                                    style = TextStyle(color = colors.contentText, fontSize = 11.sp),
-                                )
-                            }
-                            ShellButton(Strings.aiProbe.consent(), accent = consented === review, onClick = {
-                                consented =
-                                    if (consented === review) null else review
-                            })
-                            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                ShellButton(Strings.aiTools.approve(), enabled = consented === review && sessionCurrent(), onClick = {
-                                    gate.respond(review, true)
-                                    consented =
-                                        null
-                                })
-                                ShellButton(Strings.aiTools.deny(), onClick = {
-                                    gate.respond(review, false)
-                                    consented = null
-                                })
-                            }
-                        }
-                        if (answer.isNotEmpty()) {
-                            SelectionContainer {
-                                BasicText(
-                                    answer,
-                                    Modifier.heightIn(max = 220.dp).verticalScroll(rememberScrollState()),
-                                    style = TextStyle(color = colors.contentText, fontSize = 12.sp),
-                                )
-                            }
-                        }
-                        plan?.let { proposal ->
-                            BasicText(Strings.aiTools.preview(), style = TextStyle(color = colors.contentText, fontSize = 15.sp))
-                            proposal.items.forEach { item ->
-                                ShellButton(
-                                    Strings.aiTools.include(
-                                        when (item.summary) {
-                                            "create_nodes" -> Strings.aiTools.createNodes()
-                                            "create_groups" -> Strings.aiTools.createGroups()
-                                            "create_relations" -> Strings.aiTools.createRelations()
-                                            "insert_node_on_relation" -> Strings.aiTools.insertRelationNode()
-                                            "update_nodes" -> Strings.aiTools.updateNodes()
-                                            "layout_nodes" -> Strings.aiTools.layoutNodes()
-                                            else -> item.summary
-                                        },
-                                    ),
-                                    accent = item.included,
-                                    enabled =
-                                        !applying && frozenApplyPlan == null,
-                                    onClick = {
-                                        if (!applying &&
-                                            frozenApplyPlan == null
-                                        ) {
-                                            plan = proposal.withItemIncluded(item.itemId, !item.included)
-                                            applyConsent =
-                                                false
-                                        }
-                                    },
-                                )
-                            }
-                            if (frozenApplyPlan !=
-                                null
-                            ) {
-                                BasicText(
-                                    Strings.aiTools.selectionFixed(),
-                                    style = TextStyle(color = colors.contentMuted, fontSize = 12.sp),
-                                )
-                            }
-                            when (val p = preview) {
-                                is AiProposalPreview.Ready -> {
-                                    AiDiagramDraftPreview(p.workspace, references)
-                                }
-
-                                is AiProposalPreview.Conflict -> {
-                                    BasicText(
-                                        Strings.aiTools.conflict(),
-                                        style = TextStyle(color = colors.danger),
-                                    )
-                                }
-
-                                else -> {
-                                    BasicText(Strings.aiTools.empty(), style = TextStyle(color = colors.contentMuted))
-                                }
-                            }
-                            ShellButton(
-                                Strings.aiTools.applyConsent(),
-                                accent = applyConsent,
-                                enabled =
-                                    !applying && preview is AiProposalPreview.Ready,
-                                onClick = { applyConsent = !applyConsent },
-                            )
-                            ShellButton(
-                                Strings.aiTools.apply(),
-                                enabled =
-                                    applyConsent && preview is AiProposalPreview.Ready && !applying && sessionCurrent(),
-                                onClick = applyPlan@{
-                                    if (applying || busy || !applyConsent || !open || plan !== proposal) return@applyPlan
-                                    val reviewed =
-                                        frozenApplyPlan ?: proposal
-                                            .copy(
-                                                items = proposal.items.toList(),
-                                            ).also { frozenApplyPlan = it }
-                                    applyConsent = false
-                                    applying = true
-                                    job =
-                                        scope.launch {
-                                            try {
-                                                if (apply(reviewed) ==
-                                                    AiDiagramApplyOutcome.Queued
-                                                ) {
-                                                    message = Strings.aiTools.queued()
-                                                    plan = null
-                                                    answer = ""
-                                                    close()
-                                                } else {
-                                                    message =
-                                                        Strings.aiTools.applyFailed()
-                                                }
-                                            } catch (
-                                                cancelled: CancellationException,
-                                            ) {
-                                                throw cancelled
-                                            } catch (
-                                                _: Exception,
-                                            ) {
-                                                message = Strings.aiTools.applyFailed()
-                                            } finally {
-                                                applying = false
-                                            }
-                                        }
-                                },
-                            )
-                        }
-                        ShellButton(Strings.common.cancel(), enabled = !applying, onClick = { close() })
+                        ShellButton(Strings.aiTools.send(), accent = true, enabled = canSend, onClick = { start() })
                     }
                 }
             }
         }
+    }
+    if (showSettings) {
+        AiSettingsDialog(
+            initial = conn,
+            hasStoredToken = storedToken,
+            sessionHasToken = token.isNotEmpty(),
+            tokenProtected = store?.tokenProtected == true,
+            problem = settingsProblem,
+            onSave = { result ->
+                scope.launch {
+                    var ok = true
+                    if (store != null) ok = store.saveSettings(result.settings.toSaved())
+                    result.token?.let { typed ->
+                        if (result.rememberToken && store != null) {
+                            if (store.saveToken(typed)) storedToken = true else ok = false
+                        }
+                        token = typed
+                    }
+                    if (ok) {
+                        conn = result.settings
+                        settingsProblem = null
+                        showSettings = false
+                        message = Strings.aiTools.settingsSaved()
+                    } else {
+                        settingsProblem = Strings.aiTools.settingsSaveFailed()
+                    }
+                }
+            },
+            onForgetToken = {
+                scope.launch {
+                    store?.clearToken()
+                    token = ""
+                    storedToken = false
+                    settingsProblem = Strings.aiTools.tokenForgotten()
+                }
+            },
+            onDismiss = {
+                settingsProblem = null
+                showSettings = false
+            },
+        )
     }
 }
 
@@ -630,6 +691,7 @@ internal fun AiDiagramToolDialog(
                         when (node) {
                             is TextNode -> node.text
                             is GroupFrame -> node.title
+                            is cg.creamgod.boarderless.domain.model.ExternalMediaNode -> node.altText
                             is MediaNode -> node.altText
                         }
                     drawText(
@@ -649,6 +711,7 @@ internal fun AiDiagramToolDialog(
                 when (node) {
                     is TextNode -> node.text
                     is GroupFrame -> node.title
+                    is cg.creamgod.boarderless.domain.model.ExternalMediaNode -> node.altText
                     is MediaNode -> node.altText
                 },
             style = TextStyle(color = colors.contentText, fontSize = 12.sp),

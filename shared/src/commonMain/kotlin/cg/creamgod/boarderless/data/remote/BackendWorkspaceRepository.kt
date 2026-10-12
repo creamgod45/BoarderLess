@@ -26,6 +26,9 @@ import cg.creamgod.boarderless.domain.history.TransformObjectsOperation
 import cg.creamgod.boarderless.domain.history.UpdateGroupFrameAttributesOperation
 import cg.creamgod.boarderless.domain.history.UpdateMediaNodeAttributesOperation
 import cg.creamgod.boarderless.domain.history.UpdateMediaReferenceOperation
+import cg.creamgod.boarderless.domain.history.mediaReference
+import cg.creamgod.boarderless.domain.history.historyTargetSide
+import cg.creamgod.boarderless.domain.history.MediaReferenceHistoryOrigin
 import cg.creamgod.boarderless.domain.history.UpdateRelationAttributesOperation
 import cg.creamgod.boarderless.domain.history.UpdateTextNodeAttributesOperation
 import cg.creamgod.boarderless.domain.history.WorkspaceOperation
@@ -41,6 +44,10 @@ import cg.creamgod.boarderless.domain.model.Relation
 import cg.creamgod.boarderless.domain.model.RelationDirection
 import cg.creamgod.boarderless.domain.model.RelationId
 import cg.creamgod.boarderless.domain.model.TextNode
+import cg.creamgod.boarderless.domain.model.VectorPath
+import cg.creamgod.boarderless.domain.model.TextPlacement
+import cg.creamgod.boarderless.domain.model.RelationGeometry
+import cg.creamgod.boarderless.domain.sequence.hasValidSequenceBindings
 import cg.creamgod.boarderless.domain.model.Vec2
 import cg.creamgod.boarderless.domain.model.Workspace
 import cg.creamgod.boarderless.domain.model.WorkspaceId
@@ -50,6 +57,7 @@ import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
+import io.ktor.client.request.prepareGet
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.request.patch
@@ -58,6 +66,8 @@ import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
+import io.ktor.client.statement.bodyAsChannel
+import io.ktor.utils.io.readAvailable
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
@@ -73,16 +83,88 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.floatOrNull
+import kotlinx.serialization.json.longOrNull
 
 class BackendWorkspaceRepository(
     baseUrl: String = defaultBackendBaseUrl(),
     private val preferences: SessionPreferences = SessionPreferences(),
     private val client: HttpClient = createHttpClient(),
+    private val realtimeRuntime: RealtimeCheckpointRuntime? = null,
+    private val awaitedSubmissionRuntime: AwaitedSubmissionRuntime? = null,
+    private val requireServerWriterActive: () -> Unit = {},
+    private val prepareServerWriter: suspend () -> Unit = {},
+    private val releaseServerWriter: () -> Unit = {},
+    private val serverWriterOperations: ServerWriterOperationLease? = null,
+    private val mediaReferenceProofRuntime: MediaReferenceProofRuntime? = null,
+    override val quickSchemeRepository: cg.creamgod.boarderless.data.persistence.QuickSchemeRepository? = null,
 ) : cg.creamgod.boarderless.data.CanvasWorkspaceRepository {
+    override val collaborationTransport = cg.creamgod.boarderless.data.WorkspaceCollaborationTransport.RestPolling
+    override val maximumAtomicOperations: Int get() = BackendMaximumAtomicOperations
+    override fun submissionOperationCount(operation: WorkspaceOperation): Int = operation.backendOperationCount()
+    override val cloudQuickSchemeServer = cg.creamgod.boarderless.data.persistence.CloudSchemeServer(baseUrl)
     private val apiBase = "${baseUrl.trimEnd('/')}/api/v1"
+    override val syncAssetGatewayFactory: () -> cg.creamgod.boarderless.data.AssetTransferGateway = { BackendAssetTransferGateway(baseUrl) }
+    override val syncAssetPreparationGatewayFactory: () -> BackendAssetPreparationGateway = { BackendAssetPreparationGateway(baseUrl) }
+    override val syncServerScope = org.kotlincrypto.hash.sha2.SHA256().digest(apiBase.encodeToByteArray())
+        .joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
     private val submissionMutex = preferences.submissionMutex
-    private val draftPersistence = preferences.draftPersistence
-    private val sequenceAllocator = preferences.sequenceAllocator
+    private val legacyDraftPersistence = preferences.draftPersistence
+    private val draftPersistence = AwaitedDraftBoundary(legacyDraftPersistence, awaitedSubmissionRuntime?.drafts, serverWriterOperations)
+    private val recoverySafety = AwaitedRecoveryBoundary(preferences.fenceAttempts, preferences.deletionEvidence, awaitedSubmissionRuntime?.safety, serverWriterOperations)
+    /** Construction/adoption proof only, not a claim that this repository owns the writer
+     * yet. Its normal prepareServerWriter must still acquire and verify platform ownership. */
+    internal fun requireActivatedSubmissionRuntime(runtime: AwaitedSubmissionRuntime, scope: PendingSubmissionScope) {
+        check(awaitedSubmissionRuntime === runtime)
+        check(scope.apiBase == apiBase && scope.userId == preferences.userId && scope.clientId == preferences.clientId &&
+            scope.workspaceId == preferences.workspaceId)
+        runtime.requireActive(scope)
+    }
+    private val sequenceAllocator = awaitedSubmissionRuntime?.sequences ?: preferences.sequenceAllocator?.let { AwaitedLegacyClientSequenceAllocator(it, serverWriterOperations) }
+    private val mediaReferenceCommits by lazy { mediaReferenceProofRuntime?.store { scope ->
+        requireServerWriterActive()
+        awaitedSubmissionRuntime?.requireActive?.invoke(scope)
+        check(scope.apiBase == apiBase && scope.userId == preferences.userId && scope.clientId == preferences.clientId)
+    } }
+    private val confirmedHistories by lazy { mediaReferenceProofRuntime?.historyStore { scope ->
+        requireServerWriterActive()
+        awaitedSubmissionRuntime?.requireActive?.invoke(scope)
+        check(scope.apiBase == apiBase && scope.userId == preferences.userId && scope.clientId == preferences.clientId)
+    } }
+
+    override fun preparedMediaImport(session: WorkspaceSession, canContinue: () -> Boolean): cg.creamgod.boarderless.data.PreparedMediaImportController? {
+        val runtime = mediaReferenceProofRuntime ?: return null
+        val store = runtime.pickedAssetUploads { scope ->
+            requireServerWriterActive()
+            check(scope.serverScope == syncServerScope && scope.userId == preferences.userId &&
+                scope.clientId == preferences.clientId && scope.workspaceId.value == preferences.workspaceId)
+            check(canContinue())
+        }
+        val gateway = BackendAssetPreparationGateway(baseUrl = apiBase.removeSuffix("/api/v1"))
+        return cg.creamgod.boarderless.data.PreparedMediaImportController(session, store, gateway,
+            BackendAssetTransferGateway(apiBase.removeSuffix("/api/v1")), this, canContinue)
+    }
+
+    override suspend fun restoreConfirmedHistory(session: WorkspaceSession): cg.creamgod.boarderless.domain.history.WorkspaceHistory? =
+        submissionMutex.withLock { loadConfirmedHistoryLocked(session) }
+
+    private suspend fun loadConfirmedHistoryLocked(session: WorkspaceSession): cg.creamgod.boarderless.domain.history.WorkspaceHistory? {
+        val store = confirmedHistories ?: return null
+        val scope = submissionScope(session)
+        check(preferences.userId == session.userId && preferences.clientId == session.clientId &&
+            preferences.workspaceId == session.workspace.id.value)
+        val saved = store.readDurable(scope) ?: return null
+        currentCoroutineContext().ensureActive()
+        check(submissionScope(session) == scope && preferences.userId == session.userId &&
+            preferences.workspaceId == session.workspace.id.value && preferences.clientId == session.clientId)
+        require(saved.value.workspaceVersion <= session.workspaceVersion && saved.value.lastServerSeq <= session.lastServerSeq) {
+            "Server state is older than the confirmed history checkpoint"
+        }
+        // Keep local stack intentions but use current server objects, lock/version and ACL.
+        // Undo/Redo rechecks their normal preconditions; no replay or network write here.
+        return saved.value.history.copy(workspace = session.workspace)
+    }
+    override val awaitsDraftPublication: Boolean get() = awaitedSubmissionRuntime != null || legacyDraftPersistence.supportsAtomicStoppedEvidence
+    override val awaitsHistoryCommit: Boolean get() = mediaReferenceProofRuntime != null
 
     private data class ProjectionCache(
         val session: WorkspaceSession,
@@ -91,9 +173,102 @@ class BackendWorkspaceRepository(
 
     // One authoritative raw snapshot only. Optimistic/domain-only sessions cannot reuse it.
     private var projectionCache: ProjectionCache? = null
+    private var canvasReadCapabilities = BackendCanvasReadCapabilities()
+    override val supportsCanvasStyle: Boolean get() = canvasReadCapabilities.canvasStyleWrite
+    override val supportsRelationGeometry: Boolean get() = canvasReadCapabilities.geometry && canvasReadCapabilities.canWriteCanvas
+    override val supportsVectorPaths: Boolean get() = canvasReadCapabilities.vectorPath && canvasReadCapabilities.canWriteCanvas
+    override val supportsTextPlacement: Boolean get() = canvasReadCapabilities.textPlacement && canvasReadCapabilities.canWriteCanvas
+    override val supportsSequenceDiagrams: Boolean get() = canvasReadCapabilities.sequenceWrite
     private val replayJson = Json { ignoreUnknownKeys = true }
 
+    internal val canOpenRealtime: Boolean get() = realtimeRuntime != null
+    internal val canReviewLegacyMigration: Boolean get() = awaitedSubmissionRuntime == null && preferences.sequenceAllocator == null
+
+    /** Read-only preview. Neither mutex nor repeated reads certify full writer exclusion;
+     * publication must recapture again under the actual migration host's barrier. */
+    internal suspend fun reviewLegacyMigration(session: WorkspaceSession, catalogJson: String? = null): LegacySubmissionMigrationReview =
+        submissionMutex.withLock {
+            check(canReviewLegacyMigration)
+            prepareWriter()
+            val scope = submissionScope(session)
+            val review = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                val input = LegacyMigrationCatalogInput.decode(catalogJson)
+                writerWork {
+                    check(preferences.userId == session.userId && preferences.workspaceId == session.workspace.id.value)
+                    val capture = preferences.captureCataloguedLegacySequenceForMigration(scope, input.scopes, input.archives)
+                    LegacySubmissionMigrationReview(LegacySubmissionMigrationPlanner.prepare(scope, capture, emptyList()))
+                }
+            }
+            currentCoroutineContext().ensureActive()
+            submissionScope(session)
+            review
+        }
+    internal val missingRealtimeWritePrerequisites: Set<RealtimeWritePrerequisite> get() = buildSet {
+        if (realtimeRuntime == null) add(RealtimeWritePrerequisite.DurableCheckpoint)
+        if (sequenceAllocator == null) add(RealtimeWritePrerequisite.SequenceLedger)
+        if (!draftPersistence.supportsAtomicStoppedEvidence) add(RealtimeWritePrerequisite.AtomicRecovery)
+    }
+    internal val canSubmitRealtime: Boolean get() = missingRealtimeWritePrerequisites.isEmpty()
+    private var activeRealtimeOwner: BackendRealtimeOwner? = null
+    internal fun registerRealtimeOwner(owner: BackendRealtimeOwner, session: WorkspaceSession) {
+        require(owner.belongsTo(session) && preferences.userId == session.userId && preferences.clientId == session.clientId &&
+            preferences.workspaceId == session.workspace.id.value)
+        if (activeRealtimeOwner !== owner) activeRealtimeOwner?.close()
+        activeRealtimeOwner = owner
+    }
+    internal fun unregisterRealtimeOwner(owner: BackendRealtimeOwner?) {
+        if (activeRealtimeOwner === owner) activeRealtimeOwner = null
+    }
+    internal suspend fun createRealtimeOwner(session: WorkspaceSession, subscriptionId: String,
+        canContinue: () -> Boolean): BackendRealtimeOwner {
+        prepareWriter()
+        val runtime = checkNotNull(realtimeRuntime) { "Durable realtime storage is unavailable" }
+        require(subscriptionId.isNotBlank() && subscriptionId.length <= 256 && subscriptionId.none { it.code < 32 || it.code == 127 })
+        require(subscriptionId.encodeToByteArray(throwOnInvalidSequence = true).size <= 256)
+        fun valid(): Boolean {
+            requireServerWriterActive()
+            return canContinue() && preferences.userId == session.userId &&
+                preferences.workspaceId == session.workspace.id.value && preferences.clientId == session.clientId
+        }
+        currentCoroutineContext().ensureActive(); check(valid())
+        val negotiated = readCanvasCapabilities(readRealtimeJson("$apiBase/capabilities", session.userId, 64 * 1024))
+        currentCoroutineContext().ensureActive(); check(valid())
+        val store = runtime.checkpoints(RealtimeCheckpointScope(syncServerScope, session.userId, session.clientId,
+            session.workspace.id.value), negotiated)
+        return store.createOwner(apiBase.removeSuffix("/api/v1"), subscriptionId, ::valid,
+            readMetadata = {
+                val raw = readRealtimeJson("$apiBase/workspaces/${session.workspace.id.value}", session.userId, 64 * 1024)
+                fun text(key: String) = requireNotNull((raw[key] as? JsonPrimitive)?.takeIf { it.isString }?.content)
+                require(text("id") == session.workspace.id.value)
+                val revision = requireNotNull((raw["metadataRevision"] as? JsonPrimitive)?.takeUnless { it.isString }?.longOrNull)
+                BackendRealtimeMetadata(revision, text("title"), text("role"))
+            }, readSnapshot = {
+                val raw = readRealtimeJson("$apiBase/workspaces/${session.workspace.id.value}/state", session.userId, 64 * 1024 * 1024)
+                decodeNegotiatedWorkspaceState(raw, negotiated).also { require(it.workspaceId == session.workspace.id.value) }
+            })
+    }
+
+    private suspend fun readRealtimeJson(url: String, userId: String, maximumBytes: Int): JsonObject =
+        kotlinx.coroutines.withTimeout(15_000) {
+            client.prepareGet(url) { header(DevUserHeader, userId); header("Cache-Control", "no-cache, no-store") }.execute { response ->
+                if (response.status.value !in 200..299) throw BackendRealtimeHttpException(response.status.value)
+                require(response.headers["Content-Type"]?.substringBefore(';')?.trim()?.lowercase() == "application/json")
+                val channel = response.bodyAsChannel(); val bytes = ByteArray(maximumBytes + 1); var size = 0
+                try {
+                    while (size < bytes.size) {
+                        currentCoroutineContext().ensureActive()
+                        val count = channel.readAvailable(bytes, size, bytes.size - size)
+                        if (count < 0) break
+                        size += count
+                    }
+                    require(size in 1 until bytes.size)
+                    cg.creamgod.boarderless.data.parseStrictJsonObject(bytes.copyOf(size).decodeToString(throwOnInvalidSequence = true))
+                } finally { channel.cancel(null) }
+            }
+        }
+
     override suspend fun openOrCreateWorkspace(preferredWorkspaceId: WorkspaceId?): WorkspaceSession {
+        prepareWriter()
         val savedUserId = preferences.userId
         if (savedUserId != null && preferredWorkspaceId != null && preferredWorkspaceId.value != preferences.workspaceId) {
             try {
@@ -108,9 +283,10 @@ class BackendWorkspaceRepository(
             try {
                 return loadSession(savedUserId, savedWorkspaceId)
             } catch (error: BackendHttpException) {
+                requireServerWriterActive()
                 when (error.status) {
-                    HttpStatusCode.NotFound -> preferences.workspaceId = null
-                    HttpStatusCode.Unauthorized -> preferences.clearIdentity()
+                    HttpStatusCode.NotFound -> writerWork { preferences.workspaceId = null }
+                    HttpStatusCode.Unauthorized -> writerWork { preferences.clearIdentity() }
                     else -> throw error
                 }
             }
@@ -125,7 +301,8 @@ class BackendWorkspaceRepository(
                 return createWorkspaceForUser(savedUserId, Strings.content.myThinkingSpace())
             } catch (error: BackendHttpException) {
                 if (error.status != HttpStatusCode.Unauthorized && error.status != HttpStatusCode.NotFound) throw error
-                preferences.clearIdentity()
+                requireServerWriterActive()
+                writerWork { preferences.clearIdentity() }
             }
         }
 
@@ -139,6 +316,7 @@ class BackendWorkspaceRepository(
         session: WorkspaceSession,
         title: String,
     ): WorkspaceSession {
+        prepareWriter()
         val normalizedTitle = title.trim()
         require(normalizedTitle.isNotEmpty()) { "Workspace title must not be blank" }
         return createWorkspaceForUser(session.userId, normalizedTitle)
@@ -147,13 +325,17 @@ class BackendWorkspaceRepository(
     override suspend fun openWorkspace(
         session: WorkspaceSession,
         workspaceId: WorkspaceId,
-    ): WorkspaceSession = loadAndRemember(session.userId, workspaceId.value)
+    ): WorkspaceSession {
+        prepareWriter()
+        return loadAndRemember(session.userId, workspaceId.value)
+    }
 
     override suspend fun renameWorkspace(
         session: WorkspaceSession,
         workspaceId: WorkspaceId,
         title: String,
     ): WorkspaceSummary {
+        prepareWriter()
         val normalizedTitle = title.trim()
         require(normalizedTitle.isNotEmpty()) { "Workspace title must not be blank" }
         return client
@@ -170,11 +352,13 @@ class BackendWorkspaceRepository(
         session: WorkspaceSession,
         workspaceId: WorkspaceId,
     ) {
+        prepareWriter()
         client
             .delete("$apiBase/workspaces/${workspaceId.value}") {
                 header(DevUserHeader, session.userId)
             }.requireSuccess()
-        if (preferences.workspaceId == workspaceId.value) preferences.workspaceId = null
+        requireServerWriterActive()
+        writerWork { if (preferences.workspaceId == workspaceId.value) preferences.workspaceId = null }
     }
 
     override suspend fun listRecentActivity(
@@ -245,6 +429,7 @@ class BackendWorkspaceRepository(
         userId: String,
         role: WorkspaceMemberRole,
     ) {
+        prepareWriter()
         require(userId.isNotBlank()) { "Member user ID must not be blank" }
         require(role != WorkspaceMemberRole.Owner) { "The owner role cannot be assigned" }
         client
@@ -259,6 +444,7 @@ class BackendWorkspaceRepository(
         session: WorkspaceSession,
         userId: String,
     ) {
+        prepareWriter()
         require(userId.isNotBlank()) { "Member user ID must not be blank" }
         client
             .delete("$apiBase/workspaces/${session.workspace.id.value}/members/${userId.trim()}") {
@@ -267,6 +453,7 @@ class BackendWorkspaceRepository(
     }
 
     override suspend fun refresh(session: WorkspaceSession): WorkspaceSession {
+        prepareWriter()
         val cached = projectionCache?.takeIf { it.session == session }
         val metadata =
             client
@@ -316,7 +503,7 @@ class BackendWorkspaceRepository(
         if (cached != null && catchUp != null && catchUp.lastServerSeq >= metadata.lastServerSeq) {
             val replayed =
                 try {
-                    reduceCommittedCatchUpPage(cached.state, catchUp)
+                    reduceCommittedCatchUpPage(cached.state, catchUp, canvasReadCapabilities)
                 } catch (_: BackendContractException) {
                     null
                 }
@@ -326,7 +513,7 @@ class BackendWorkspaceRepository(
                         role = role,
                         workspaceVersion = replayed.workspaceVersion,
                         lastServerSeq = replayed.throughServerSeq,
-                        workspace = replayed.toDomainWorkspace(metadata.title),
+                        workspace = replayed.toDomainWorkspace(metadata.title, canvasReadCapabilities),
                     )
                 currentCoroutineContext().ensureActive()
                 projectionCache = ProjectionCache(refreshed, replayed)
@@ -342,61 +529,204 @@ class BackendWorkspaceRepository(
         operation: WorkspaceOperation,
     ): SubmitOutcome =
         submissionMutex.withLock {
-            check(session.workspace.sequenceDiagrams.isEmpty()) { "Backend sequence diagram capability is unavailable" }
-            check(session.clientId == preferences.clientId) { "Submission belongs to another client" }
-            val scope = submissionScope(session)
-            check(draftPersistence.pending(scope) == null) { "An unconfirmed change requires recovery first" }
-            draftPersistence.journal(scope)?.let { draft ->
-                check(!draft.quarantined && draft.operations.firstOrNull() == operation) { "Saved draft head does not match submission" }
-            }
-            val expanded = operation.toExpandedDtos(0)
-            preferences.deletionEvidence.requireRestoration(scope, expanded, operation)
-            val range = sequenceAllocator?.reserve(scope, expanded.size) ?: preferences.reserveClientSequences(expanded.size)
-            if (sequenceAllocator != null) preferences.advanceClientSequence(range.last) // Compatibility mirror only.
-            val operations = expanded.mapIndexed { index, dto -> dto.copy(clientSeq = range.first + index) }
-            val request =
-                SubmitOperationsRequest(
-                    clientId = session.clientId,
-                    transactionId = randomUuid(),
-                    baseVersion = session.workspaceVersion,
-                    operations = operations,
-                )
-            val pending =
-                PendingWorkspaceSubmission(
-                    scope,
-                    operation.operationId,
-                    request,
-                    operation.deletionVersions(),
-                    operation.deletionSnapshotDigests(),
-                )
-            draftPersistence.stage(pending)
-            submitWireRequest(session, request).also { outcome ->
+            val pending = prepareSubmissionLocked(session, operation, allowExisting = false, requireJournal = false)
+            submitWireRequest(session, pending.request).also { outcome ->
                 if (outcome is SubmitOutcome.Accepted) {
-                    sequenceAllocator?.advance(scope, range.last)
-                    preferences.advanceClientSequence(range.last)
-                    draftPersistence.acknowledge(pending, outcome.workspaceVersion, outcome.lastServerSeq)
+                    val last = pending.request.operations.last().clientSeq
+                    sequenceAllocator?.advance(pending.scope, last)
+                    advanceLegacySequence(last)
+                    acknowledgeConfirmedPending(pending, outcome.workspaceVersion, outcome.lastServerSeq)
                 }
             }
         }
 
+    override suspend fun prepareSubmission(session: WorkspaceSession, operation: WorkspaceOperation): cg.creamgod.boarderless.data.PreparedWorkspaceSubmission =
+        submissionMutex.withLock {
+            preparedIdentity(prepareSubmissionLocked(session, operation, allowExisting = true, requireJournal = true))
+        }
+
+    override suspend fun preparedSubmission(session: WorkspaceSession): cg.creamgod.boarderless.data.PreparedWorkspaceSubmission? =
+        submissionMutex.withLock {
+            check(session.clientId == preferences.clientId)
+            draftPersistence.pending(submissionScope(session))?.let(::preparedIdentity)
+        }
+
+    override suspend fun sendPreparedSubmission(session: WorkspaceSession,
+        prepared: cg.creamgod.boarderless.data.PreparedWorkspaceSubmission): SubmitOutcome = submissionMutex.withLock {
+        check(session.clientId == preferences.clientId && session.canEditContent)
+        val scope = submissionScope(session)
+        val pending = checkNotNull(draftPersistence.pending(scope))
+        check(preparedIdentity(pending) == prepared) { "Prepared request identity changed" }
+        check(recoverySafety.fenceState(pending) == null) { "Fence recovery requires receipt verification" }
+        draftPersistence.stage(pending)
+        submitWireRequest(session, pending.request).also { outcome ->
+            if (outcome is SubmitOutcome.Accepted) {
+                val last = pending.request.operations.last().clientSeq
+                sequenceAllocator?.advance(scope, last)
+                advanceLegacySequence(last)
+                acknowledgeConfirmedPending(pending, outcome.workspaceVersion, outcome.lastServerSeq)
+            }
+        }
+    }
+
+    private suspend fun prepareSubmissionLocked(session: WorkspaceSession, operation: WorkspaceOperation,
+        allowExisting: Boolean, requireJournal: Boolean): PendingWorkspaceSubmission {
+        prepareWriter()
+        check(supportsSequenceDiagrams || session.workspace.sequenceDiagrams.isEmpty()) { "Backend sequence diagram capability is unavailable" }
+        check(session.clientId == preferences.clientId) { "Submission belongs to another client" }
+        check(session.canEditContent) { "Preparation requires edit permission" }
+        check(supportsCanvasStyle || operation.flatten().none { it is cg.creamgod.boarderless.domain.history.UpdateCanvasStyleOperation }) {
+            "Backend canvas style capability is unavailable"
+        }
+        val scope = submissionScope(session)
+        if (awaitedSubmissionRuntime == null) writerWork { preferences.registerLegacyScope(scope) }
+        val journal = draftPersistence.journal(scope)
+        if (requireJournal) check(journal != null && journal.baseWorkspace == session.workspace && journal.baseVersion == session.workspaceVersion) {
+            "Preparation requires the saved draft baseline"
+        }
+        journal?.let { check(!it.quarantined && it.operations.firstOrNull() == operation) { "Saved draft head does not match submission" } }
+        draftPersistence.pending(scope)?.let { pending ->
+            check(allowExisting && pending.localOperationId == operation.operationId) { "An unconfirmed change requires recovery first" }
+            check(recoverySafety.fenceState(pending) == null) { "Fence recovery requires receipt verification" }
+            check(pending.request.baseVersion == session.workspaceVersion && journal?.baseWorkspace == session.workspace)
+            draftPersistence.stage(pending)
+            return pending
+        }
+        val expanded = operation.toExpandedDtos(0, canvasReadCapabilities)
+        require(expanded.size in 1..BackendMaximumAtomicOperations) { "Atomic transaction exceeds backend operation limit" }
+        if (operation.flatten().filterIsInstance<UpdateMediaReferenceOperation>().any { part -> part.changes.any { it.before != it.after } }) {
+            check(mediaReferenceProofRuntime != null) { "Media reference changes require configured durable original evidence storage" }
+        }
+        recoverySafety.requireRestoration(scope, expanded, operation)
+        requireMediaReferenceHistory(session, operation)
+        val range = sequenceAllocator?.reserve(scope, expanded.size) ?: writerWork { preferences.reserveClientSequences(expanded.size) }
+        if (sequenceAllocator != null) advanceLegacySequence(range.last)
+        val request = SubmitOperationsRequest(clientId = session.clientId, transactionId = randomUuid(), baseVersion = session.workspaceVersion,
+            operations = expanded.mapIndexed { index, dto -> dto.copy(clientSeq = range.first + index) })
+        val pending = PendingWorkspaceSubmission(scope, operation.operationId, request, operation.deletionVersions(), operation.deletionSnapshotDigests(),
+            captureMediaReferenceChanges(session.workspace, operation, request),
+            historyIntent = journal?.historyIntents?.get(operation.operationId))
+        draftPersistence.stage(pending)
+        return pending
+    }
+
+    private fun preparedIdentity(pending: PendingWorkspaceSubmission): cg.creamgod.boarderless.data.PreparedWorkspaceSubmission {
+        val digest = preparedRequestDigest(pending.request)
+        return cg.creamgod.boarderless.data.PreparedWorkspaceSubmission(syncServerScope, pending.scope.userId,
+            pending.request.clientId, cg.creamgod.boarderless.domain.model.WorkspaceId(pending.scope.workspaceId),
+            pending.localOperationId, pending.request.transactionId, pending.request.baseVersion,
+            pending.request.operations.map { it.operationId }, pending.request.operations.map { it.clientSeq }, digest)
+    }
+
+    override suspend fun verifyPreparedSubmission(session: WorkspaceSession,
+        prepared: cg.creamgod.boarderless.data.PreparedWorkspaceSubmission,
+        operation: WorkspaceOperation, baseline: WorkspaceSession?): cg.creamgod.boarderless.data.PreparedSubmissionVerification = submissionMutex.withLock {
+        check(session.clientId == preferences.clientId && prepared.clientId == session.clientId)
+        check(prepared.serverScope == syncServerScope && prepared.userId == session.userId && prepared.workspaceId == session.workspace.id)
+        val request = rebuildPreparedRequest(prepared, operation, canvasReadCapabilities)
+        baseline?.let {
+            require(it.userId == prepared.userId && it.clientId == prepared.clientId && it.workspace.id == prepared.workspaceId)
+            require(it.workspaceVersion == prepared.baseVersion && it.workspace.version == prepared.baseVersion)
+            require(it.lastServerSeq in 0..9_007_199_254_740_991L)
+        }
+        val response = client.post("$apiBase/workspaces/${session.workspace.id.value}/operations/receipts") {
+            contentType(ContentType.Application.Json)
+            header(DevUserHeader, session.userId)
+            setBody(ReceiptQueryDto(listOf(prepared.transactionId)))
+        }.requireSuccess().body<SubmissionReceiptResponseDto>()
+        val result = response.validatePendingReceipt(session.workspace.id.value, session.userId, request)
+        val committed = response.receipts.singleOrNull()
+        if (committed != null) readOriginalCommittedLog(session, request, committed)
+        val current = loadSession(session.userId, session.workspace.id.value)
+        check(current.userId == session.userId && current.clientId == session.clientId && current.workspace.id == session.workspace.id)
+        check(current.workspaceVersion in maxOf(session.workspaceVersion, result.headWorkspaceVersion)..9_007_199_254_740_991L)
+        check(current.lastServerSeq in maxOf(session.lastServerSeq, result.headServerSeq)..9_007_199_254_740_991L)
+        val committedWorkspace = if (committed != null && baseline != null) {
+            // Titles currently have no versioned committed operation. Do not invent history
+            // for a concurrent rename, or silently approximate unsupported snapshot fields.
+            require(current.workspace.title == baseline.workspace.title) { "Historical title revision unavailable" }
+            val initial = recoveryProjection(baseline, canvasReadCapabilities)
+            val window = collectCommittedThrough(baseline.lastServerSeq, committed.toServerSeq) { after ->
+                client.get("$apiBase/workspaces/${session.workspace.id.value}/operations") {
+                    header(DevUserHeader, session.userId)
+                    parameter("afterSeq", after)
+                    parameter("limit", 1000)
+                }.requireSuccess().body<FullCatchUpOperationsDto>()
+            }
+            val recovered = reduceCommittedCatchUpPage(initial, window, canvasReadCapabilities)
+            validateOriginalCommittedLog(committed, request, session.userId, FullCatchUpOperationsDto(
+                window.operations.filter { it.serverSeq in committed.fromServerSeq..committed.toServerSeq }, window.lastServerSeq, false))
+            require(recovered.workspaceVersion == committed.workspaceVersion)
+            recovered.toDomainWorkspace(baseline.workspace.title, canvasReadCapabilities)
+        } else null
+        currentCoroutineContext().ensureActive()
+        cg.creamgod.boarderless.data.PreparedSubmissionVerification(prepared, result.status, current,
+            committed?.workspaceVersion, committed?.toServerSeq, committedWorkspace)
+    }
+
     private fun submissionScope(session: WorkspaceSession) =
-        PendingSubmissionScope(apiBase, session.userId, session.clientId, session.workspace.id.value)
+        PendingSubmissionScope(apiBase, session.userId, session.clientId, session.workspace.id.value).also {
+            requireServerWriterActive()
+            awaitedSubmissionRuntime?.requireActive?.invoke(it)
+        }
 
     override fun retainDraft(
         session: WorkspaceSession,
         before: Workspace,
         operation: WorkspaceOperation,
-    ) {
+    ) = retainHistoryDraft(session, before, operation, cg.creamgod.boarderless.domain.history.WorkspaceHistoryIntent.Edit)
+
+    override fun retainHistoryDraft(session: WorkspaceSession, before: Workspace,
+        operation: WorkspaceOperation, intent: cg.creamgod.boarderless.domain.history.WorkspaceHistoryIntent,
+        beforeHistory: cg.creamgod.boarderless.domain.history.WorkspaceHistory?) {
+        check(awaitedSubmissionRuntime == null) { "This platform requires awaited draft publication" }
+        validateRetainedDraft(session, before, operation)
+        val scope = submissionScope(session)
+        writerWork {
+            preferences.registerLegacyScope(scope)
+            legacyDraftPersistence.appendWithIntent(scope, session, before, operation, intent, beforeHistory)
+        }
+    }
+    override suspend fun retainDraftAwaited(session: WorkspaceSession, before: Workspace, operation: WorkspaceOperation) {
+        validateRetainedDraft(session, before, operation)
+        submissionMutex.withLock {
+            validateRetainedDraft(session, before, operation)
+            val scope = submissionScope(session)
+            if (awaitedSubmissionRuntime == null) writerWork { preferences.registerLegacyScope(scope) }
+            draftPersistence.appendWithIntent(scope, session, before, operation, cg.creamgod.boarderless.domain.history.WorkspaceHistoryIntent.Edit)
+        }
+        currentCoroutineContext().ensureActive()
+    }
+    private fun validateRetainedDraft(session: WorkspaceSession, before: Workspace, operation: WorkspaceOperation) {
+        require(operation.backendOperationCount() in 1..BackendMaximumAtomicOperations) {
+            "Atomic transaction exceeds backend operation limit; draft was not retained"
+        }
+        if (awaitedSubmissionRuntime != null) check(preferences.userId == session.userId && preferences.workspaceId == session.workspace.id.value)
         check(session.clientId == preferences.clientId && session.canEditContent)
         check(
-            before.sequenceDiagrams.isEmpty() &&
-                operation.flatten().none { it is cg.creamgod.boarderless.domain.history.UpdateSequenceDiagramsOperation },
+            supportsSequenceDiagrams || (before.sequenceDiagrams.isEmpty() &&
+                operation.flatten().none { it is cg.creamgod.boarderless.domain.history.UpdateSequenceDiagramsOperation }),
         ) { "Backend sequence diagram capability is unavailable" }
-        check(operation.flatten().none { it is cg.creamgod.boarderless.domain.history.UpdateCanvasStyleOperation }) {
+        check(supportsCanvasStyle || operation.flatten().none { it is cg.creamgod.boarderless.domain.history.UpdateCanvasStyleOperation }) {
             "Backend canvas style capability is unavailable"
         }
-        operation.requireLegacyRelationContract()
-        draftPersistence.append(submissionScope(session), session, before, operation)
+        operation.requireLegacyRelationContract(canvasReadCapabilities)
+    }
+
+    override suspend fun retainHistoryDraftAwaited(session: WorkspaceSession, before: Workspace,
+        operation: WorkspaceOperation, intent: cg.creamgod.boarderless.domain.history.WorkspaceHistoryIntent,
+        beforeHistory: cg.creamgod.boarderless.domain.history.WorkspaceHistory?) {
+        validateRetainedDraft(session, before, operation)
+        submissionMutex.withLock {
+            validateRetainedDraft(session, before, operation)
+            val scope = submissionScope(session)
+            if (awaitedSubmissionRuntime == null) writerWork { preferences.registerLegacyScope(scope) }
+            draftPersistence.appendWithIntent(scope, session, before, operation, intent, beforeHistory)
+        }
+        currentCoroutineContext().ensureActive()
+    }
+    private fun advanceLegacySequence(sequence: Long) {
+        if (awaitedSubmissionRuntime == null) writerWork { preferences.advanceClientSequence(sequence) }
     }
 
     override suspend fun pendingDraft(session: WorkspaceSession): PendingWorkspaceDraft? =
@@ -416,7 +746,7 @@ class BackendWorkspaceRepository(
             currentCoroutineContext().ensureActive()
             check(current.canEditContent)
             val journal = draftPersistence.restore(scope, draftId, current)
-            RestoredWorkspaceDraft(current, journal.operations)
+            RestoredWorkspaceDraft(current, journal.operations, journal.replayHistory())
         }
 
     override suspend fun dismissPendingDraft(
@@ -464,7 +794,7 @@ class BackendWorkspaceRepository(
 
     override suspend fun pendingChange(session: WorkspaceSession): PendingWorkspaceChange? =
         draftPersistence.pending(submissionScope(session))?.let {
-            PendingWorkspaceChange(it.request.transactionId, it.request.operations.size, preferences.fenceAttempts.state(it) != null)
+            PendingWorkspaceChange(it.request.transactionId, it.request.operations.size, recoverySafety.fenceState(it) != null)
         }
 
     override suspend fun stoppedChanges(session: WorkspaceSession): List<cg.creamgod.boarderless.data.StoppedWorkspaceChange> =
@@ -521,7 +851,7 @@ class BackendWorkspaceRepository(
             currentCoroutineContext().ensureActive()
             check(draftPersistence.pending(scope) == pending) { "Pending request changed during lookup" }
             response.validatePendingReceipt(session.workspace.id.value, session.userId, pending.request).also {
-                preferences.fenceAttempts.observe(pending, it.status)
+                recoverySafety.observeFence(pending, it.status)
             }
         }
 
@@ -629,7 +959,10 @@ class BackendWorkspaceRepository(
             val scope = submissionScope(session)
             val pending = checkNotNull(draftPersistence.pending(scope))
             check(pending.request.transactionId == transactionId) { "Pending transaction changed" }
-            preferences.fenceAttempts.begin(pending)
+            recoverySafety.beginFence(pending)
+            currentCoroutineContext().ensureActive()
+            check(draftPersistence.pending(scope) == pending) { "Pending request changed before fence dispatch" }
+            submissionScope(session) // Recheck the activation lease after the awaited read.
             val response =
                 client
                     .post("$apiBase/workspaces/${session.workspace.id.value}/operations/fences") {
@@ -644,7 +977,7 @@ class BackendWorkspaceRepository(
             if (resolved.status == cg.creamgod.boarderless.data.PendingReceiptStatus.Unknown) {
                 throw BackendContractException("Fence did not establish a terminal original transaction result")
             }
-            preferences.fenceAttempts.observe(pending, resolved.status)
+            recoverySafety.observeFence(pending, resolved.status)
             // A concurrent commit wins instead of fence. Neither result clears pending here.
             resolved
         }
@@ -652,12 +985,23 @@ class BackendWorkspaceRepository(
     override suspend fun confirmPendingReceipt(
         session: WorkspaceSession,
         transactionId: String,
-    ): WorkspaceSession =
+    ): WorkspaceSession = confirmPendingReceiptWithHistory(session, transactionId).session
+
+    override suspend fun confirmPendingReceiptWithHistory(
+        session: WorkspaceSession,
+        transactionId: String,
+    ): cg.creamgod.boarderless.data.ConfirmedWorkspaceReceipt =
         submissionMutex.withLock {
             check(session.clientId == preferences.clientId)
             val scope = submissionScope(session)
             val pending = checkNotNull(draftPersistence.pending(scope))
             check(pending.request.transactionId == transactionId)
+            // Capture before acknowledge removes the journal head. Recover the whole
+            // transaction, never only its media children. Missing legacy journals may
+            // settle, but cannot manufacture an undo snapshot from server after-state.
+            val original = pendingHistoryOperation(pending)
+            val intent = pending.historyIntent
+                ?: cg.creamgod.boarderless.domain.history.WorkspaceHistoryIntent.Edit
             val receiptResponse =
                 client
                     .post("$apiBase/workspaces/${session.workspace.id.value}/operations/receipts") {
@@ -678,31 +1022,85 @@ class BackendWorkspaceRepository(
             check(current.workspaceVersion <= 9_007_199_254_740_991L && current.lastServerSeq <= 9_007_199_254_740_991L)
             currentCoroutineContext().ensureActive()
             check(draftPersistence.pending(scope) == pending)
-            preferences.fenceAttempts.observe(pending, cg.creamgod.boarderless.data.PendingReceiptStatus.Committed)
-            preferences.deletionEvidence.record(pending, ack)
+            recoverySafety.observeFence(pending, cg.creamgod.boarderless.data.PendingReceiptStatus.Committed)
+            requireMediaRestorationAcknowledgement(pending, ack)
+            recoverySafety.recordDeletions(pending, ack)
+            val origins = recordMediaReferenceCommit(pending, ack)
+            recordConfirmedHistory(pending, ack, origins)
+            val confirmedHistory = loadConfirmedHistoryLocked(current)
             sequenceAllocator?.advance(
                 scope,
                 pending.request.operations
                     .last()
                     .clientSeq,
             )
-            preferences.advanceClientSequence(
+            advanceLegacySequence(
                 pending.request.operations
                     .last()
                     .clientSeq,
             )
-            draftPersistence.acknowledge(pending, receipt.workspaceVersion, receipt.toServerSeq)
-            current
+            acknowledgeConfirmedPending(pending, receipt.workspaceVersion, receipt.toServerSeq)
+            cg.creamgod.boarderless.data.ConfirmedWorkspaceReceipt(current, original, origins, intent, confirmedHistory)
         }
 
     override suspend fun retryPendingChange(
         session: WorkspaceSession,
         transactionId: String,
-    ): WorkspaceSession {
-        check(pendingChange(session)?.transactionId == transactionId) { "Pending change no longer matches" }
+    ): WorkspaceSession = retryPendingChangeWithHistory(session, transactionId).session
+
+    override suspend fun retryPendingChangeWithHistory(
+        session: WorkspaceSession,
+        transactionId: String,
+    ): cg.creamgod.boarderless.data.ConfirmedWorkspaceReceipt = submissionMutex.withLock {
+        prepareWriter()
+        check(session.clientId == preferences.clientId)
+        val scope = submissionScope(session)
+        val pending = checkNotNull(draftPersistence.pending(scope))
+        check(pending.request.transactionId == transactionId) { "Pending change no longer matches" }
+        check(recoverySafety.fenceState(pending) == null) { "Fence recovery requires receipt verification, not resend" }
+        val original = pendingHistoryOperation(pending)
+        val intent = pending.historyIntent
+            ?: cg.creamgod.boarderless.domain.history.WorkspaceHistoryIntent.Edit
         val current = refresh(session)
-        retryPendingSubmission(current)
-        return refresh(current)
+        check(current.canEditContent) { "Pending submission requires current edit permission" }
+        check(submissionScope(current) == scope && draftPersistence.pending(scope) == pending)
+        draftPersistence.stage(pending)
+        // Dispatch only the saved request. A conflict keeps it pending and yields no history.
+        val accepted = submitWireRequest(current, pending.request) as? SubmitOutcome.Accepted
+            ?: throw BackendContractException("Original transaction retry conflicted")
+        val refreshed = refresh(current)
+        check(refreshed.workspaceVersion >= accepted.workspaceVersion && refreshed.lastServerSeq >= accepted.lastServerSeq)
+        currentCoroutineContext().ensureActive()
+        check(submissionScope(refreshed) == scope && draftPersistence.pending(scope) == pending)
+        val confirmedHistory = loadConfirmedHistoryLocked(refreshed)
+        val last = pending.request.operations.last().clientSeq
+        sequenceAllocator?.advance(scope, last)
+        advanceLegacySequence(last)
+        acknowledgeConfirmedPending(pending, accepted.workspaceVersion, accepted.lastServerSeq)
+        cg.creamgod.boarderless.data.ConfirmedWorkspaceReceipt(refreshed, original, accepted.mediaReferenceOrigins, intent, confirmedHistory)
+    }
+
+    /** Used only while holding submissionMutex, before settlement removes the journal head. */
+    private suspend fun pendingHistoryOperation(pending: PendingWorkspaceSubmission): WorkspaceOperation? {
+        val journal = draftPersistence.journal(pending.scope) ?: return null
+        check(journal.baseVersion == pending.request.baseVersion)
+        val head = checkNotNull(journal.operations.firstOrNull())
+        check(head.operationId == pending.localOperationId)
+        val expanded = head.toExpandedDtos(0, canvasReadCapabilities)
+        check(expanded.size == pending.request.operations.size)
+        check(expanded.zip(pending.request.operations).all { (rebuilt, sent) ->
+            rebuilt.copy(operationId = sent.operationId, clientSeq = sent.clientSeq) == sent
+        }) { "Saved history does not match the original wire transaction" }
+        val captured = captureMediaReferenceChanges(journal.baseWorkspace, head, pending.request)
+        // Legacy missing evidence must not become partial mixed-transaction authority.
+        if (pending.mediaReferenceChanges.isEmpty() && captured.isNotEmpty()) return null
+        check(captured == pending.mediaReferenceChanges)
+        head.inverse()
+        // Older entries have no declared stack intent. Never guess Undo/Redo from
+        // operation IDs or infer that every confirmed operation was a new edit.
+        val intent = pending.historyIntent ?: return null
+        check(journal.historyIntents[head.operationId] == intent) { "Saved history intent changed after preparation" }
+        return head
     }
 
     override suspend fun dismissPendingChange(
@@ -728,7 +1126,7 @@ class BackendWorkspaceRepository(
             }
             val scope = PendingSubmissionScope(apiBase, session.userId, session.clientId, session.workspace.id.value)
             val pending = draftPersistence.pending(scope) ?: return@withLock null
-            check(preferences.fenceAttempts.state(pending) == null) { "Fence recovery requires receipt verification, not resend" }
+            check(recoverySafety.fenceState(pending) == null) { "Fence recovery requires receipt verification, not resend" }
             draftPersistence.stage(pending)
             submitWireRequest(session, pending.request).also { outcome ->
                 if (outcome is SubmitOutcome.Accepted) {
@@ -738,12 +1136,12 @@ class BackendWorkspaceRepository(
                             .last()
                             .clientSeq,
                     )
-                    preferences.advanceClientSequence(
+                    advanceLegacySequence(
                         pending.request.operations
                             .last()
                             .clientSeq,
                     )
-                    draftPersistence.acknowledge(pending, outcome.workspaceVersion, outcome.lastServerSeq)
+                    acknowledgeConfirmedPending(pending, outcome.workspaceVersion, outcome.lastServerSeq)
                 }
             }
         }
@@ -752,6 +1150,47 @@ class BackendWorkspaceRepository(
         session: WorkspaceSession,
         request: SubmitOperationsRequest,
     ): SubmitOutcome {
+        currentCoroutineContext().ensureActive()
+        submissionScope(session)
+        val realtime = activeRealtimeOwner?.takeIf { canSubmitRealtime && it.belongsTo(session) && it.status.value == BackendRealtimeStatus.Live }
+        if (realtime != null) {
+            val scope = submissionScope(session)
+            val pending = checkNotNull(draftPersistence.pending(scope))
+            require(pending.request == request && recoverySafety.fenceState(pending) == null)
+            // Caller already staged the original request under submissionMutex. Never
+            // issue an HTTP fallback when this dispatch/ACK becomes uncertain.
+            return when (val result = realtime.submit(request) {
+                fun current() = activeRealtimeOwner === realtime && preferences.userId == session.userId &&
+                    preferences.workspaceId == session.workspace.id.value && preferences.clientId == session.clientId
+                submissionScope(session)
+                if (!current()) false else {
+                    val saved = draftPersistence.pending(scope)
+                    val fence = recoverySafety.fenceState(pending)
+                    currentCoroutineContext().ensureActive()
+                    submissionScope(session)
+                    current() && saved == pending && fence == null
+                }
+            }) {
+                is RealtimeSubmissionResult.Accepted -> {
+                    val accepted = result.acknowledgement
+                    accepted.validateAcknowledgement(request, session.userId)
+                    check(draftPersistence.pending(scope) == pending)
+                    requireMediaRestorationAcknowledgement(pending, accepted)
+                    recoverySafety.recordDeletions(pending, accepted)
+                    val origins = recordMediaReferenceCommit(pending, accepted)
+                    recordConfirmedHistory(pending, accepted, origins)
+                    SubmitOutcome.Accepted(accepted.workspaceVersion, accepted.toServerSeq, origins)
+                }
+                is RealtimeSubmissionResult.Conflict -> {
+                    val current = loadSession(session.userId, session.workspace.id.value)
+                    require(current.workspaceVersion >= result.workspaceVersion && current.lastServerSeq >= result.lastServerSeq)
+                    SubmitOutcome.Conflict(current)
+                }
+                is RealtimeSubmissionResult.Rejected -> throw RealtimeSubmissionRejected(result.code)
+            }
+        }
+        currentCoroutineContext().ensureActive()
+        submissionScope(session) // No suspension between this guard and HTTP dispatch.
         val response =
             client.post("$apiBase/workspaces/${session.workspace.id.value}/operations") {
                 contentType(ContentType.Application.Json)
@@ -765,22 +1204,22 @@ class BackendWorkspaceRepository(
                 accepted.validateAcknowledgement(request, session.userId)
                 val pending = checkNotNull(draftPersistence.pending(submissionScope(session)))
                 check(pending.request == request)
-                preferences.deletionEvidence.record(pending, accepted)
+                requireMediaRestorationAcknowledgement(pending, accepted)
+                recoverySafety.recordDeletions(pending, accepted)
+                val origins = recordMediaReferenceCommit(pending, accepted)
+                recordConfirmedHistory(pending, accepted, origins)
                 SubmitOutcome.Accepted(
                     workspaceVersion = accepted.workspaceVersion,
                     lastServerSeq = accepted.toServerSeq,
+                    mediaReferenceOrigins = origins,
                 )
             }
 
             HttpStatusCode.Conflict -> {
                 val conflict = response.body<ConflictOperationsDto>()
                 val current = loadSession(session.userId, session.workspace.id.value)
-                SubmitOutcome.Conflict(
-                    current.copy(
-                        workspaceVersion = conflict.workspaceVersion,
-                        lastServerSeq = conflict.lastServerSeq,
-                    ),
-                )
+                require(current.workspaceVersion >= conflict.workspaceVersion && current.lastServerSeq >= conflict.lastServerSeq)
+                SubmitOutcome.Conflict(current)
             }
 
             else -> {
@@ -790,10 +1229,125 @@ class BackendWorkspaceRepository(
     }
 
     override fun close() {
-        client.close()
+        try { activeRealtimeOwner?.close(); activeRealtimeOwner = null }
+        finally { try { client.close() } finally { releaseServerWriter() } }
+    }
+
+    private suspend fun prepareWriter() {
+        currentCoroutineContext().ensureActive()
+        prepareServerWriter()
+        currentCoroutineContext().ensureActive()
+        requireServerWriterActive()
+    }
+
+    private suspend fun recordMediaReferenceCommit(pending: PendingWorkspaceSubmission, ack: AcceptedOperationsDto): List<MediaReferenceHistoryOrigin> {
+        if (pending.mediaReferenceChanges.isEmpty()) return emptyList() // Legacy entries never gain invented snapshots.
+        return requireNotNull(mediaReferenceCommits) { "Original media reference storage unavailable" }.record(pending, ack).historyOrigins()
+    }
+
+    /** Persist only the original committed head, never the unconfirmed journal tail.
+     * Called after full ACK/provenance validation and before pending acknowledgement. */
+    private suspend fun recordConfirmedHistory(pending: PendingWorkspaceSubmission, ack: AcceptedOperationsDto,
+        origins: List<MediaReferenceHistoryOrigin>) {
+        val store = confirmedHistories ?: return
+        val original = pendingHistoryOperation(pending) ?: return
+        val journal = checkNotNull(draftPersistence.journal(pending.scope))
+        val baseline = journal.baseHistory ?: return // Do not replace complete history with a legacy partial reconstruction.
+        val saved = store.readDurable(pending.scope)
+        val requestDigest = preparedRequestDigest(pending.request)
+        if (saved != null && saved.value.workspaceVersion == ack.workspaceVersion && saved.value.lastServerSeq == ack.toServerSeq) {
+            require(saved.value.transactionId == pending.request.transactionId && saved.value.requestDigest == requestDigest) {
+                "Original confirmed history identity differs"
+            }
+            return // Exact original already published, including prior committed media provenance.
+        }
+        val before = saved?.value?.takeIf {
+            it.workspaceVersion == journal.baseVersion && it.lastServerSeq == journal.baseServerSeq &&
+                it.history.workspace == journal.baseWorkspace
+        }?.history ?: baseline
+        val history = before.applyRecorded(original, checkNotNull(pending.historyIntent)).history
+            .withCommittedMediaReferences(original, origins)
+        val next = SavedWorkspaceHistory(scope = pending.scope, workspaceVersion = ack.workspaceVersion,
+            lastServerSeq = ack.toServerSeq, transactionId = pending.request.transactionId,
+            requestDigest = requestDigest, history = history)
+        if (saved != null && (saved.value.workspaceVersion > ack.workspaceVersion || saved.value.lastServerSeq > ack.toServerSeq)) {
+            // Confirming an older receipt must not rewind a later confirmed snapshot.
+            return
+        }
+        store.save(next, saved?.generation)
+    }
+
+    private suspend fun acknowledgeConfirmedPending(pending: PendingWorkspaceSubmission, version: Long, seq: Long) {
+        val saved = confirmedHistories?.readDurable(pending.scope)?.value
+        val history = saved?.takeIf { it.workspaceVersion == version && it.lastServerSeq == seq }?.let {
+            require(it.transactionId == pending.request.transactionId && it.requestDigest == preparedRequestDigest(pending.request)) {
+                "Confirmed history does not belong to the pending transaction"
+            }
+            it.history
+        }
+        currentCoroutineContext().ensureActive()
+        check(draftPersistence.pending(pending.scope) == pending)
+        draftPersistence.acknowledgeWithHistory(pending, version, seq, history)
+    }
+
+    private suspend fun requireMediaReferenceHistory(session: WorkspaceSession, operation: WorkspaceOperation) {
+        val parts = operation.flatten()
+        if (parts.filterIsInstance<UpdateMediaReferenceOperation>().none { it.changes.any { change -> change.historyOrigin != null } }) return
+        check(canvasReadCapabilities.mediaReferenceRestore && canvasReadCapabilities.canWriteCanvas) { "Backend media reference restoration is unavailable" }
+        val scope = submissionScope(session)
+        val store = requireNotNull(mediaReferenceCommits)
+        var current = session.workspace
+        val evidence = mutableMapOf<String, MediaReferenceCommitEvidence>()
+        for (part in parts) {
+            if (part is UpdateMediaReferenceOperation) for (change in part.changes) {
+                val origin = change.historyOrigin ?: continue
+                require(origin.workspaceId == scope.workspaceId && origin.actorId == scope.userId)
+                val saved = evidence[origin.transactionId] ?: requireNotNull(store.read(scope, origin.transactionId)) {
+                    "Original media reference evidence missing"
+                }.also { evidence[origin.transactionId] = it }
+                val original = saved.changes.single { it.wireOperationId == origin.wireOperationId }.change
+                require(original.objectId == origin.objectId && original.before == origin.before && original.after == origin.after &&
+                    original.expectedVersion == origin.objectVersionBefore)
+                require(origin.before.mediaKind == origin.after.mediaKind)
+                change.historyTargetSide()
+                val node = current.objects[change.objectId] as? MediaNode ?: error("Historical media node missing")
+                require(!node.locked && node.version == change.expectedVersion && node.mediaReference() == change.before)
+            }
+            current = when (val applied = part.applyTo(current)) {
+                is cg.creamgod.boarderless.domain.history.OperationResult.Applied -> applied.workspace
+                is cg.creamgod.boarderless.domain.history.OperationResult.Rejected -> error("Historical media baseline changed")
+            }
+        }
+        currentCoroutineContext().ensureActive(); submissionScope(session)
+    }
+
+    private suspend fun requireMediaRestorationAcknowledgement(pending: PendingWorkspaceSubmission, ack: AcceptedOperationsDto) {
+        for (wire in pending.request.operations.filter { it.kind == "restore_media_references" }) {
+            validateRestorationWire(wire)
+            fun text(key: String) = requireNotNull((wire.payload[key] as? JsonPrimitive)?.takeIf { it.isString }?.content)
+            val original = requireNotNull(requireNotNull(mediaReferenceCommits).read(pending.scope, text("originalTransactionId"))) {
+                "Original media reference evidence missing at settlement"
+            }
+            val captured = original.changes.single { it.wireOperationId == text("originalOperationId") }.change
+            require(captured.objectId.value == text("objectId") && captured.before.mediaKind == captured.after.mediaKind)
+            val expected = if (text("targetSide") == "before") captured.before else captured.after
+            val committed = ack.operations.single { it.operationId == wire.operationId }
+            val restored = committed.payload["restoredReference"] as? JsonObject ?: error("Restored media reference missing")
+            require(restored.keys == setOf("assetId", "thumbnailAssetId") &&
+                restored["assetId"] == JsonPrimitive(expected.assetId) &&
+                restored["thumbnailAssetId"] == (expected.thumbnailAssetId?.let(::JsonPrimitive) ?: JsonNull))
+            val version = requireNotNull((wire.payload["expectedObjectVersion"] as? JsonPrimitive)?.longOrNull)
+            require(committed.payload["objectVersion"] == JsonPrimitive(version + 1))
+        }
+    }
+
+    private fun <T> writerWork(action: () -> T): T {
+        fun guarded(): T { requireServerWriterActive(); return action() }
+        return if (serverWriterOperations != null) serverWriterOperations.run(::guarded) else guarded()
     }
 
     private suspend fun createSession(): WorkspaceSession {
+        requireServerWriterActive()
         val user =
             client
                 .post("$apiBase/users") {
@@ -801,7 +1355,8 @@ class BackendWorkspaceRepository(
                     setBody(CreateUserRequest(Strings.content.defaultUserName()))
                 }.requireSuccess()
                 .body<UserDto>()
-        preferences.userId = user.id
+        requireServerWriterActive()
+        writerWork { preferences.userId = user.id }
         return createWorkspaceForUser(user.id, Strings.content.myThinkingSpace())
     }
 
@@ -809,6 +1364,7 @@ class BackendWorkspaceRepository(
         userId: String,
         title: String,
     ): WorkspaceSession {
+        requireServerWriterActive()
         val workspace =
             client
                 .post("$apiBase/workspaces") {
@@ -833,8 +1389,11 @@ class BackendWorkspaceRepository(
         workspaceId: String,
     ): WorkspaceSession {
         val loaded = loadSession(userId, workspaceId)
-        preferences.userId = userId
-        preferences.workspaceId = workspaceId
+        requireServerWriterActive()
+        writerWork {
+            preferences.userId = userId
+            preferences.workspaceId = workspaceId
+        }
         return loaded
     }
 
@@ -858,22 +1417,28 @@ class BackendWorkspaceRepository(
         title: String,
         role: WorkspaceMemberRole,
     ): WorkspaceSession {
+        // Negotiate from this repository's configured deployment, never a provider URL.
+        val capabilityResponse = client.get("$apiBase/capabilities") { header(DevUserHeader, userId) }
+        val negotiated = if (capabilityResponse.status == HttpStatusCode.NotFound) BackendCanvasReadCapabilities()
+            else readCanvasCapabilities(capabilityResponse.requireSuccess().body<JsonObject>())
         val state =
             client
                 .get("$apiBase/workspaces/$workspaceId/state") {
                     header(DevUserHeader, userId)
                 }.requireSuccess()
                 .body<JsonObject>()
-                .let(::decodeLegacyWorkspaceState)
+                .let { decodeNegotiatedWorkspaceState(it, negotiated) }
+        canvasReadCapabilities = negotiated
         if (state.workspaceId != workspaceId) throw BackendContractException("Workspace projection scope mismatch")
+        requireServerWriterActive() // clientId getter can initialize legacy identity.
         val loaded =
             WorkspaceSession(
                 userId = userId,
-                clientId = preferences.clientId,
+                clientId = writerWork { preferences.clientId },
                 role = role,
                 workspaceVersion = state.workspaceVersion,
                 lastServerSeq = state.throughServerSeq,
-                workspace = state.toDomainWorkspace(title),
+                workspace = state.toDomainWorkspace(title, negotiated),
             )
         currentCoroutineContext().ensureActive()
         projectionCache = ProjectionCache(loaded, state)
@@ -1015,9 +1580,12 @@ internal fun String.toWorkspaceMemberRole(): WorkspaceMemberRole =
     WorkspaceMemberRole.fromToken(this)
         ?: throw BackendContractException("Workspace has unsupported role '$this'")
 
-private fun WorkspaceOperation.requireLegacyRelationContract() {
+private fun WorkspaceOperation.requireLegacyRelationContract(capabilities: BackendCanvasReadCapabilities = BackendCanvasReadCapabilities()) {
     flatten().forEach { operation ->
-        check(operation !is cg.creamgod.boarderless.domain.history.UpdateSequenceDiagramsOperation) {
+        if (operation is UpdateMediaReferenceOperation && operation.changes.any { it.historyOrigin != null }) {
+            check(capabilities.mediaReferenceRestore && capabilities.canWriteCanvas) { "Backend media reference restoration is unavailable" }
+        }
+        check(operation !is cg.creamgod.boarderless.domain.history.UpdateSequenceDiagramsOperation || capabilities.sequenceWrite) {
             "Backend sequence diagram capability is unavailable"
         }
         val vectorSupported =
@@ -1040,7 +1608,14 @@ private fun WorkspaceOperation.requireLegacyRelationContract() {
                     true
                 }
             }
-        check(vectorSupported) { "Backend vector path capability is unavailable" }
+        check(vectorSupported || capabilities.vectorPath && capabilities.canWriteCanvas) { "Backend vector path capability is unavailable" }
+        val placementSupported = when (operation) {
+            is CreateObjectsOperation -> operation.objects.none { (it as? TextNode)?.textPlacement != null }
+            is DeleteObjectsOperation -> operation.objects.none { (it as? TextNode)?.textPlacement != null }
+            is UpdateTextNodeAttributesOperation -> operation.changes.all { it.before.textPlacement == null && it.after.textPlacement == null }
+            else -> true
+        }
+        check(placementSupported || capabilities.textPlacement && capabilities.canWriteCanvas) { "Backend text placement capability is unavailable" }
         val supported =
             when (operation) {
                 is CreateRelationsOperation -> operation.relations.all { it.geometry == null && it.sourceObjectId != it.targetObjectId }
@@ -1049,8 +1624,36 @@ private fun WorkspaceOperation.requireLegacyRelationContract() {
                 is UpdateRelationAttributesOperation -> operation.changes.all { it.before.geometry == null && it.after.geometry == null }
                 else -> true
             }
-        check(supported) { "Backend relation geometry capability is unavailable" }
+        check(supported || capabilities.geometry && capabilities.canWriteCanvas) { "Backend relation geometry capability is unavailable" }
     }
+}
+
+private fun captureMediaReferenceChanges(before: Workspace, operation: WorkspaceOperation,
+    request: SubmitOperationsRequest): List<PendingMediaReferenceChange> {
+    val flattened = operation.flatten()
+    if (flattened.none { it is UpdateMediaReferenceOperation }) return emptyList()
+    var current = before
+    val captured = mutableListOf<PendingMediaReferenceChange>()
+    for (part in flattened) {
+        if (part is UpdateMediaReferenceOperation) part.changes.forEach { change ->
+            if (change.historyOrigin != null) return@forEach // Restoration retains its original immutable evidence.
+            if (change.before == change.after) return@forEach // No changed reference means no restoration authority.
+            val node = current.objects[change.objectId] as? MediaNode ?: error("Original media node missing")
+            require(node.version == change.expectedVersion &&
+                node.mediaReference() == change.before)
+            val sent = request.operations.single { it.kind == "update_object" &&
+                it.payload["objectId"] == JsonPrimitive(change.objectId.value) &&
+                it.expectedObjectVersions == mapOf(change.objectId.value to change.expectedVersion) &&
+                (it.payload["properties"] as? JsonObject)?.get("assetId") == JsonPrimitive(change.after.assetId) }
+            requireMediaReferenceWire(sent, change)
+            captured += PendingMediaReferenceChange(sent.operationId, change)
+        }
+        current = when (val applied = part.applyTo(current)) {
+            is cg.creamgod.boarderless.domain.history.OperationResult.Applied -> applied.workspace
+            is cg.creamgod.boarderless.domain.history.OperationResult.Rejected -> error("Cannot capture media reference baseline")
+        }
+    }
+    return captured
 }
 
 private fun WorkspaceOperation.flatten(): List<WorkspaceOperation> =
@@ -1061,6 +1664,7 @@ private fun WorkspaceOperation.flatten(): List<WorkspaceOperation> =
 
 private fun WorkspaceOperation.toDto(clientSequence: Long): OperationDto =
     when (this) {
+        is cg.creamgod.boarderless.domain.history.LocalWorkspaceContentOperation -> error("Local content transactions cannot be submitted as server operations")
         is CreateObjectsOperation -> {
             error("Create operations must be expanded before conversion")
         }
@@ -1111,7 +1715,13 @@ private fun WorkspaceOperation.toDto(clientSequence: Long): OperationDto =
                         put("label", change.after.label?.let(::JsonPrimitive) ?: JsonNull)
                         put(
                             "style",
-                            buildJsonObject { put("colorToken", JsonPrimitive(change.after.colorToken)) },
+                            buildJsonObject {
+                                put("colorToken", JsonPrimitive(change.after.colorToken))
+                                if (change.before.geometry != change.after.geometry) {
+                                    put("geometry", Json { encodeDefaults = true }.encodeToJsonElement(RelationGeometry.serializer(),
+                                        change.after.geometry ?: RelationGeometry()))
+                                }
+                            },
                         )
                     },
             )
@@ -1197,6 +1807,12 @@ private fun WorkspaceOperation.toDto(clientSequence: Long): OperationDto =
                                 if (change.before.shape != change.after.shape) {
                                     put("shapeToken", JsonPrimitive(change.after.shape.token))
                                 }
+                                if (change.before.vectorPath != change.after.vectorPath) {
+                                    put("vectorPath", change.after.vectorPath?.let { Json { encodeDefaults = true }.encodeToJsonElement(VectorPath.serializer(), it) } ?: JsonNull)
+                                }
+                                if (change.before.textPlacement != change.after.textPlacement) {
+                                    put("textPlacement", change.after.textPlacement?.let { Json { encodeDefaults = true }.encodeToJsonElement(TextPlacement.serializer(), it) } ?: JsonNull)
+                                }
                             }
                         if (properties.isNotEmpty()) put("properties", properties)
                     },
@@ -1233,7 +1849,16 @@ private fun WorkspaceOperation.toDto(clientSequence: Long): OperationDto =
         is UpdateMediaReferenceOperation -> {
             require(changes.size == 1)
             val change = changes.single()
-            OperationDto(
+            val origin = change.historyOrigin
+            if (origin != null) {
+                OperationDto(randomUuid(), clientSequence, "restore_media_references", payload = buildJsonObject {
+                    put("objectId", JsonPrimitive(change.objectId.value))
+                    put("expectedObjectVersion", JsonPrimitive(change.expectedVersion))
+                    put("originalTransactionId", JsonPrimitive(origin.transactionId))
+                    put("originalOperationId", JsonPrimitive(origin.wireOperationId))
+                    put("targetSide", JsonPrimitive(change.historyTargetSide()))
+                })
+            } else OperationDto(
                 operationId = randomUuid(),
                 clientSeq = clientSequence,
                 kind = "update_object",
@@ -1275,11 +1900,18 @@ private fun WorkspaceOperation.toDto(clientSequence: Long): OperationDto =
         }
 
         is cg.creamgod.boarderless.domain.history.UpdateSequenceDiagramsOperation -> {
-            error("Backend sequence diagram capability is unavailable")
+            OperationDto(operationId, clientSequence, "update_sequence_diagrams", payload = buildJsonObject {
+                put("expectedSequenceDiagramsVersion", JsonPrimitive(expectedSequenceDiagramsVersion))
+                put("before", sequenceDiagramsWire(before))
+                put("after", sequenceDiagramsWire(after))
+            })
         }
 
         is cg.creamgod.boarderless.domain.history.UpdateCanvasStyleOperation -> {
-            error("Backend canvas style capability is unavailable")
+            OperationDto(operationId, clientSequence, "update_canvas_style", payload = buildJsonObject {
+                put("expectedCanvasStyleVersion", JsonPrimitive(expectedCanvasStyleVersion))
+                put("canvasStyle", Json { encodeDefaults = true }.encodeToJsonElement(cg.creamgod.boarderless.domain.model.CanvasStyle.serializer(), after))
+            })
         }
 
         is TransactionOperation -> {
@@ -1343,8 +1975,11 @@ private fun WorkspaceOperation.flattenAndExpand(): List<WorkspaceOperation> =
         }
     }
 
-internal fun WorkspaceOperation.toExpandedDtos(startingSequence: Long): List<OperationDto> =
-    also { it.requireLegacyRelationContract() }.flattenAndExpand().mapIndexed { index, operation ->
+internal const val BackendMaximumAtomicOperations = 200
+internal fun WorkspaceOperation.backendOperationCount(): Int = flattenAndExpand().size
+
+internal fun WorkspaceOperation.toExpandedDtos(startingSequence: Long, capabilities: BackendCanvasReadCapabilities = BackendCanvasReadCapabilities()): List<OperationDto> =
+    also { it.requireLegacyRelationContract(capabilities) }.flattenAndExpand().mapIndexed { index, operation ->
         val restoration =
             when (operation) {
                 is CreateObjectsOperation -> {
@@ -1392,6 +2027,7 @@ internal fun WorkspaceOperation.toExpandedDtos(startingSequence: Long): List<Ope
                                 when (canvasObject) {
                                     is TextNode -> "text"
                                     is GroupFrame -> "group"
+                                    is cg.creamgod.boarderless.domain.model.ExternalMediaNode -> error("Server does not support external media nodes")
                                     is MediaNode -> "media"
                                 },
                             ),
@@ -1408,6 +2044,8 @@ internal fun WorkspaceOperation.toExpandedDtos(startingSequence: Long): List<Ope
                                         put("text", JsonPrimitive(canvasObject.text))
                                         put("colorToken", JsonPrimitive(canvasObject.colorToken))
                                         put("shapeToken", JsonPrimitive(canvasObject.shape.token))
+                                        canvasObject.vectorPath?.let { put("vectorPath", Json { encodeDefaults = true }.encodeToJsonElement(VectorPath.serializer(), it)) }
+                                        canvasObject.textPlacement?.let { put("textPlacement", Json { encodeDefaults = true }.encodeToJsonElement(TextPlacement.serializer(), it)) }
                                     }
 
                                     is GroupFrame -> {
@@ -1415,6 +2053,7 @@ internal fun WorkspaceOperation.toExpandedDtos(startingSequence: Long): List<Ope
                                         put("colorToken", JsonPrimitive(canvasObject.colorToken))
                                     }
 
+                                    is cg.creamgod.boarderless.domain.model.ExternalMediaNode -> error("Server does not support external media nodes")
                                     is MediaNode -> {
                                         put("assetId", JsonPrimitive(canvasObject.assetId))
                                         put("mediaKind", JsonPrimitive(canvasObject.mediaKind.token))
@@ -1430,6 +2069,9 @@ internal fun WorkspaceOperation.toExpandedDtos(startingSequence: Long): List<Ope
             )
         } else if (operation is CreateRelationsOperation) {
             val relation = operation.relations.single()
+            require(relation.sourceObjectId != relation.targetObjectId || relation.geometry != null) {
+                "Self-loop requires explicit geometry"
+            }
             OperationDto(
                 operationId = randomUuid(),
                 clientSeq = startingSequence + index + 1,
@@ -1444,7 +2086,12 @@ internal fun WorkspaceOperation.toExpandedDtos(startingSequence: Long): List<Ope
                         relation.label?.let { put("label", JsonPrimitive(it)) }
                         put(
                             "style",
-                            buildJsonObject { put("colorToken", JsonPrimitive(relation.colorToken)) },
+                            buildJsonObject {
+                                put("colorToken", JsonPrimitive(relation.colorToken))
+                                relation.geometry?.let {
+                                    put("geometry", Json { encodeDefaults = true }.encodeToJsonElement(RelationGeometry.serializer(), it))
+                                }
+                            },
                         )
                     },
             )
@@ -1462,7 +2109,13 @@ private fun CanvasTransform.toJson(): JsonObject =
         put("rotationDegrees", JsonPrimitive(rotationDegrees))
     }
 
-internal fun WorkspaceStateDto.toDomainWorkspace(title: String): Workspace {
+internal fun WorkspaceStateDto.toDomainWorkspace(title: String, capabilities: BackendCanvasReadCapabilities = BackendCanvasReadCapabilities()): Workspace {
+    if (!capabilities.canvasStyle && (canvasStyle != cg.creamgod.boarderless.domain.model.CanvasStyle() || canvasStyleVersion != 0L))
+        throw BackendContractException("Unnegotiated canvas style")
+    if (!capabilities.sequenceDiagrams && (sequenceDiagrams.isNotEmpty() || sequenceDiagramsVersion != 0L))
+        throw BackendContractException("Unnegotiated sequence metadata")
+    if (sequenceDiagrams.map { it.containerId }.distinct().size != sequenceDiagrams.size)
+        throw BackendContractException("Duplicate sequence container")
     if (workspaceVersion < 0 || throughServerSeq < 0) {
         throw BackendContractException("Workspace projection contains a negative version or server sequence")
     }
@@ -1497,7 +2150,8 @@ internal fun WorkspaceStateDto.toDomainWorkspace(title: String): Workspace {
                 } catch (error: IllegalArgumentException) {
                     throw BackendContractException("Object ${dto.objectId} has an invalid transform", error)
                 }
-            if ("vectorPath" in dto.properties) throw BackendContractException("Vector path requires negotiated backend support")
+            if ("vectorPath" in dto.properties && !capabilities.vectorPath) throw BackendContractException("Vector path requires negotiated backend support")
+            if ("textPlacement" in dto.properties && !capabilities.textPlacement) throw BackendContractException("Text placement requires negotiated backend support")
             try {
                 when (dto.objectType) {
                     "text" -> {
@@ -1516,6 +2170,12 @@ internal fun WorkspaceStateDto.toDomainWorkspace(title: String): Workspace {
                                         "Object ${dto.objectId} has unsupported node shape '$token'",
                                     )
                                 } ?: NodeShape.RoundedRectangle,
+                            vectorPath = dto.properties["vectorPath"]?.takeUnless { it == JsonNull }?.let {
+                                Json.decodeFromJsonElement(VectorPath.serializer(), it)
+                            },
+                            textPlacement = dto.properties["textPlacement"]?.takeUnless { it == JsonNull }?.let {
+                                Json.decodeFromJsonElement(TextPlacement.serializer(), it)
+                            },
                         )
                     }
 
@@ -1591,13 +2251,13 @@ internal fun WorkspaceStateDto.toDomainWorkspace(title: String): Workspace {
     }
     val domainRelations =
         relations.map { dto ->
-            if ("geometry" in dto.style) throw BackendContractException("Relation geometry requires negotiated backend support")
+            if ("geometry" in dto.style && !capabilities.geometry) throw BackendContractException("Relation geometry requires negotiated backend support")
             if (dto.relationVersion < 1) {
                 throw BackendContractException("Relation ${dto.relationId} has invalid version ${dto.relationVersion}")
             }
             val sourceId = CanvasObjectId(dto.sourceObjectId)
             val targetId = CanvasObjectId(dto.targetObjectId)
-            if (sourceId == targetId) {
+            if (sourceId == targetId && (!capabilities.geometry || "geometry" !in dto.style)) {
                 throw BackendContractException("Relation ${dto.relationId} connects an object to itself")
             }
             if (sourceId !in objectMap || targetId !in objectMap) {
@@ -1614,6 +2274,7 @@ internal fun WorkspaceStateDto.toDomainWorkspace(title: String): Workspace {
                 intent = dto.intent,
                 label = dto.label,
                 colorToken = dto.style.string("colorToken") ?: "relation",
+                geometry = dto.style["geometry"]?.let { Json.decodeFromJsonElement(RelationGeometry.serializer(), it) }
             )
         }
     return Workspace(
@@ -1622,7 +2283,11 @@ internal fun WorkspaceStateDto.toDomainWorkspace(title: String): Workspace {
         version = workspaceVersion,
         objects = objectMap,
         relations = domainRelations.associateBy { it.id },
-    )
+        canvasStyle = canvasStyle,
+        canvasStyleVersion = canvasStyleVersion,
+        sequenceDiagrams = sequenceDiagrams.associateBy { it.containerId },
+        sequenceDiagramsVersion = sequenceDiagramsVersion,
+    ).also { if (!it.hasValidSequenceBindings()) throw BackendContractException("Invalid sequence graph bindings") }
 }
 
 private fun RelationDirection.toBackendValue(): String =
@@ -1685,4 +2350,19 @@ internal fun decodeLegacyWorkspaceState(raw: JsonObject): WorkspaceStateDto {
         throw BackendContractException("Sequence diagrams require negotiated backend support")
     }
     return Json { ignoreUnknownKeys = true }.decodeFromJsonElement(WorkspaceStateDto.serializer(), raw)
+}
+
+internal fun decodeNegotiatedWorkspaceState(raw: JsonObject, capabilities: BackendCanvasReadCapabilities): WorkspaceStateDto {
+    if (("canvasStyle" in raw || "canvasStyleVersion" in raw) && !capabilities.canvasStyle)
+        throw BackendContractException("Canvas style requires negotiated backend support")
+    if (("sequenceDiagrams" in raw || "sequenceDiagramsVersion" in raw) && !capabilities.sequenceDiagrams)
+        throw BackendContractException("Sequence diagrams require negotiated backend support")
+    if (capabilities.canvasStyle && !("canvasStyle" in raw && "canvasStyleVersion" in raw))
+        throw BackendContractException("Incomplete canvas style projection")
+    if (capabilities.sequenceDiagrams && !("sequenceDiagrams" in raw && "sequenceDiagramsVersion" in raw))
+        throw BackendContractException("Incomplete sequence projection")
+    val state = Json { ignoreUnknownKeys = true }.decodeFromJsonElement(WorkspaceStateDto.serializer(), raw)
+    raw["sequenceDiagrams"]?.let { sequenceDiagramsFromWire(it) }
+    require(state.sequenceDiagrams.map { it.containerId }.distinct().size == state.sequenceDiagrams.size) { "Duplicate sequence container" }
+    return state
 }

@@ -12,6 +12,9 @@ internal data class ClipboardPayload(
     val nodes: List<ClipboardNode>,
     val groups: List<ClipboardGroup> = emptyList(),
     val media: List<ClipboardMedia> = emptyList(),
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+    @kotlinx.serialization.EncodeDefault(kotlinx.serialization.EncodeDefault.Mode.NEVER)
+    val externalMedia: List<ClipboardExternalMedia> = emptyList(),
     val relations: List<ClipboardRelation> = emptyList(),
     @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
     @kotlinx.serialization.EncodeDefault(kotlinx.serialization.EncodeDefault.Mode.NEVER)
@@ -71,6 +74,17 @@ internal data class ClipboardMedia(
 )
 
 @Serializable
+internal data class ClipboardExternalMedia(
+    val originalId: String,
+    val x: Float, val y: Float, val width: Float, val height: Float, val rotationDegrees: Float,
+    val reference: cg.creamgod.boarderless.domain.media.ExternalMediaReference,
+    val altText: String = "",
+    val parentOriginalId: String? = null,
+    val locked: Boolean = false,
+    val zOffset: Long = 0,
+)
+
+@Serializable
 internal data class ClipboardRelation(
     val sourceId: String,
     val targetId: String,
@@ -108,12 +122,12 @@ internal enum class ClipboardPayloadIssue {
 
 internal fun validateClipboardPayload(payload: ClipboardPayload): ClipboardPayloadIssue? {
     if (payload.format != "boarderless/selection") return ClipboardPayloadIssue.UnsupportedFormat
-    if (payload.version !in 1..8) return ClipboardPayloadIssue.UnsupportedVersion
-    if (payload.nodes.isEmpty() && payload.groups.isEmpty() && payload.media.isEmpty()) {
+    if (payload.version !in 1..9) return ClipboardPayloadIssue.UnsupportedVersion
+    if (payload.nodes.isEmpty() && payload.groups.isEmpty() && payload.media.isEmpty() && payload.externalMedia.isEmpty()) {
         return ClipboardPayloadIssue.Empty
     }
 
-    if (payload.nodes.size + payload.groups.size + payload.media.size > 1000 || payload.relations.size > 2000 ||
+    if (payload.nodes.size + payload.groups.size + payload.media.size + payload.externalMedia.size > 1000 || payload.relations.size > 2000 ||
         payload.sequenceDiagrams.size > 64
     ) {
         return ClipboardPayloadIssue.Limit
@@ -124,10 +138,11 @@ internal fun validateClipboardPayload(payload: ClipboardPayload): ClipboardPaylo
         return ClipboardPayloadIssue.UnsupportedVersion
     }
     if (payload.version < 8 && payload.nodes.any { it.textPlacement != null }) return ClipboardPayloadIssue.UnsupportedVersion
+    if (payload.version < 9 && payload.externalMedia.isNotEmpty()) return ClipboardPayloadIssue.UnsupportedVersion
     val objectIds =
         payload.groups.map(ClipboardGroup::originalId) +
             payload.nodes.map(ClipboardNode::originalId) +
-            payload.media.map(ClipboardMedia::originalId)
+            payload.media.map(ClipboardMedia::originalId) + payload.externalMedia.map(ClipboardExternalMedia::originalId)
     if (objectIds.any(String::isBlank)) return ClipboardPayloadIssue.InvalidObjectId
     if (objectIds.toSet().size != objectIds.size) return ClipboardPayloadIssue.DuplicateObjectId
 
@@ -148,6 +163,9 @@ internal fun validateClipboardPayload(payload: ClipboardPayload): ClipboardPaylo
         payload.groups.any {
             !validTransform(it.x, it.y, it.width, it.height, it.rotationDegrees)
         } ||
+        payload.externalMedia.any {
+            !validTransform(it.x, it.y, it.width, it.height, it.rotationDegrees)
+        } ||
         payload.media.any {
             !validTransform(it.x, it.y, it.width, it.height, it.rotationDegrees)
         }
@@ -166,8 +184,10 @@ internal fun validateClipboardPayload(payload: ClipboardPayload): ClipboardPaylo
         return ClipboardPayloadIssue.InvalidMedia
     }
 
+    if (payload.externalMedia.any { it.altText.length > 8192 }) return ClipboardPayloadIssue.InvalidMedia
     val groupIds = payload.groups.mapTo(mutableSetOf(), ClipboardGroup::originalId)
     if (payload.nodes.any { it.parentOriginalId != null && it.parentOriginalId !in groupIds } ||
+        payload.externalMedia.any { it.parentOriginalId != null && it.parentOriginalId !in groupIds } ||
         payload.media.any { it.parentOriginalId != null && it.parentOriginalId !in groupIds } ||
         payload.groups.any {
             it.parentOriginalId != null &&
@@ -192,6 +212,7 @@ internal fun validateClipboardPayload(payload: ClipboardPayload): ClipboardPaylo
 
     val nodeIds = payload.nodes.mapTo(mutableSetOf(), ClipboardNode::originalId)
     nodeIds += payload.media.map { it.originalId }
+    nodeIds += payload.externalMedia.map { it.originalId }
     if (payload.relations.any { relation ->
             relation.sourceId !in nodeIds || relation.targetId !in nodeIds ||
                 (relation.sourceId == relation.targetId && (payload.version < 5 || relation.geometry == null)) ||

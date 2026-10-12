@@ -15,7 +15,7 @@ import cg.creamgod.boarderless.i18n.Strings
 @Composable
 internal fun BoxScope.CanvasBrushControls(
     supported: Boolean, active: Boolean, enabled: Boolean, viewport: Viewport,
-    readLive: () -> PenCanvasLive, commit: (WorkspaceOperation, CanvasObjectId) -> Boolean,
+    readLive: () -> PenCanvasLive, commit: suspend (WorkspaceOperation, CanvasObjectId) -> Boolean,
     onClose: () -> Unit, onToolbarHeight: (Int) -> Unit, onStart: () -> Unit,
 ) {
     if (!supported) return

@@ -74,11 +74,24 @@ internal class PersistentSchemeBundleImportReceipts(
     override suspend fun recovered(asset: SchemeBundleAsset, repository: AssetRepository): ImportedMedia? {
         require(asset in expected)
         val entry = read().second.entries.singleOrNull { it.source == asset } ?: return null
-        val fresh = repository.getAsset(owner, entry.destinationId)
-        require(fresh.id == entry.destinationId && fresh.workspaceId == owner.workspace.id && fresh.ownerId == owner.userId)
+        fun validate(fresh: WorkspaceAsset) {
+            require(fresh.id == entry.destinationId && fresh.workspaceId == owner.workspace.id && fresh.ownerId == owner.userId)
+            require(fresh.mediaType == asset.mediaType && fresh.byteSize == asset.byteSize && fresh.checksum == asset.checksum &&
+                fresh.width == asset.width && fresh.height == asset.height && fresh.durationMs == asset.durationMs)
+        }
+        var fresh = repository.getAsset(owner, entry.destinationId)
+        validate(fresh)
+        // A stored receipt proves this complete original already passed the source hash and
+        // scoped pre-completion checkpoint. Reconcile local IO only; never issue a new upload
+        // or invent a remote completion URL for a pending server asset.
+        val local = repository as? CanvasWorkspaceRepository
+        if (fresh.status == AssetStatus.Pending && local?.isLocalOnly == true) {
+            require(owner.canEditContent)
+            fresh = checkNotNull(local.localAssetGateway).confirm(owner,
+                AssetUploadTicket(fresh, "boarderless-local:${fresh.id}"))
+            validate(fresh)
+        }
         require(fresh.status == AssetStatus.Ready) { "Resolve pending bundle asset before retrying import" }
-        require(fresh.mediaType == asset.mediaType && fresh.byteSize == asset.byteSize && fresh.checksum == asset.checksum &&
-            fresh.width == asset.width && fresh.height == asset.height && fresh.durationMs == asset.durationMs)
         return ImportedMedia(fresh, requireNotNull(mediaKindForAssetMediaType(fresh.mediaType)))
     }
 }

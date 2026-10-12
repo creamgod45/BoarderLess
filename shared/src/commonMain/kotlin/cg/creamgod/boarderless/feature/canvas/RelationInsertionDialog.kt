@@ -15,16 +15,23 @@ import androidx.compose.ui.window.DialogProperties
 import cg.creamgod.boarderless.designsystem.*
 import cg.creamgod.boarderless.domain.model.*
 import cg.creamgod.boarderless.i18n.Strings
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 
 /** Explicit preview and confirmation. No operation is staged by merely selecting a relation. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable internal fun RelationInsertionDialog(
     draft: RelationInsertionDraft,
     isCurrent: () -> Boolean,
-    onConfirm: (RelationInsertionPlan) -> Boolean,
+    onConfirm: suspend (RelationInsertionPlan) -> Boolean,
     onDismiss: () -> Unit,
 ) {
     val colors = BoarderLessTheme.colors
+    val scope = rememberCoroutineScope()
+    var saving by remember { mutableStateOf(false) }
     var text by remember { mutableStateOf("") }
+    var shape by remember { mutableStateOf(NodeShape.Rectangle) }
+    var showShapes by remember { mutableStateOf(false) }
     var label by remember { mutableStateOf(draft.original.label.orEmpty()) }
     var intent by remember { mutableStateOf(draft.original.intent.orEmpty()) }
     var x by remember { mutableStateOf((draft.center.x - 130f).toString()) }
@@ -35,7 +42,7 @@ import cg.creamgod.boarderless.i18n.Strings
     var attempted by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf(false) }
     val plan =
-        remember(text, label, intent, x, y, width, height) {
+        remember(text, shape, label, intent, x, y, width, height) {
             runCatching {
                 draft.plan(
                     text,
@@ -45,10 +52,11 @@ import cg.creamgod.boarderless.i18n.Strings
                     intent.ifEmpty { null },
                     Vec2(x.toFloat(), y.toFloat()),
                     CanvasSize(width.toFloat(), height.toFloat()),
+                    shape,
                 )
             }.getOrNull()
         }
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    Dialog(onDismissRequest = { if (!saving) onDismiss() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).imePadding(), contentAlignment = Alignment.Center) {
             GlassSurface(Modifier.widthIn(max = 680.dp).fillMaxWidth(.94f).fillMaxHeight(.86f)) {
                 Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -71,6 +79,21 @@ import cg.creamgod.boarderless.i18n.Strings
                             confirmed = false
                         }
                     }, enabled = !attempted, multiline = true)
+                    ShellButton(Strings.relationInsert.chooseShape(nodeShapeLabel(shape)), enabled = !attempted && !saving,
+                        accent = showShapes, onClick = { showShapes = !showShapes })
+                    if (showShapes) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            NodeShape.entries.forEach { option ->
+                                ShellButton(nodeShapeLabel(option), compact = true, accent = shape == option,
+                                    enabled = !attempted && !saving, onClick = {
+                                        shape = option
+                                        confirmed = false
+                                        error = false
+                                        showShapes = false
+                                    })
+                            }
+                        }
+                    }
                     AiProbeField(Strings.relationInsert.firstLabel(), label, {
                         if (!attempted &&
                             it.encodeToByteArray().size <= 64 * 1024
@@ -139,6 +162,7 @@ import cg.creamgod.boarderless.i18n.Strings
                             when (node) {
                                 is TextNode -> node.text
                                 is GroupFrame -> node.title
+                                is cg.creamgod.boarderless.domain.model.ExternalMediaNode -> node.altText
                                 is MediaNode -> node.altText
                             }
                         BasicText(
@@ -169,21 +193,30 @@ import cg.creamgod.boarderless.i18n.Strings
                             style = TextStyle(color = colors.danger, fontSize = 12.sp),
                         )
                     }
-                    ShellButton(Strings.relationInsert.consent(), accent = confirmed, enabled = plan != null && isCurrent(), onClick = {
+                    ShellButton(Strings.relationInsert.consent(), accent = confirmed, enabled = !saving && plan != null && isCurrent(), onClick = {
                         confirmed =
                             !confirmed
                     })
                     ShellButton(
                         Strings.relationInsert.apply(),
-                        enabled = confirmed && plan != null && isCurrent(),
+                        enabled = !saving && confirmed && plan != null && isCurrent(),
                         onClick = apply@{
-                            if (!confirmed || !isCurrent()) return@apply
+                            if (saving || !confirmed || !isCurrent()) return@apply
                             confirmed = false
                             attempted = true
-                            if (onConfirm(checkNotNull(plan))) onDismiss() else error = true
+                            val prepared = checkNotNull(plan)
+                            saving = true
+                            scope.launch {
+                                try {
+                                    if (isCurrent() && onConfirm(prepared)) onDismiss() else error = true
+                                } catch (cancelled: CancellationException) { throw cancelled }
+                                catch (_: Exception) { error = true }
+                                finally { saving = false }
+                            }
                         },
                     )
-                    ShellButton(Strings.common.cancel(), onClick = onDismiss)
+                    if (saving) BasicText(Strings.status.savingChanges(1), style = TextStyle(color = colors.contentMuted))
+                    ShellButton(Strings.common.cancel(), enabled = !saving, onClick = { if (!saving) onDismiss() })
                 }
             }
         }

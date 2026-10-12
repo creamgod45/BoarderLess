@@ -261,6 +261,28 @@ object MermaidSequenceAdapter {
         }
     }
 
+    /** Mermaid has no message/block identity syntax. Preserve the full original identity
+     * only when every validated semantic field is unchanged (including order and branches).
+     * Formatting/comments may differ; changed semantics never get guessed positional IDs. */
+    fun parseKeepingUnchangedIdentity(source: String, previous: SequenceDiagramDraft?): SequenceParseResult {
+        val result = parse(source)
+        if (result !is SequenceParseResult.Parsed || previous == null) return result
+        val original = previous.validatedSnapshot()
+        fun sameSteps(before: List<SequenceStep>, after: List<SequenceStep>): Boolean =
+            before.size == after.size && before.zip(after).all { (first, second) ->
+                when {
+                    first is SequenceMessage && second is SequenceMessage ->
+                        first.copy(id = second.id) == second
+                    first is SequenceBlock && second is SequenceBlock ->
+                        first.kind == second.kind && first.branches.size == second.branches.size &&
+                            first.branches.zip(second.branches).all { (a, b) -> a.label == b.label && sameSteps(a.steps, b.steps) }
+                    else -> false
+                }
+            }
+        return if (original.participants == result.draft.participants && sameSteps(original.steps, result.draft.steps))
+            SequenceParseResult.Parsed(original) else result
+    }
+
     /** Exports the supported semantic tree, never source snippets or renderer directives.
      * Logical IDs are retained by serialized draft; Mermaid itself has no message identity syntax. */
     fun export(source: SequenceDiagramDraft): String {

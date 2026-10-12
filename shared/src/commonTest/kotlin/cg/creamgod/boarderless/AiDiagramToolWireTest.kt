@@ -115,6 +115,17 @@ class AiDiagramToolWireTest {
         }
     }
 
+    @Test fun workingRulesRideInsideTheFirstUserMessageWithoutANewRole() {
+        for (dialect in AiRequestDialect.entries) {
+            val first = body(dialect, prompt = "Add a branch").getValue("messages").jsonArray.first().jsonObject
+            assertEquals("user", first.getValue("role").jsonPrimitive.content)
+            val text = first.getValue("content").let { it.jsonPrimitive.content }
+            assertTrue(text.startsWith(AI_DIAGRAM_GUIDANCE))
+            assertTrue(text.endsWith("Add a branch"))
+            assertContains(text, "relation label")
+        }
+    }
+
     @Test fun chatRetainsExactArgumentsAndPairedResultIdsWithoutElevatingData() {
         val c = call(args = "{ \"schema\" : 1 }")
         val messages = body(AiRequestDialect.OpenAiChat, listOf(round(c))).getValue("messages").jsonArray

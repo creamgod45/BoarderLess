@@ -63,20 +63,14 @@ internal suspend fun runAiUnderstandingProbe(
                 prompt,
                 AiContextSnapshot("probe", 0, AiContextScope.PromptOnly, emptyList(), emptyList()),
             )
-        val text = StringBuilder()
+        val text = AiUtf8TextBuffer()
         var completed = false
         provider.stream(request).collect { event ->
             when (event) {
                 is AiCoworkEvent.TextDelta -> {
-                    // Enforce the advertised UTF-8 byte limit, not Kotlin UTF-16 character count.
-                    val nextText = text.toString() + event.text
-                    if (nextText.encodeToByteArray().size > 128 * 1024) {
-                        record(AiProbeDiagnostic(AiProbeStage.Failed, AiProbeFailure.OutputLimit))
-                        error("AI output limit")
-                    }
+                    val nextText = text.append(event.text)
                     if (last?.stage != AiProbeStage.Receiving) record(AiProbeDiagnostic(AiProbeStage.Receiving))
-                    text.append(event.text)
-                    onText(text.toString())
+                    onText(nextText)
                 }
 
                 AiCoworkEvent.Completed -> {
@@ -105,14 +99,18 @@ internal suspend fun runAiUnderstandingProbe(
                 }
             }
         }
-        if (!completed ||
-            text.isBlank()
-        ) {
+        if (!completed) {
             record(AiProbeDiagnostic(AiProbeStage.Failed, AiProbeFailure.Incomplete))
             error("Incomplete AI response")
         }
-        record(AiProbeDiagnostic(AiProbeStage.Completed))
-        return text.toString()
+        val result = text.finish()
+        if (result.isBlank()) {
+            record(AiProbeDiagnostic(AiProbeStage.Failed, AiProbeFailure.EmptyResponse))
+            error("Empty AI response")
+        }
+        val responseBytes = result.encodeToByteArray(throwOnInvalidSequence = true).size
+        record(AiProbeDiagnostic(AiProbeStage.Completed, reply = AiReplyDiagnostic(responseBytes, 0, 0)))
+        return result
     } catch (cancelled: kotlinx.coroutines.CancellationException) {
         onDiagnostic(AiProbeDiagnostic(AiProbeStage.Cancelled))
         throw cancelled
@@ -120,7 +118,12 @@ internal suspend fun runAiUnderstandingProbe(
         record(
             AiProbeDiagnostic(
                 AiProbeStage.Failed,
-                if (failure is AiRequestValidationException) AiProbeFailure.Configuration else AiProbeFailure.Unknown,
+                when (failure) {
+                    is AiRequestValidationException -> AiProbeFailure.Configuration
+                    is AiTextLimitException -> AiProbeFailure.OutputLimit
+                    is AiTextEncodingException -> AiProbeFailure.ResponseFormat
+                    else -> AiProbeFailure.Unknown
+                },
             ),
         )
         throw failure

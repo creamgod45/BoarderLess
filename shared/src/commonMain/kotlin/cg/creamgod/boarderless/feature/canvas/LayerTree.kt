@@ -80,6 +80,17 @@ private fun CanvasObject.toLayerTreeEntry(depth: Int): LayerTreeEntry =
             )
         }
 
+        is cg.creamgod.boarderless.domain.model.ExternalMediaNode -> {
+            LayerTreeEntry(
+                objectId = id,
+                depth = depth,
+                title = altText.ifBlank { "GIPHY" }.take(48),
+                kind = LayerObjectKind.Media,
+                locked = locked,
+                zIndex = zIndex,
+            )
+        }
+
         is MediaNode -> {
             LayerTreeEntry(
                 objectId = id,

@@ -3,6 +3,9 @@ package cg.creamgod.boarderless.data.remote
 import cg.creamgod.boarderless.data.requireBoundedDraftJsonDepth
 import com.russhwolf.settings.Settings
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
+import cg.creamgod.boarderless.domain.history.MediaReferenceChange
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
@@ -23,6 +26,10 @@ internal data class StoppedSubmissionLocator(
 )
 
 @Serializable
+internal data class PendingMediaReferenceChange(val wireOperationId: String, val change: MediaReferenceChange)
+
+@OptIn(ExperimentalSerializationApi::class)
+@Serializable
 internal data class PendingWorkspaceSubmission(
     val scope: PendingSubmissionScope,
     val localOperationId: String,
@@ -30,6 +37,12 @@ internal data class PendingWorkspaceSubmission(
     // Captured before transport, including relation cascades. Old records cannot authorize restore.
     val deletionVersions: Map<String, Long> = emptyMap(),
     val deletionSnapshotDigests: Map<String, String> = emptyMap(),
+    // Exact pre-submit references bound to a wire operation. Empty legacy entries stay
+    // byte-compatible; they must never acquire invented historical restoration proof.
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val mediaReferenceChanges: List<PendingMediaReferenceChange> = emptyList(),
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val historyIntent: cg.creamgod.boarderless.domain.history.WorkspaceHistoryIntent? = null,
 )
 
 /** Persistent wire identity foundation, not an automatic resend policy.
@@ -375,4 +388,11 @@ internal fun validatePendingWorkspaceSubmission(entry: PendingWorkspaceSubmissio
         entry.deletionSnapshotDigests.keys == entry.deletionVersions.keys &&
             entry.deletionSnapshotDigests.values.all { it.matches(Regex("[0-9a-f]{64}")) },
     )
+    require(entry.mediaReferenceChanges.size <= 200 && entry.mediaReferenceChanges.map { it.wireOperationId }.distinct().size == entry.mediaReferenceChanges.size)
+    entry.mediaReferenceChanges.forEach { captured ->
+        val change = captured.change
+        require(change.expectedVersion in 1 until 9_007_199_254_740_991L && change.before != change.after)
+        val sent = entry.request.operations.single { it.operationId == captured.wireOperationId }
+        requireMediaReferenceWire(sent, change)
+    }
 }

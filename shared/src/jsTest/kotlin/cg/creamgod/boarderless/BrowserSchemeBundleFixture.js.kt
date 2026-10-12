@@ -14,3 +14,5 @@ internal actual fun browserBundleFixtureWaitForIdle(done: () -> Unit) { js("glob
 internal actual fun browserBundleFixtureExerciseLeases(done: (String?, String?) -> Unit) { js("globalThis.boarderlessBundleFixture").exerciseLeases(done) }
 
 internal actual fun browserBundleFixtureFailNextRemoval() { js("globalThis.boarderlessBundleFixture").failNextRemoval() }
+
+internal actual fun browserBundleFixtureSelectBytes(base64: String) { js("globalThis.boarderlessBundleFixture").selectBytes(base64) }

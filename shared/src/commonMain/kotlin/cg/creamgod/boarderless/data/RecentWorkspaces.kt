@@ -14,6 +14,7 @@ const val MaxRecentWorkspaces = 5
 data class RecentWorkspace(
     val id: String,
     val title: String,
+    val storageMode: WorkspaceStorageMode? = null,
 )
 
 /** Most recently opened first, without duplicates, at most [MaxRecentWorkspaces]. */
@@ -31,21 +32,25 @@ fun List<RecentWorkspace>.reconciledWith(available: List<WorkspaceSummary>): Lis
 /** The recently opened workspaces, kept in the app's settings so they survive restarts. */
 class RecentWorkspaceStore(
     private val settings: Settings = Settings(),
+    private val storageMode: WorkspaceStorageMode? = null,
 ) {
+    private val storeKey = RecentWorkspacesKey + (storageMode?.let { ".${it.token}" } ?: "")
+
     var items: List<RecentWorkspace>
         get() =
             settings
-                .getStringOrNull(RecentWorkspacesKey)
+                .getStringOrNull(storeKey)
                 ?.let { runCatching { StoreJson.decodeFromString<List<RecentWorkspace>>(it) }.getOrNull() }
                 .orEmpty()
                 .take(MaxRecentWorkspaces)
-        private set(value) = settings.putString(RecentWorkspacesKey, StoreJson.encodeToString(value))
+                .map { it.copy(storageMode = storageMode) }
+        private set(value) = settings.putString(storeKey, StoreJson.encodeToString(value))
 
     fun recordOpened(
         id: WorkspaceId,
         title: String,
     ) {
-        items = items.withOpened(id.value, title)
+        items = items.withOpened(id.value, title).map { it.copy(storageMode = storageMode) }
     }
 
     fun rename(
@@ -85,17 +90,24 @@ fun interface RecentWorkspacesPublisher {
  * Requests from outside the app (a Dock menu item, jump list entry, launcher shortcut or quick
  * action) to open a workspace. The workspace screen opens the pending request and consumes it.
  */
-object WorkspaceLaunchRequests {
-    private val pendingRequest = MutableStateFlow<WorkspaceId?>(null)
-    val pending: StateFlow<WorkspaceId?> = pendingRequest.asStateFlow()
+data class WorkspaceLaunchRequest(val workspaceId: WorkspaceId, val storageMode: WorkspaceStorageMode? = null) {
+    fun matches(mode: WorkspaceStorageMode?): Boolean = storageMode == null || storageMode == mode
+}
 
-    /** Ignores ids that cannot be workspace ids, since they come from outside the app. */
-    fun open(workspaceId: String) {
-        if (isWorkspaceId(workspaceId)) pendingRequest.value = WorkspaceId(workspaceId)
+object WorkspaceLaunchRequests {
+    private val pendingRequest = MutableStateFlow<WorkspaceLaunchRequest?>(null)
+    val pending: StateFlow<WorkspaceLaunchRequest?> = pendingRequest.asStateFlow()
+
+    /** Unknown modes and invalid external ids are rejected rather than routed to another store. */
+    fun open(workspaceId: String, storageModeToken: String? = null) {
+        if (!isWorkspaceId(workspaceId)) return
+        val mode = WorkspaceStorageMode.fromToken(storageModeToken)
+        if (storageModeToken != null && mode == null) return
+        pendingRequest.value = WorkspaceLaunchRequest(WorkspaceId(workspaceId), mode)
     }
 
-    fun consume(workspaceId: WorkspaceId) {
-        pendingRequest.compareAndSet(workspaceId, null)
+    fun consume(request: WorkspaceLaunchRequest) {
+        pendingRequest.compareAndSet(request, null)
     }
 
     fun isWorkspaceId(value: String): Boolean = WorkspaceIdPattern.matches(value)

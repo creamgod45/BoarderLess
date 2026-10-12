@@ -29,7 +29,7 @@ internal object QuickSchemeTransferCodec {
     private fun validate(document: Document) {
         require(document.format == "boarderless.quick-scheme" && document.schemaVersion == 1)
         require(document.name.isNotBlank() && document.name.encodeToByteArray(throwOnInvalidSequence = true).size <= 4096)
-        require(document.selection.nodes.size + document.selection.groups.size + document.selection.media.size <= 1000)
+        require(document.selection.nodes.size + document.selection.groups.size + document.selection.media.size + document.selection.externalMedia.size <= 1000)
         require(document.selection.relations.size <= 2000)
         val groups = document.selection.groups.associateBy { it.originalId }
         document.selection.groups.forEach { group ->

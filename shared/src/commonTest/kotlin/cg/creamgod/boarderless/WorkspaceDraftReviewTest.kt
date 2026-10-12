@@ -7,6 +7,22 @@ import kotlinx.serialization.json.*
 import kotlin.test.*
 
 class WorkspaceDraftReviewTest {
+    @Test fun syncComparisonIncludesRemoteOnlyEntitiesAndDocumentStyleAndTitle() {
+        val local = baseline.copy(title = "離線標題", canvasStyle = CanvasStyle(backgroundToken = "cool"))
+        val added = text.copy(id = CanvasObjectId("remote-only"), text = "遠端新增")
+        val remote = baseline.copy(canvasStyle = CanvasStyle(backgroundToken = "warm"), objects = baseline.objects + (added.id to added))
+        val reviewed = review(local, remote)
+        val ordinary = reviewed.differences()
+        assertEquals(listOf("document:title", "document:canvasStyle"), ordinary.map { it.id })
+        val all = reviewed.differences(includeRemoteChanges = true)
+        assertEquals(listOf("document:title", "document:canvasStyle", "object:remote-only"), all.map { it.id })
+        val style = assertIs<WorkspaceDraftDifference.DocumentChange>(all[1])
+        assertEquals(DraftRemoteComparison.Changed, style.remoteComparison)
+        assertTrue(style.before.contains("default")); assertTrue(style.draft.contains("cool")); assertTrue(style.remote.contains("warm"))
+        val creation = assertIs<WorkspaceDraftDifference.ObjectChange>(all.last())
+        assertNull(creation.before); assertNull(creation.draft); assertEquals(added, creation.remote)
+        assertEquals(baseline.objects.size, reviewed.baseline.objects.size)
+    }
     private val transform = CanvasTransform(Vec2(15f, -20f), CanvasSize(200f, 120f), 45f)
     private val text =
         TextNode(CanvasObjectId("text"), transform = transform, text = "Private <script>text</script>", shape = NodeShape.Diamond)

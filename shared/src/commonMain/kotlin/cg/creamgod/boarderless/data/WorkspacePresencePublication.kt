@@ -87,6 +87,7 @@ internal suspend fun publishWorkspacePresence(
     publisher: WorkspacePresencePublisher,
     readLatest: () -> WorkspacePresenceIntent?,
     monotonicTimeMs: () -> Long,
+    forceInitialPublication: Boolean = false,
 ) {
     var failure: Throwable? = null
     try {
@@ -95,6 +96,7 @@ internal suspend fun publishWorkspacePresence(
         var lastSelectionPublication: Long? = null
         var lastClock: Long? = null
         var sequence = 0L
+        var initialPending = forceInitialPublication
         while (true) {
             currentCoroutineContext().ensureActive()
             val latest = readLatest() ?: return
@@ -105,13 +107,14 @@ internal suspend fun publishWorkspacePresence(
             val selectionChanged = latest.selectedIds != previous.selectedIds
             val cursorReady = lastPublication == null || now - lastPublication >= 100
             val selectionReady = !selectionChanged || lastSelectionPublication == null || now - lastSelectionPublication >= 250
-            if (latest != previous && cursorReady && selectionReady) {
+            if ((initialPending || latest != previous) && cursorReady && selectionReady) {
                 check(sequence < 9_007_199_254_740_991L) { "Presence sequence exhausted" }
                 val update = WorkspacePresenceUpdate(sequence + 1, latest.cursor, latest.selectedIds.toSet())
                 currentCoroutineContext().ensureActive()
                 publisher.publish(update)
                 currentCoroutineContext().ensureActive()
                 sequence = update.presenceSeq
+                initialPending = false
                 previous = latest.copy(selectedIds = update.selectedIds)
                 // Account for time spent suspended in a slow transport, not only sampling time.
                 val completedAt = monotonicTimeMs()

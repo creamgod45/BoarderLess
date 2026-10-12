@@ -112,6 +112,10 @@ internal data class WorkspaceStateDto(
     val throughServerSeq: Long,
     val objects: List<CanvasObjectDto>,
     val relations: List<RelationDto> = emptyList(),
+    val canvasStyle: cg.creamgod.boarderless.domain.model.CanvasStyle = cg.creamgod.boarderless.domain.model.CanvasStyle(),
+    val canvasStyleVersion: Long = 0,
+    val sequenceDiagrams: List<cg.creamgod.boarderless.domain.sequence.SequenceCanvasDiagram> = emptyList(),
+    val sequenceDiagramsVersion: Long = 0,
 )
 
 @Serializable

@@ -92,6 +92,16 @@ data class PendingWorkspaceDraft(
 data class RestoredWorkspaceDraft(
     val session: WorkspaceSession,
     val operations: List<WorkspaceOperation>,
+    val history: cg.creamgod.boarderless.domain.history.WorkspaceHistory? = null,
+)
+
+/** A verified original commit, not an instruction to replay it on the current canvas. */
+data class ConfirmedWorkspaceReceipt(
+    val session: WorkspaceSession,
+    val originalOperation: WorkspaceOperation? = null,
+    val mediaReferenceOrigins: List<cg.creamgod.boarderless.domain.history.MediaReferenceHistoryOrigin> = emptyList(),
+    val historyIntent: cg.creamgod.boarderless.domain.history.WorkspaceHistoryIntent = cg.creamgod.boarderless.domain.history.WorkspaceHistoryIntent.Edit,
+    val confirmedHistory: cg.creamgod.boarderless.domain.history.WorkspaceHistory? = null,
 )
 
 val WorkspaceSession.canEditContent: Boolean
@@ -101,6 +111,7 @@ sealed interface SubmitOutcome {
     data class Accepted(
         val workspaceVersion: Long,
         val lastServerSeq: Long,
+        val mediaReferenceOrigins: List<cg.creamgod.boarderless.domain.history.MediaReferenceHistoryOrigin> = emptyList(),
     ) : SubmitOutcome
 
     data class Conflict(
@@ -108,18 +119,34 @@ sealed interface SubmitOutcome {
     ) : SubmitOutcome
 }
 
+/** Configured transport capability, not a claim that a physical connection is currently live. */
+enum class WorkspaceCollaborationTransport { Unavailable, RestPolling, WebSocket }
+
 interface WorkspaceRepository {
+    /** History may need committed original identity before generating an inverse. */
+    val awaitsHistoryCommit: Boolean get() = false
+    val collaborationTransport: WorkspaceCollaborationTransport get() = WorkspaceCollaborationTransport.Unavailable
+    /** Stable fingerprint of the configured server route; never a credential. */
+    val syncServerScope: String? get() = null
     val isLocalOnly: Boolean get() = false
+    /** True when draft retention must await an asynchronous storage transaction. */
+    val awaitsDraftPublication: Boolean get() = false
+    val supportsExternalMedia: Boolean get() = false
     val supportsCanvasStyle: Boolean get() = false
     val supportsRelationGeometry: Boolean get() = false
     val supportsSequenceDiagrams: Boolean get() = false
     val supportsVectorPaths: Boolean get() = false
+    val supportsTextPlacement: Boolean get() = false
+    val cloudQuickSchemeServer: cg.creamgod.boarderless.data.persistence.CloudSchemeServer? get() = null
 
     /** Local storage capability only; false must not be treated as permission for multi-key writes. */
     val supportsAtomicStoppedEvidence: Boolean get() = false
 
     /** Opens [preferredWorkspaceId] when it can, otherwise the last opened or a new workspace. */
     suspend fun openOrCreateWorkspace(preferredWorkspaceId: WorkspaceId? = null): WorkspaceSession
+
+    /** Local confirmed stacks only; the supplied authoritative canvas is never replaced. */
+    suspend fun restoreConfirmedHistory(session: WorkspaceSession): cg.creamgod.boarderless.domain.history.WorkspaceHistory? = null
 
     suspend fun listWorkspaces(session: WorkspaceSession): List<WorkspaceSummary>
 
@@ -189,6 +216,24 @@ interface WorkspaceRepository {
 
     suspend fun pendingChange(session: WorkspaceSession): PendingWorkspaceChange? = null
 
+    /** Prepare and save exact wire IDs/client sequence without HTTP. Requires a saved draft.
+     * Repeat with the same draft only; an existing different pending request cannot be replaced. */
+    suspend fun prepareSubmission(session: WorkspaceSession, operation: WorkspaceOperation): PreparedWorkspaceSubmission =
+        throw UnsupportedOperationException("Two-phase submission preparation is unavailable")
+
+    /** Inspect saved identity only. Not a receipt or permission to send. */
+    suspend fun preparedSubmission(session: WorkspaceSession): PreparedWorkspaceSubmission? = null
+    /** Verify original receipt/log using saved identity, even after adapter pending ACK cleanup.
+     * Never sends canvas operations or updates local recovery state. */
+    suspend fun verifyPreparedSubmission(session: WorkspaceSession, prepared: PreparedWorkspaceSubmission,
+        operation: WorkspaceOperation, baseline: WorkspaceSession? = null): PreparedSubmissionVerification =
+        throw UnsupportedOperationException("Prepared submission verification is unavailable")
+
+    /** Explicit send of the saved request. Caller owns fresh ACL/scope checks and consent;
+     * unknown response recovery must inspect the original receipt before deciding to resend. */
+    suspend fun sendPreparedSubmission(session: WorkspaceSession, prepared: PreparedWorkspaceSubmission): SubmitOutcome =
+        throw UnsupportedOperationException("Prepared submission transport is unavailable")
+
     /** Local archive summaries only; no payload disclosure or permission to resend/merge. */
     suspend fun stoppedChanges(session: WorkspaceSession): List<StoppedWorkspaceChange> = emptyList()
 
@@ -226,12 +271,42 @@ interface WorkspaceRepository {
         transactionId: String,
     ): WorkspaceSession = throw UnsupportedOperationException("Receipt settlement is unavailable")
 
+    suspend fun confirmPendingReceiptWithHistory(
+        session: WorkspaceSession,
+        transactionId: String,
+    ): ConfirmedWorkspaceReceipt = ConfirmedWorkspaceReceipt(confirmPendingReceipt(session, transactionId))
+
+    /** Explicit saved-wire retry; history is returned only after the original ACK is verified. */
+    suspend fun retryPendingChangeWithHistory(
+        session: WorkspaceSession,
+        transactionId: String,
+    ): ConfirmedWorkspaceReceipt = ConfirmedWorkspaceReceipt(retryPendingChange(session, transactionId))
+
+    suspend fun retainHistoryDraftAwaited(session: WorkspaceSession, before: Workspace,
+        operation: WorkspaceOperation, intent: cg.creamgod.boarderless.domain.history.WorkspaceHistoryIntent,
+        beforeHistory: cg.creamgod.boarderless.domain.history.WorkspaceHistory? = null) {
+        retainDraftAwaited(session, before, operation)
+    }
+
     /** Save before optimistic publication. Default repositories may not support local journals. */
     fun retainDraft(
         session: WorkspaceSession,
         before: Workspace,
         operation: WorkspaceOperation,
     ) {}
+
+    fun retainHistoryDraft(session: WorkspaceSession, before: Workspace,
+        operation: WorkspaceOperation, intent: cg.creamgod.boarderless.domain.history.WorkspaceHistoryIntent,
+        beforeHistory: cg.creamgod.boarderless.domain.history.WorkspaceHistory? = null) {
+        retainDraft(session, before, operation)
+    }
+
+    /** Await actual durable publication before exposing a derived canvas/history result. */
+    suspend fun retainDraftAwaited(
+        session: WorkspaceSession,
+        before: Workspace,
+        operation: WorkspaceOperation,
+    ) { retainDraft(session, before, operation) }
 
     suspend fun pendingDraft(session: WorkspaceSession): PendingWorkspaceDraft? = null
 
@@ -274,8 +349,16 @@ interface WorkspaceRepository {
 interface CanvasWorkspaceRepository :
     WorkspaceRepository,
     AssetRepository {
+    val localSyncStore: LocalWorkspaceSyncStore? get() = null
     val quickSchemeRepository: cg.creamgod.boarderless.data.persistence.QuickSchemeRepository? get() = null
     val localAssetGateway: AssetTransferGateway? get() = null
+    /** Owned remote gateway from this repository's exact endpoint configuration. */
+    val syncAssetGatewayFactory: (() -> AssetTransferGateway)? get() = null
+    val syncAssetPreparationGatewayFactory: (() -> cg.creamgod.boarderless.data.remote.BackendAssetPreparationGateway)? get() = null
+    fun preparedMediaImport(session: WorkspaceSession, canContinue: () -> Boolean): PreparedMediaImportController? = null
+    /** Null for local-only repositories. Counts actual expanded protocol operations. */
+    val maximumAtomicOperations: Int? get() = null
+    fun submissionOperationCount(operation: WorkspaceOperation): Int? = null
 }
 
 internal fun WorkspaceSession.hasRemoteChangesComparedTo(current: WorkspaceSession): Boolean =

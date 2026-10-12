@@ -38,13 +38,8 @@ internal class RelationInsertionDraft(
     init {
         require(original.sourceObjectId != original.targetObjectId || original.geometry != null)
         require(baseline.version in 0..9_007_199_254_738_990L && original.version in 1..9_007_199_254_738_990L)
+        require(relationEndpointsUnlocked(baseline, source.id, target.id)) { "Relation endpoint is locked or hierarchy is invalid" }
         for (endpoint in listOf(source, target)) {
-            var current: CanvasObject? = endpoint
-            val seen = mutableSetOf<CanvasObjectId>()
-            while (current != null) {
-                require(seen.add(current.id) && !current.locked)
-                current = current.parentId?.let { baseline.objects[it].also { parent -> require(parent is GroupFrame) } }
-            }
             val t = endpoint.transform
             require(
                 abs(t.position.x) <= 1_000_000 && abs(t.position.y) <= 1_000_000 && t.size.width in 1f..100_000f &&
@@ -64,6 +59,7 @@ internal class RelationInsertionDraft(
             center -
                 Vec2(130f, 66f),
         size: CanvasSize = CanvasSize(260f, 132f),
+        shape: NodeShape = NodeShape.Rectangle,
     ): RelationInsertionPlan {
         require(text.isNotBlank() && text.encodeToByteArray().size <= 64 * 1024)
         require(firstLabel == null || firstLabel.encodeToByteArray().size <= 64 * 1024)
@@ -74,6 +70,7 @@ internal class RelationInsertionDraft(
                 nodeId,
                 transform = CanvasTransform(position, size),
                 text = text,
+                shape = shape,
                 parentId = source.parentId.takeIf { it == target.parentId },
                 zIndex = (baseline.objects.values.maxOfOrNull { it.zIndex } ?: 0) + 1,
             )

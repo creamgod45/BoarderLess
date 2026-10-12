@@ -38,6 +38,29 @@ class AiDiagramDraftTest {
 
     private fun ready(engine: AiDiagramDraft): AiProposalPreview.Ready = assertIs(engine.proposal()!!.preview(baseline))
 
+    @Test fun createResultsReportPlacedGeometryAndNewOverlapsOnly() {
+        val engine = draft()
+        val overlapping =
+            engine.execute(
+                call("c1", "create_nodes", """{"nodes":[{"id":"A","text":"A","x":5,"y":5,"width":100,"height":40,"shape":"rectangle","color":"paper"}]}"""),
+            )
+        assertEquals(AiDiagramToolStatus.Proposed, overlapping.status)
+        assertEquals(1, overlapping.data.getValue("placed").jsonArray.size)
+        val overlaps = overlapping.data.getValue("overlaps").jsonArray
+        assertEquals(1, overlaps.size)
+        val pair = overlaps.single().jsonObject.let { setOf(it.getValue("a").jsonPrimitive.content, it.getValue("b").jsonPrimitive.content) }
+        assertTrue("A" in pair && pair.size == 2)
+        assertFalse("hidden" in overlapping.data.toString(), "unapproved objects must never be named")
+        val clear = engine.execute(call("c2", "create_nodes", """{"nodes":[{"id":"B","text":"B","x":400,"y":400,"width":100,"height":40,"shape":"rectangle","color":"paper"}]}"""))
+        // The earlier A-vs-approved overlap persists until fixed, so validate_diagram keeps reporting it.
+        assertEquals(1, engine.execute(call("v", "validate_diagram")).data.getValue("overlaps").jsonArray.size)
+        assertTrue(clear.data.getValue("placed").jsonArray.single().jsonObject.getValue("id").jsonPrimitive.content == "B")
+        val fixed =
+            engine.execute(call("l", "layout_nodes", """{"nodes":[{"id":"A","x":300,"y":0,"width":100,"height":40,"rotation":0}]}"""))
+        assertEquals(AiDiagramToolStatus.Proposed, fixed.status)
+        assertEquals(0, engine.execute(call("v2", "validate_diagram")).data.getValue("overlaps").jsonArray.size)
+    }
+
     @Test fun approvedReadIsSanitizedAndCapabilitiesDoNotInventMediaPenOrSelfLoops() {
         val engine = draft()
         val graph = engine.execute(call("read", "read_approved_graph"))

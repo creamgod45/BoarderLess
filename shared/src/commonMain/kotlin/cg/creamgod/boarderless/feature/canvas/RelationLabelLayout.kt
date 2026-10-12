@@ -39,15 +39,22 @@ internal data class LabelBounds(
     }
 }
 
+private data class LabelPlacementScore(val labels: Int, val objects: Int, val lines: Int) {
+    val clear: Boolean get() = labels == 0 && objects == 0 && lines == 0
+}
+
 /** Stable ID order avoids map-insertion-dependent label stacking. Crowded layouts use best effort. */
 internal fun layoutRelationLabels(
     labels: List<RelationLabelInput>,
     routes: Collection<List<Vec2>>,
     obstacles: List<LabelBounds>,
     gap: Float,
+    reservedLabels: List<LabelBounds> = emptyList(),
 ): Map<RelationId, Vec2> {
     require(gap.isFinite() && gap >= 0f)
-    val occupied = mutableListOf<LabelBounds>()
+    val occupied = reservedLabels.map {
+        LabelBounds(it.left - gap / 2f, it.top - gap / 2f, it.right + gap / 2f, it.bottom + gap / 2f)
+    }.toMutableList()
     return buildMap {
         labels.sortedBy { it.id.value }.forEach { label ->
             if (label.route.size < 2) return@forEach
@@ -83,12 +90,20 @@ internal fun layoutRelationLabels(
                     p.y + label.size.height + gap / 2f,
                 )
 
-            fun score(p: Vec2): Int {
+            fun score(p: Vec2): LabelPlacementScore {
                 val box = bounds(p)
-                return occupied.count(box::overlaps) * 100 + obstacles.count(box::overlaps) * 100 +
-                    routes.count { route -> route.zipWithNext().any { (a, b) -> box.crosses(a, b) } } * 10
+                return LabelPlacementScore(
+                    occupied.count(box::overlaps),
+                    obstacles.count(box::overlaps),
+                    routes.count { route -> route.zipWithNext().any { (a, b) -> box.crosses(a, b) } },
+                )
             }
-            val location = candidates.firstOrNull { score(it) == 0 } ?: candidates.minByOrNull(::score) ?: return@forEach
+            // A large number of nearby lines must never outweigh avoiding another label.
+            // Retain candidate order for ties, so layout and export remain deterministic.
+            val ranked = candidates.map { it to score(it) }
+            val location = (ranked.firstOrNull { it.second.clear } ?: ranked.minWithOrNull(
+                compareBy<Pair<Vec2, LabelPlacementScore>>({ it.second.labels }, { it.second.objects }, { it.second.lines }),
+            ))?.first ?: return@forEach
             put(label.id, location)
             occupied += bounds(location)
         }

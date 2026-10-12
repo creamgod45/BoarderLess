@@ -40,6 +40,8 @@ fun MainViewController(): UIViewController {
             val quickSchemeRepository = remember { cg.creamgod.boarderless.data.persistence.iosFileQuickSchemeStore() }
             val workspaceStorageRuntime = remember(mediaPicker) {
                 cg.creamgod.boarderless.data.WorkspaceStorageRuntime(
+                    serverRepository = { cg.creamgod.boarderless.data.remote.iosRealtimeBackendRepository() },
+                    serverRepositoryWithSubmission = { cg.creamgod.boarderless.data.remote.iosRealtimeBackendRepository(it) },
                     localRepository = { cg.creamgod.boarderless.data.persistence.iosFileWorkspaceRepository() },
                     mediaRuntimeFor = mediaPicker::runtimeFor,
                 )

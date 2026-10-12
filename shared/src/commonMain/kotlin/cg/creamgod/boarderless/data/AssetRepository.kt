@@ -58,6 +58,7 @@ enum class AssetRejectionReason(
     DimensionsExceeded("dimensions_exceeded"),
     InvalidDuration("invalid_duration"),
     DurationExceeded("duration_exceeded"),
+    DeclaredMetadataMismatch("declared_metadata_mismatch"),
     Unknown("unknown"),
     ;
 

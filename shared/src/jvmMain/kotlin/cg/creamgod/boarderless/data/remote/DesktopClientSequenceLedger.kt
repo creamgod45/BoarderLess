@@ -76,6 +76,7 @@ internal class DesktopClientSequenceLedger(
         require(sequence in 0..Maximum)
         val current = requireNotNull(read(scope)) { "Sequence ledger requires explicit initialization" }
         if (sequence > current.highWater) publish(scope, current.generation, sequence)
+        else files.confirmDurable(key(scope), current.generation)
     }
 
     private fun publish(

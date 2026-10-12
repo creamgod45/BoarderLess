@@ -105,6 +105,10 @@ fun ColorPickerWindow(
     modifier: Modifier = Modifier,
     title: String = Strings.colorPicker.title(),
     fieldSize: Dp = 188.dp,
+    busy: Boolean = false,
+    readOnly: Boolean = false,
+    statusText: String? = null,
+    onReviewPending: (() -> Unit)? = null,
 ) {
     val colors = BoarderLessTheme.colors
     val initialPreset = initialToken.takeIf { token -> presets.any { it.token == token } }
@@ -144,6 +148,20 @@ fun ColorPickerWindow(
         } else {
             pick(model.toRgb(next).clamped(), keepDraft = next)
         }
+    }
+
+    if (busy || readOnly) {
+        GlassSurface(modifier.offset { IntOffset(windowOffset.x.roundToInt(), windowOffset.y.roundToInt()) }) {
+            Column(Modifier.width(fieldSize + 124.dp).padding(12.dp)) {
+                BasicText(title, style = TextStyle(color = colors.contentText))
+                BasicText(statusText ?: Strings.status.savingChanges(1), style = TextStyle(color = colors.contentMuted))
+                if (readOnly && !busy) onReviewPending?.let { review ->
+                    ShellButton(Strings.draftReview.originalTransactions(), onClick = review)
+                }
+                ShellButton(Strings.common.close(), enabled = !busy, onClick = onCancel)
+            }
+        }
+        return
     }
 
     GlassSurface(
@@ -193,6 +211,7 @@ fun ColorPickerWindow(
                 )
             }
 
+            statusText?.let { BasicText(it, style = TextStyle(color = colors.contentMuted, fontSize = 12.sp)) }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 SaturationBrightnessField(
                     hue = hsb.hue,

@@ -7,7 +7,7 @@ import kotlinx.serialization.json.JsonObject
 
 /** Read-only legacy adaptation shared by preview and insertion; never rewrites saved content. */
 internal fun decodeQuickSchemePayload(scheme: QuickScheme): ClipboardPayload? {
-    if (scheme.schemaVersion !in 1..8) return null
+    if (scheme.schemaVersion !in 1..9) return null
     val payload =
         runCatching {
             val document =

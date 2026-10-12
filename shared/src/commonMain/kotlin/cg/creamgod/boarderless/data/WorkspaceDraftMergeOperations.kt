@@ -3,6 +3,7 @@ package cg.creamgod.boarderless.data
 import cg.creamgod.boarderless.data.remote.randomUuid
 import cg.creamgod.boarderless.domain.history.*
 import cg.creamgod.boarderless.domain.model.*
+import cg.creamgod.boarderless.domain.sequence.*
 
 /** Pure compilation, NOT submission/authorization. Caller still needs fresh ACL, media validation,
  * unconfirmed-submission reconciliation and confirmation. Never replay imported operation IDs.
@@ -14,17 +15,6 @@ internal fun buildDraftMergeOperation(
     newId: () -> String = ::randomUuid,
 ): TransactionOperation? {
     require(current == plan.review.current) { "Merge snapshot changed; review again" }
-    require(
-        plan.review.baseline.sequenceDiagrams
-            .isEmpty() &&
-            plan.review.proposed.sequenceDiagrams
-                .isEmpty() &&
-            current.sequenceDiagrams.isEmpty(),
-    ) { "Sequence metadata merge requires explicit support" }
-    val target = plan.resolve(choices)
-    var state = current
-    val commands = mutableListOf<WorkspaceOperation>()
-    var expandedCount = 0
     val ids = mutableSetOf<String>()
 
     fun collect(op: WorkspaceOperation) {
@@ -32,6 +22,24 @@ internal fun buildDraftMergeOperation(
         if (op is TransactionOperation) op.operations.forEach(::collect)
     }
     plan.review.operations.forEach(::collect)
+    return buildWorkspaceContentTransaction(current, plan.resolve(choices), newId, ids)
+}
+
+/** Compiles an already reviewed whole-content target. Pure: no storage or HTTP. Server
+ * capability assessment, tombstone/materialization checks and fresh consent remain required.
+ * Title has no atomic canvas operation yet; reject rather than silently dropping it. */
+internal fun buildWorkspaceContentTransaction(
+    current: Workspace,
+    target: Workspace,
+    newId: () -> String = ::randomUuid,
+    reservedIds: Set<String> = emptySet(),
+): TransactionOperation? {
+    require(current.id == target.id && current.title == target.title) { "Atomic title merge requires a server operation" }
+    require(current.hasValidSequenceBindings() && target.hasValidSequenceBindings())
+    var state = current
+    val commands = mutableListOf<WorkspaceOperation>()
+    var expandedCount = 0
+    val ids = reservedIds.toMutableSet()
 
     fun id(): String = newId().also { require(it.isNotBlank() && ids.add(it)) }
 
@@ -59,7 +67,7 @@ internal fun buildDraftMergeOperation(
                 else -> emptyList()
             }
         require(incrementedVersions.all { it in 1 until 9_007_199_254_740_991L })
-        state = (op.applyTo(state) as? OperationResult.Applied)?.workspace ?: error("Invalid merge operation")
+        state = (op.applyInTransaction(state) as? OperationResult.Applied)?.workspace ?: error("Invalid merge operation")
         commands.add(op)
         expandedCount += cost
     }
@@ -85,6 +93,12 @@ internal fun buildDraftMergeOperation(
                 }
             }
 
+            before is cg.creamgod.boarderless.domain.model.ExternalMediaNode && after is cg.creamgod.boarderless.domain.model.ExternalMediaNode -> {
+                val a = MediaNodeAttributes(before.zIndex, before.locked, before.altText)
+                val b = MediaNodeAttributes(after.zIndex, after.locked, after.altText)
+                if (a != b) emit(UpdateMediaNodeAttributesOperation(id(), listOf(MediaNodeAttributesChange(before.id, before.version, a, b))))
+            }
+
             before is MediaNode && after is MediaNode -> {
                 val a = MediaNodeAttributes(before.zIndex, before.locked, before.altText)
                 val b = MediaNodeAttributes(after.zIndex, after.locked, after.altText)
@@ -106,6 +120,7 @@ internal fun buildDraftMergeOperation(
             is TextNode -> obj.copy(locked = false)
             is GroupFrame -> obj.copy(locked = false)
             is MediaNode -> obj.copy(locked = false)
+            is cg.creamgod.boarderless.domain.model.ExternalMediaNode -> obj.copy(locked = false)
         }
 
     fun replacement(
@@ -115,6 +130,7 @@ internal fun buildDraftMergeOperation(
         when {
             a is TextNode && b is TextNode -> false
             a is GroupFrame && b is GroupFrame -> false
+            a is cg.creamgod.boarderless.domain.model.ExternalMediaNode && b is cg.creamgod.boarderless.domain.model.ExternalMediaNode -> a.reference != b.reference
             a is MediaNode && b is MediaNode -> false
             else -> true
         }
@@ -133,6 +149,14 @@ internal fun buildDraftMergeOperation(
             desired == null || desired.sourceObjectId != edge.sourceObjectId || desired.targetObjectId != edge.targetObjectId ||
                 edge.sourceObjectId in removed || edge.targetObjectId in removed
         }
+    val removedEdgeIds = removedEdges.mapTo(mutableSetOf()) { it.id }
+    val detachedMetadata = state.sequenceDiagrams.filterValues { diagram ->
+        diagram.allObjectIds().any(removed::contains) || diagram.allRelationIds().any(removedEdgeIds::contains)
+    }.keys
+    if (detachedMetadata.isNotEmpty()) {
+        emit(UpdateSequenceDiagramsOperation(id(), state.sequenceDiagramsVersion, state.sequenceDiagrams,
+            state.sequenceDiagrams - detachedMetadata))
+    }
     if (removedEdges.isNotEmpty()) emit(DeleteRelationsOperation(id(), removedEdges))
     // Detach retained children before deleting old groups or changing hierarchy. Attach only after creation.
     val detach =
@@ -204,6 +228,9 @@ internal fun buildDraftMergeOperation(
     if (state.canvasStyle != target.canvasStyle) {
         emit(UpdateCanvasStyleOperation(id(), state.canvasStyleVersion, state.canvasStyle, target.canvasStyle))
     }
+    if (state.sequenceDiagrams != target.sequenceDiagrams) {
+        emit(UpdateSequenceDiagramsOperation(id(), state.sequenceDiagramsVersion, state.sequenceDiagrams, target.sequenceDiagrams))
+    }
     check(state.mergeContent() == target.mergeContent())
     return if (commands.isEmpty()) {
         null
@@ -219,6 +246,7 @@ internal fun Workspace.mergeContent(): Workspace =
     copy(
         version = 0,
         canvasStyleVersion = 0,
+        sequenceDiagramsVersion = 0,
         objects = objects.mapValues { it.value.withVersion(1) },
         relations = relations.mapValues { it.value.copy(version = 1) },
     )

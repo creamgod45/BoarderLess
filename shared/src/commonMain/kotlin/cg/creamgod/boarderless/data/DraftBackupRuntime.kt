@@ -46,6 +46,20 @@ internal suspend fun exportWorkspaceDraftBackup(
     isCurrent: () -> Boolean,
     readFresh: suspend () -> WorkspaceDraftReview,
 ): DraftBackupResult {
+    return exportLocalJsonBackup(runtime, "boarderless-draft-backup.json", isCurrent) {
+        val reviewed = readFresh()
+        check(reviewed.draftId == draftId) { "Draft backup identity changed" }
+        reviewed.toBackupJson()
+    }
+}
+
+/** Shared native/browser destination lifecycle. Content is obtained only after selection. */
+internal suspend fun exportLocalJsonBackup(
+    runtime: DraftBackupRuntime,
+    suggestedName: String,
+    isCurrent: () -> Boolean,
+    readFreshJson: suspend () -> String,
+): DraftBackupResult {
     val context = currentCoroutineContext()
 
     fun checkCurrent() {
@@ -54,14 +68,13 @@ internal suspend fun exportWorkspaceDraftBackup(
     }
     checkCurrent()
     val choose = checkNotNull(runtime.chooseDestination) { "Draft file export unavailable" }
-    val destination = choose("boarderless-draft-backup.json") ?: return DraftBackupResult.Cancelled
+    val destination = choose(suggestedName) ?: return DraftBackupResult.Cancelled
     var failure: Throwable? = null
     try {
         checkCurrent()
-        val reviewed = readFresh()
+        val content = readFreshJson()
         checkCurrent()
-        check(reviewed.draftId == draftId) { "Draft backup identity changed" }
-        destination.write(reviewed.toBackupJson()) { context.isActive && isCurrent() }
+        destination.write(content) { context.isActive && isCurrent() }
         checkCurrent()
         return if (runtime.usesBrowserDownload) DraftBackupResult.DownloadRequested else DraftBackupResult.Saved
     } catch (error: Throwable) {

@@ -67,12 +67,12 @@ internal abstract class AiDiagramToolDecoder(
         val name: String,
     ) {
         val arguments = StringBuilder()
+        val argumentText = AiUtf8TextBuffer(64 * 1024)
         var bytes = 0L
     }
 
     protected val calls = mutableListOf<PendingCall>()
-    protected val text = StringBuilder()
-    private var textBytes = 0L
+    private val text = AiUtf8TextBuffer()
     private var argumentBytes = 0L
     private var eventCount = 0
     private var wireBytes = 0L
@@ -90,17 +90,15 @@ internal abstract class AiDiagramToolDecoder(
     }
 
     protected fun budget(data: String) {
-        val bytes = data.encodeToByteArray().size
+        val bytes = data.encodeToByteArray(throwOnInvalidSequence = true).size
         streamCheck(bytes in 1..262144 && ++eventCount <= 8192, AiDiagramStreamFailure.Limit)
         wireBytes += bytes
         streamCheck(wireBytes <= 4L * 1024 * 1024, AiDiagramStreamFailure.Limit)
     }
 
     protected fun addText(value: String): List<AiDiagramStreamEvent> {
-        textBytes += value.encodeToByteArray().size
-        streamCheck(textBytes <= 128 * 1024, AiDiagramStreamFailure.Limit)
-        text.append(value)
-        return if (value.isEmpty()) emptyList() else listOf(AiDiagramStreamEvent.TextDelta(value))
+        val delta = text.appendDelta(value)
+        return if (delta.isEmpty()) emptyList() else listOf(AiDiagramStreamEvent.TextDelta(delta))
     }
 
     protected fun newCall(
@@ -116,21 +114,22 @@ internal abstract class AiDiagramToolDecoder(
         call: PendingCall,
         fragment: String,
     ) {
-        val bytes = fragment.encodeToByteArray().size
-        call.bytes += bytes
-        argumentBytes += bytes
+        call.argumentText.appendDelta(fragment)
+        val bytes = call.argumentText.reservedBytes.toLong()
+        argumentBytes += bytes - call.bytes
+        call.bytes = bytes
         streamCheck(call.bytes <= 64 * 1024 && argumentBytes <= 1024 * 1024, AiDiagramStreamFailure.Limit)
         call.arguments.append(fragment)
     }
 
     protected fun validateCall(call: PendingCall) {
+        call.argumentText.finish()
         parseAiToolObject(call.arguments.toString())
     }
 
     protected fun complete(): List<AiDiagramStreamEvent> {
-        streamCheck(calls.isNotEmpty() || text.isNotBlank(), AiDiagramStreamFailure.EmptyResponse)
-        val result = text.toString()
-        result.encodeToByteArray(throwOnInvalidSequence = true)
+        val result = text.finish()
+        streamCheck(calls.isNotEmpty() || result.isNotBlank(), AiDiagramStreamFailure.EmptyResponse)
         calls.forEach(::validateCall)
         val completed =
             AiDiagramStreamEvent.Completed(
@@ -152,6 +151,8 @@ internal abstract class AiDiagramToolDecoder(
             failure: InvalidToolStream,
         ) {
             fail(failure.code)
+        } catch (_: AiTextLimitException) {
+            fail(AiDiagramStreamFailure.Limit)
         } catch (_: Exception) {
             fail(AiDiagramStreamFailure.Format)
         }
@@ -166,7 +167,7 @@ internal abstract class AiDiagramToolDecoder(
 
     private fun clear() {
         text.clear()
-        calls.forEach { it.arguments.clear() }
+        calls.forEach { it.arguments.clear(); it.argumentText.clear() }
         calls.clear()
     }
 

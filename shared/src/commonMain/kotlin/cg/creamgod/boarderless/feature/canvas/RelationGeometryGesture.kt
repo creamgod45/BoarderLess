@@ -7,12 +7,27 @@ import cg.creamgod.boarderless.domain.history.*
 import cg.creamgod.boarderless.domain.model.*
 import kotlin.math.sqrt
 
+/** Same endpoint/ancestor lock rule as inserting a node into a relation. Missing parents
+ * and cycles are not permission to mutate geometry. No repository or history mutation. */
+internal fun relationEndpointsUnlocked(workspace: Workspace, source: CanvasObjectId, target: CanvasObjectId): Boolean =
+    listOf(source, target).distinct().all { id ->
+        var current = workspace.objects[id] ?: return@all false
+        val seen = mutableSetOf<CanvasObjectId>()
+        while (true) {
+            if (current.locked || !seen.add(current.id)) return@all false
+            val parent = current.parentId ?: break
+            current = workspace.objects[parent] as? GroupFrame ?: return@all false
+        }
+        true
+    }
+
 internal sealed interface RelationGeometryHandle {
     data class Waypoint(
         val index: Int,
     ) : RelationGeometryHandle
 
     data object NewWaypoint : RelationGeometryHandle
+    data class InsertWaypoint(val index: Int, val centerWorld: Vec2? = null) : RelationGeometryHandle
 
     data object LoopExtent : RelationGeometryHandle
 
@@ -71,6 +86,13 @@ internal data class RelationGeometryGesture(
                     initial.copy(route = route.copy(waypoints = listOf(route.waypoints.single() + delta)))
                 }
 
+                is RelationGeometryHandle.InsertWaypoint -> {
+                    val route = initial.route as RelationRoute.Manual
+                    initial.copy(route = route.copy(waypoints = route.waypoints.mapIndexed { index, point ->
+                        if (index == target.index) point + delta else point
+                    }))
+                }
+
                 RelationGeometryHandle.LoopExtent -> {
                     val route = initial.route as RelationRoute.Loop
                     val rotation =
@@ -121,6 +143,7 @@ internal data class RelationGeometryGesture(
             operationId: String = randomUuid(),
         ): RelationGeometryGesture {
             require(owner.canEditContent && owner.workspace.id == workspace.id && workspace.relations[relation.id] == relation)
+            require(relationEndpointsUnlocked(workspace, relation.sourceObjectId, relation.targetObjectId)) { "Relation endpoint is locked" }
             val existing = relation.geometry ?: RelationGeometry()
             val initial =
                 when (handle) {
@@ -138,6 +161,23 @@ internal data class RelationGeometryGesture(
                                     listOf(polylineMidpoint(checkNotNull(relationWorldRoute(relation, workspace.objects)))),
                                 ),
                         )
+                    }
+
+                    is RelationGeometryHandle.InsertWaypoint -> {
+                        require(relation.sourceObjectId != relation.targetObjectId)
+                        val points = checkNotNull(relationWorldRoute(relation, workspace.objects))
+                        val route = when (val route = existing.route) {
+                            is RelationRoute.Manual -> route
+                            RelationRoute.Auto -> RelationRoute.Manual(points.drop(1).dropLast(1).ifEmpty {
+                                listOf(polylineMidpoint(points))
+                            })
+                            is RelationRoute.Loop -> error("Loop uses extent handles")
+                        }
+                        require(route.waypoints.size < 32 && handle.index in 0..route.waypoints.size)
+                        val insertion = handle.centerWorld ?: ((points[handle.index] + points[handle.index + 1]) * .5f)
+                        existing.copy(route = route.copy(waypoints = route.waypoints.toMutableList().also {
+                            it.add(handle.index, insertion)
+                        }))
                     }
 
                     RelationGeometryHandle.LoopExtent -> {

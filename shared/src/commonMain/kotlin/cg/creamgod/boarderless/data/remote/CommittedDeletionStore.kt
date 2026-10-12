@@ -52,7 +52,7 @@ internal class CommittedDeletionStore(
         local: WorkspaceOperation,
     ) {
         val snapshots = local.restorationSnapshotDigests()
-        for (operation in operations.filter { it.kind.startsWith("restore_") }) {
+        for (operation in operations.filter { it.kind in setOf("restore_objects", "restore_relations") }) {
             validateRestorationWire(operation)
             val type = if (operation.kind == "restore_objects") "object" else "relation"
             val versions = checkNotNull(operation.expectedObjectVersions)
@@ -71,13 +71,7 @@ internal class CommittedDeletionStore(
                         check(raw.length <= 4096)
                         json.decodeFromString<CommittedDeletionEvidence>(raw)
                     }
-                check(
-                    evidence.scope == scope && evidence.entity == entity &&
-                        evidence.tombstoneVersion == version && evidence.transactionId.isNotBlank() &&
-                        evidence.throughServerSeq > 0 && evidence.snapshotDigest == snapshots[entity],
-                ) {
-                    "Restoration evidence does not match history"
-                }
+                requireDeletionRestorationEvidence(evidence, scope, entity, version, snapshots[entity])
             }
         }
     }
@@ -86,58 +80,8 @@ internal class CommittedDeletionStore(
         entry: PendingWorkspaceSubmission,
         accepted: AcceptedOperationsDto,
     ) {
-        val confirmed = linkedMapOf<String, Long>()
-        val cascadeIds = mutableSetOf<String>()
-        for ((index, record) in accepted.operations.withIndex()) {
-            val sent = entry.request.operations[index]
-            when (record.operationType) {
-                "delete_objects", "delete_relations" -> {
-                    if (entry.deletionVersions.isEmpty()) continue
-                    val objects = record.operationType == "delete_objects"
-                    val idsKey = if (objects) "objectIds" else "relationIds"
-                    val ids = record.payload.ids(idsKey)
-                    check(ids == sent.payload.ids(idsKey)) { "Deletion acknowledgement changed IDs" }
-                    val expected = checkNotNull(sent.expectedObjectVersions)
-                    check(expected.keys == ids.toSet())
-                    for (id in ids) {
-                        val entity = "${if (objects) "object" else "relation"}:$id"
-                        val prior = expected.getValue(id)
-                        check(prior in 1..9_007_199_254_740_989L)
-                        check(confirmed.put(entity, prior + 1) == null)
-                    }
-                    if (objects) {
-                        for (id in record.payload.ids("cascadedRelationIds")) {
-                            check(cascadeIds.add(id))
-                            val entity = "relation:$id"
-                            check(confirmed.put(entity, checkNotNull(entry.deletionVersions[entity])) == null)
-                        }
-                    }
-                }
-
-                "restore_objects", "restore_relations" -> {
-                    val idsKey = if (record.operationType == "restore_objects") "objectIds" else "relationIds"
-                    check(record.payload.ids(idsKey) == sent.payload.ids(idsKey))
-                    val expected = checkNotNull(sent.expectedObjectVersions)
-                    val restored = record.payload.getValue("restoredVersions").jsonObject
-                    check(restored.keys == expected.keys)
-                    check(expected.all { (id, version) -> restored.getValue(id).jsonPrimitive.long == version + 1 })
-                }
-            }
-        }
-        // Legacy pending records have no cascade proof; they never create restoration authority.
-        if (entry.deletionVersions.isEmpty()) return
-        check(confirmed == entry.deletionVersions) { "Committed deletion does not match saved history" }
-        val records =
-            confirmed.map { (entity, version) ->
-                CommittedDeletionEvidence(
-                    entry.scope,
-                    entity,
-                    version,
-                    entry.request.transactionId,
-                    accepted.toServerSeq,
-                    entry.deletionSnapshotDigests.getValue(entity),
-                )
-            }
+        val records = deletionEvidenceFromAcknowledgement(entry, accepted)
+        if (records.isEmpty()) return
         native?.let {
             it.recordDeletions(entry.scope, records)
             return
@@ -162,6 +106,51 @@ internal class CommittedDeletionStore(
     }
 }
 
+internal fun requireDeletionRestorationEvidence(evidence: CommittedDeletionEvidence, scope: PendingSubmissionScope,
+    entity: String, version: Long, snapshotDigest: String?) {
+    check(evidence.scope == scope && evidence.entity == entity && evidence.tombstoneVersion == version &&
+        evidence.transactionId.isNotBlank() && evidence.throughServerSeq > 0 && evidence.snapshotDigest == snapshotDigest) {
+        "Restoration evidence does not match history"
+    }
+}
+
+internal fun deletionEvidenceFromAcknowledgement(entry: PendingWorkspaceSubmission, accepted: AcceptedOperationsDto): List<CommittedDeletionEvidence> {
+    accepted.validateAcknowledgement(entry.request, entry.scope.userId)
+    val confirmed = linkedMapOf<String, Long>(); val cascadeIds = mutableSetOf<String>()
+    accepted.operations.forEachIndexed { index, record ->
+        val sent = entry.request.operations[index]
+        when (record.operationType) {
+            "delete_objects", "delete_relations" -> {
+                if (entry.deletionVersions.isEmpty()) return@forEachIndexed
+                val objects = record.operationType == "delete_objects"
+                val idsKey = if (objects) "objectIds" else "relationIds"
+                val ids = record.payload.ids(idsKey)
+                check(ids == sent.payload.ids(idsKey)) { "Deletion acknowledgement changed IDs" }
+                val expected = checkNotNull(sent.expectedObjectVersions); check(expected.keys == ids.toSet())
+                ids.forEach { id ->
+                    val entity = "${if (objects) "object" else "relation"}:$id"; val prior = expected.getValue(id)
+                    check(prior in 1..9_007_199_254_740_989L && confirmed.put(entity, prior + 1) == null)
+                }
+                if (objects) record.payload.ids("cascadedRelationIds").forEach { id ->
+                    check(cascadeIds.add(id)); val entity = "relation:$id"
+                    check(confirmed.put(entity, checkNotNull(entry.deletionVersions[entity])) == null)
+                }
+            }
+            "restore_objects", "restore_relations" -> {
+                val idsKey = if (record.operationType == "restore_objects") "objectIds" else "relationIds"
+                check(record.payload.ids(idsKey) == sent.payload.ids(idsKey))
+                val expected = checkNotNull(sent.expectedObjectVersions); val restored = record.payload.getValue("restoredVersions").jsonObject
+                check(restored.keys == expected.keys)
+                check(expected.all { (id, version) -> restored.getValue(id).jsonPrimitive.takeUnless { it.isString }?.longOrNull == version + 1 })
+            }
+        }
+    }
+    if (entry.deletionVersions.isEmpty()) return emptyList() // Legacy data never gains cascade provenance.
+    check(confirmed == entry.deletionVersions) { "Committed deletion does not match saved history" }
+    return confirmed.map { (entity, version) -> CommittedDeletionEvidence(entry.scope, entity, version,
+        entry.request.transactionId, accepted.toServerSeq, entry.deletionSnapshotDigests.getValue(entity)) }
+}
+
 private fun JsonObject.ids(key: String): List<String> =
     getValue(key)
         .jsonArray
@@ -170,6 +159,17 @@ private fun JsonObject.ids(key: String): List<String> =
         }.also { check(it.distinct().size == it.size) }
 
 internal fun validateRestorationWire(operation: OperationDto) {
+    if (operation.kind == "restore_media_references") {
+        require(operation.expectedObjectVersions == null)
+        require(operation.payload.keys == setOf("objectId", "expectedObjectVersion", "originalTransactionId", "originalOperationId", "targetSide"))
+        listOf("objectId", "originalTransactionId", "originalOperationId").forEach { key ->
+            requireRealtimeUuid(requireNotNull((operation.payload[key] as? JsonPrimitive)?.takeIf { it.isString }?.content))
+        }
+        val version = (operation.payload["expectedObjectVersion"] as? JsonPrimitive)?.takeUnless { it.isString }?.longOrNull
+        require(version != null && version in 1 until RealtimeMaxSequence)
+        require((operation.payload["targetSide"] as? JsonPrimitive)?.takeIf { it.isString }?.content in setOf("before", "after"))
+        return
+    }
     require(operation.kind in setOf("restore_objects", "restore_relations"))
     val key = if (operation.kind == "restore_objects") "objectIds" else "relationIds"
     require(operation.payload.keys == setOf(key))
@@ -213,7 +213,7 @@ internal fun WorkspaceOperation.deletionVersions(): Map<String, Long> =
 
 internal fun WorkspaceOperation.deletionSnapshotDigests(): Map<String, String> = snapshotDigests(deleted = true)
 
-private fun WorkspaceOperation.restorationSnapshotDigests(): Map<String, String> = snapshotDigests(deleted = false)
+internal fun WorkspaceOperation.restorationSnapshotDigests(): Map<String, String> = snapshotDigests(deleted = false)
 
 private fun WorkspaceOperation.snapshotDigests(deleted: Boolean): Map<String, String> =
     buildMap {

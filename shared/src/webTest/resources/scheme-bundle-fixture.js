@@ -41,6 +41,10 @@ globalThis.boarderlessBundleFixture = {
         };
     },
     failNextRemoval() { this.state.failRemove = true; },
+    selectBytes(base64) {
+        const binary = atob(base64);
+        this.state.selected = new File([Uint8Array.from(binary, c => c.charCodeAt(0))], "desktop-original.blscheme");
+    },
     selectDownload() { this.state.selected = this.state.download; },
     mutateDownload(done) {
         const s = this.state;

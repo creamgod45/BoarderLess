@@ -71,6 +71,15 @@ data class AiContextSnapshot(
                                 )
                             }
 
+                            is cg.creamgod.boarderless.domain.model.ExternalMediaNode -> {
+                                AiContextObject(
+                                    objectId = canvasObject.id.value,
+                                    objectType = "external-media",
+                                    version = canvasObject.version,
+                                    content = canvasObject.altText.ifBlank { "giphy" },
+                                )
+                            }
+
                             is MediaNode -> {
                                 AiContextObject(
                                     objectId = canvasObject.id.value,

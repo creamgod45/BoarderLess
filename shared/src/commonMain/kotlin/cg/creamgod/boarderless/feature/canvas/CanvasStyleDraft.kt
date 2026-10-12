@@ -4,6 +4,7 @@ import cg.creamgod.boarderless.data.WorkspaceSession
 import cg.creamgod.boarderless.data.canEditContent
 import cg.creamgod.boarderless.domain.history.UpdateCanvasStyleOperation
 import cg.creamgod.boarderless.domain.model.CanvasStyle
+import cg.creamgod.boarderless.domain.model.CanvasGridStyle
 import cg.creamgod.boarderless.domain.model.Workspace
 import cg.creamgod.boarderless.domain.model.WorkspaceId
 
@@ -19,15 +20,28 @@ internal data class CanvasStyleDraft(
         session.userId == userId &&
             session.clientId == clientId && session.workspace.id == workspaceId && session.canEditContent
 
+    fun requireCurrent(session: WorkspaceSession, live: Workspace) {
+        require(matches(session) && live.id == workspaceId) { "Canvas style scope changed" }
+        require(live.canvasStyle == before && live.canvasStyleVersion == styleVersion) {
+            "Canvas style changed; reopen the editor"
+        }
+    }
+
     fun operation(
         session: WorkspaceSession,
         live: Workspace,
         token: String,
         operationId: String,
     ): UpdateCanvasStyleOperation? {
-        require(matches(session) && live.id == workspaceId) { "Canvas style scope changed" }
-        require(live.canvasStyle == before && live.canvasStyleVersion == styleVersion) { "Canvas style changed; reopen the picker" }
+        requireCurrent(session, live)
         val after = before.copy(backgroundToken = token.lowercase())
+        return if (after == before) null else UpdateCanvasStyleOperation(operationId, styleVersion, before, after)
+    }
+
+    fun gridOperation(session: WorkspaceSession, live: Workspace, gridStyle: CanvasGridStyle,
+        operationId: String): UpdateCanvasStyleOperation? {
+        requireCurrent(session, live)
+        val after = before.copy(gridStyle = gridStyle)
         return if (after == before) null else UpdateCanvasStyleOperation(operationId, styleVersion, before, after)
     }
 

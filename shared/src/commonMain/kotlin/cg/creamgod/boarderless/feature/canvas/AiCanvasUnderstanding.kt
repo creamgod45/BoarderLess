@@ -99,7 +99,14 @@ internal fun aiCanvasPacket(
                                     put("color", node.colorToken)
                                 }
 
-                                is MediaNode -> {
+                                is cg.creamgod.boarderless.domain.model.ExternalMediaNode -> {
+                                    put("kind", "external-media")
+                                    put("text", node.altText)
+                                    put("mediaKind", "giphy")
+                                    put("pixelsIncluded", false)
+                                }
+
+                            is MediaNode -> {
                                     put("kind", "media")
                                     put("text", node.altText)
                                     put("mediaKind", node.mediaKind.token)

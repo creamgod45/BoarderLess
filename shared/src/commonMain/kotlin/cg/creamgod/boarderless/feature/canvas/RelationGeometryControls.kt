@@ -33,6 +33,7 @@ internal fun geometryFromWaypointText(
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 internal fun RelationGeometryControls(
     relation: Relation,
     nodes: Map<CanvasObjectId, CanvasObject>,
@@ -46,7 +47,16 @@ internal fun RelationGeometryControls(
     var text by remember(relation.id, relation.version) {
         mutableStateOf((geometry.route as? RelationRoute.Manual)?.waypoints?.joinToString("; ") { "${it.x},${it.y}" }.orEmpty())
     }
-    val draft = if (loop) null else runCatching { geometryFromWaypointText(relation.geometry, text) }.getOrNull()
+    var resetDraft by remember(relation.id, relation.version) { mutableStateOf(false) }
+    var selectedPoint by remember(relation.id, relation.version) { mutableStateOf<Int?>(null) }
+    var pointEditPending by remember(relation.id, relation.version) { mutableStateOf(false) }
+    var batchFocused by remember { mutableStateOf(false) }
+    var xFocused by remember { mutableStateOf(false) }
+    var yFocused by remember { mutableStateOf(false) }
+    val editing by rememberUpdatedState(onEditingChange)
+    DisposableEffect(Unit) { onDispose { batchFocused = false; xFocused = false; yFocused = false; editing(false) } }
+    val draft = if (loop) null else if (resetDraft) geometry.copy(route = RelationRoute.Auto)
+        else runCatching { geometryFromWaypointText(relation.geometry, text) }.getOrNull()
     BasicText(Strings.relationGeometry.title(), style = TextStyle(color = colors.contentText, fontSize = 13.sp))
     BasicText(Strings.relationGeometry.dragHint(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
     if (loop) {
@@ -79,11 +89,59 @@ internal fun RelationGeometryControls(
         BasicText(Strings.relationGeometry.waypointHint(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
         BasicTextField(
             text,
-            { text = it.take(8192) },
+            { text = it.take(8192); resetDraft = false; selectedPoint = null; pointEditPending = false },
             enabled = enabled,
-            modifier = Modifier.width(244.dp).heightIn(min = 48.dp).onFocusChanged { onEditingChange(it.isFocused) },
+            modifier = Modifier.width(244.dp).heightIn(min = 48.dp).onFocusChanged {
+                batchFocused = it.isFocused; editing(batchFocused || xFocused || yFocused)
+            },
             textStyle = TextStyle(color = colors.contentText, fontSize = 12.sp),
         )
+        val manualPoints = (draft?.route as? RelationRoute.Manual)?.waypoints.orEmpty()
+        if (manualPoints.isNotEmpty()) {
+            BasicText(Strings.relationGeometry.pointDraftHint(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                manualPoints.indices.forEach { index ->
+                    ShellButton(Strings.relationGeometry.pointNumber(index + 1), compact = true, enabled = enabled && !pointEditPending,
+                        accent = selectedPoint == index, onClick = { selectedPoint = index })
+                }
+            }
+            selectedPoint?.takeIf { it in manualPoints.indices }?.let { index ->
+                val point = manualPoints[index]
+                var pointX by remember(relation.id, relation.version, index, text) { mutableStateOf(point.x.toString()) }
+                var pointY by remember(relation.id, relation.version, index, text) { mutableStateOf(point.y.toString()) }
+                DisposableEffect(index) { onDispose { xFocused = false; yFocused = false; editing(batchFocused) } }
+                BasicText("X", style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
+                BasicTextField(pointX, { pointX = it.take(24); pointEditPending = true }, enabled = enabled,
+                    modifier = Modifier.width(244.dp).heightIn(min = 36.dp).onFocusChanged {
+                        xFocused = it.isFocused; editing(batchFocused || xFocused || yFocused)
+                    }, textStyle = TextStyle(color = colors.contentText, fontSize = 12.sp))
+                BasicText("Y", style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
+                BasicTextField(pointY, { pointY = it.take(24); pointEditPending = true }, enabled = enabled,
+                    modifier = Modifier.width(244.dp).heightIn(min = 36.dp).onFocusChanged {
+                        yFocused = it.isFocused; editing(batchFocused || xFocused || yFocused)
+                    }, textStyle = TextStyle(color = colors.contentText, fontSize = 12.sp))
+                val edited = runCatching {
+                    (checkNotNull(draft).route as RelationRoute.Manual).copy(waypoints = manualPoints.mapIndexed { i, existing ->
+                        if (i == index) Vec2(pointX.toFloat(), pointY.toFloat()) else existing
+                    })
+                }.getOrNull()
+                ShellButton(Strings.relationGeometry.stagePoint(), enabled = enabled && edited != null, onClick = {
+                    edited?.let { text = it.waypoints.joinToString("; ") { p -> "${p.x},${p.y}" }; resetDraft = false; pointEditPending = false }
+                })
+                if (pointEditPending) ShellButton(Strings.common.cancel(), enabled = enabled, onClick = {
+                    pointX = point.x.toString(); pointY = point.y.toString(); pointEditPending = false
+                })
+                ShellButton(Strings.relationGeometry.removePoint(index + 1), enabled = enabled, onClick = {
+                    val remaining = manualPoints.filterIndexed { i, _ -> i != index }
+                    text = remaining.joinToString("; ") { p -> "${p.x},${p.y}" }
+                    resetDraft = remaining.isEmpty()
+                    selectedPoint = null
+                    pointEditPending = false
+                    xFocused = false; yFocused = false; editing(batchFocused)
+                })
+            }
+        }
+        if (resetDraft) BasicText(Strings.relationGeometry.lastPointReset(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
         if (draft != null) {
             val points = runCatching { relationWorldRoute(relation.copy(geometry = draft), nodes) }.getOrNull()
             if (!points.isNullOrEmpty()) {
@@ -102,11 +160,16 @@ internal fun RelationGeometryControls(
             }
         }
         ShellButton(
-            label = Strings.relationGeometry.applyWaypoints(),
-            enabled = enabled && draft != null,
+            label = Strings.relationGeometry.applyRouteDraft(),
+            enabled = enabled && draft != null && !pointEditPending,
             onClick = { draft?.let(onApply) },
         )
     }
+    val originalText = (geometry.route as? RelationRoute.Manual)?.waypoints?.joinToString("; ") { "${it.x},${it.y}" }.orEmpty()
+    val routeDraftDirty = !loop && (resetDraft || text != originalText || pointEditPending)
+    if (routeDraftDirty) ShellButton(Strings.relationGeometry.discardRouteDraft(), enabled = enabled, onClick = {
+        text = originalText; resetDraft = false; selectedPoint = null; pointEditPending = false
+    })
     ShellButton(
         label = Strings.relationGeometry.resetRoute(),
         enabled = enabled && geometry.route != RelationRoute.Auto,
@@ -115,7 +178,7 @@ internal fun RelationGeometryControls(
     val manual = geometry.labelPlacement is RelationLabelPlacement.Manual
     ShellButton(
         label = if (manual) Strings.relationGeometry.resetLabel() else Strings.relationGeometry.offsetLabel(),
-        enabled = enabled,
+        enabled = enabled && !routeDraftDirty,
         onClick = {
             onApply(
                 geometry.copy(labelPlacement = if (manual) RelationLabelPlacement.Auto else RelationLabelPlacement.Manual(0.5f)),
@@ -126,7 +189,7 @@ internal fun RelationGeometryControls(
         val placement = geometry.labelPlacement as RelationLabelPlacement.Manual
         ShellButton(
             label = Strings.relationGeometry.labelNearer(),
-            enabled = enabled && placement.normalOffset > -4096f,
+            enabled = enabled && !routeDraftDirty && placement.normalOffset > -4096f,
             onClick = {
                 onApply(
                     geometry.copy(labelPlacement = placement.copy(normalOffset = (placement.normalOffset - 16f).coerceAtLeast(-4096f))),
@@ -135,7 +198,7 @@ internal fun RelationGeometryControls(
         )
         ShellButton(
             label = Strings.relationGeometry.labelFarther(),
-            enabled = enabled && placement.normalOffset < 4096f,
+            enabled = enabled && !routeDraftDirty && placement.normalOffset < 4096f,
             onClick = {
                 onApply(
                     geometry.copy(labelPlacement = placement.copy(normalOffset = (placement.normalOffset + 16f).coerceAtMost(4096f))),

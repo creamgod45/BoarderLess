@@ -17,7 +17,10 @@ import kotlin.coroutines.resumeWithException
 import kotlin.io.encoding.Base64
 
 /** JS and Wasm share a small DOM bridge; browser File handles never enter canvas payloads. */
-fun browserMediaImportRuntime(activity: StateFlow<MediaPlaybackActivity>? = null): MediaImportRuntime {
+fun browserMediaImportRuntime(activity: StateFlow<MediaPlaybackActivity>? = null, localGateway: AssetDownloadGateway? = null): MediaImportRuntime {
+    fun closeGateway(gateway: AssetDownloadGateway) {
+        if (localGateway == null) (gateway as AssetTransferGateway).close()
+    }
     val previewPermits = Semaphore(2)
     val previewCache = bitmapPreviewCache()
     return MediaImportRuntime(
@@ -25,9 +28,9 @@ fun browserMediaImportRuntime(activity: StateFlow<MediaPlaybackActivity>? = null
         playbackActivity = activity,
         loadExportImage = { session, assetId, width, height ->
             previewPermits.withPermit {
-                val gateway = BackendAssetTransferGateway()
+                val gateway = localGateway ?: BackendAssetTransferGateway()
                 try { loadBrowserExportImage(gateway, session, assetId, width, height) }
-                finally { gateway.close() }
+                finally { closeGateway(gateway) }
             }
         },
         loadGiphyAnimation = { url ->
@@ -57,31 +60,31 @@ fun browserMediaImportRuntime(activity: StateFlow<MediaPlaybackActivity>? = null
         },
         loadPreview = { session, assetId ->
             previewPermits.withPermit {
-                val gateway = BackendAssetTransferGateway()
+                val gateway = localGateway ?: BackendAssetTransferGateway()
                 try {
                     BrowserAssetPreviewLoader(gateway, previewCache).load(session, assetId)
                 } finally {
-                    gateway.close()
+                    closeGateway(gateway)
                 }
             }
         },
         loadGif = { session, assetId ->
             previewPermits.withPermit {
-                val gateway = BackendAssetTransferGateway()
+                val gateway = localGateway ?: BackendAssetTransferGateway()
                 try {
                     loadBrowserGif(gateway, session, assetId)
                 } finally {
-                    gateway.close()
+                    closeGateway(gateway)
                 }
             }
         },
         loadVideo = { session, assetId ->
             previewPermits.withPermit {
-                val gateway = BackendAssetTransferGateway()
+                val gateway = localGateway ?: BackendAssetTransferGateway()
                 try {
                     loadBrowserVideo(gateway, session, assetId)
                 } finally {
-                    gateway.close()
+                    closeGateway(gateway)
                 }
             }
         },

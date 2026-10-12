@@ -10,7 +10,9 @@
             op.finished = true;
             operations.delete(op.id);
             if (op.db) op.db.close();
-            if (!op.cancelled) op.done(value, error ? 'Storage' : null);
+            // Notify terminal settlement even after Kotlin cancellation, so its writer
+            // accounting cannot release the Web Lock before this transaction finishes.
+            op.done(value, error || op.cancelled ? 'Storage' : null);
         }
         function validate(raw) {
             if (typeof raw !== 'string' || raw.length > 2 * maximumBytes + 4096) throw fail();
@@ -24,7 +26,10 @@
             const op = operations.get(id);
             if (!op || op.finished) return;
             op.cancelled = true;
-            if (op.tx) { try { op.tx.abort(); } catch (_) {} }
+            if (op.tx) {
+                try { op.tx.abort(); } catch (_) {} // Commit may already be in progress.
+                return; // Only onabort/oncomplete can settle a started transaction.
+            }
             finish(op, null, true);
         }
         async function begin(op) {
@@ -42,7 +47,8 @@
                     const write = op.action === 'cas';
                     const tx = db.transaction('records', write ? 'readwrite' : 'readonly', write ? { durability: 'strict' } : undefined);
                     op.tx = tx;
-                    tx.onabort = tx.onerror = () => finish(op, null, true);
+                    tx.onabort = () => finish(op, null, true);
+                    tx.onerror = () => { try { tx.abort(); } catch (_) {} };
                     let result = null;
                     tx.oncomplete = () => finish(op, result, false);
                     if (write && tx.durability !== 'strict') { tx.abort(); return; }
@@ -61,7 +67,10 @@
                             // No success callback here: only tx.oncomplete acknowledges durable publication.
                         } catch (_) { tx.abort(); }
                     };
-                } catch (_) { finish(op, null, true); }
+                } catch (_) {
+                    if (op.tx) { try { op.tx.abort(); } catch (_) {} }
+                    else finish(op, null, true);
+                }
             };
         }
         return Object.freeze({
@@ -82,5 +91,7 @@
         return await storage.persisted();
     };
     globalThis.boarderlessDurableRecords = createRecords('BoarderLess.bundle-receipts.v1', persistenceGranted);
+    globalThis.boarderlessAssetCatalogRecords = createRecords('BoarderLess.local-asset-catalog.v1', persistenceGranted, 4 * 1024 * 1024);
+    globalThis.boarderlessDocumentRecords = createRecords('BoarderLess.local-documents.v1', persistenceGranted, 4 * 1024 * 1024);
     globalThis.boarderlessQuickSchemeRecords = createRecords('BoarderLess.quick-schemes.v1', persistenceGranted, 4 * 1024 * 1024);
 })();

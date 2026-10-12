@@ -11,6 +11,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.kotlincrypto.hash.sha2.SHA256
 
+@OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
 @Serializable
 internal data class WorkspaceDraftJournal(
     val version: Int = 1,
@@ -23,7 +24,16 @@ internal data class WorkspaceDraftJournal(
     val headTransactionId: String? = null,
     val lastAcknowledgedTransactionId: String? = null,
     val quarantined: Boolean = false,
+    @kotlinx.serialization.EncodeDefault(kotlinx.serialization.EncodeDefault.Mode.NEVER)
+    val historyIntents: Map<String, cg.creamgod.boarderless.domain.history.WorkspaceHistoryIntent> = emptyMap(),
+    @kotlinx.serialization.EncodeDefault(kotlinx.serialization.EncodeDefault.Mode.NEVER)
+    val baseHistory: cg.creamgod.boarderless.domain.history.WorkspaceHistory? = null,
 ) {
+    fun replayHistory(): cg.creamgod.boarderless.domain.history.WorkspaceHistory? = baseHistory?.let { initial ->
+        operations.fold(initial) { history, operation ->
+            history.applyRecorded(operation, checkNotNull(historyIntents[operation.operationId])).history
+        }
+    }
     fun replay(): Workspace =
         operations.fold(baseWorkspace) { workspace, operation ->
             (operation.applyTo(workspace) as? OperationResult.Applied)?.workspace
@@ -112,6 +122,8 @@ internal class WorkspaceDraftJournalStore(
         session: WorkspaceSession,
         before: Workspace,
         operation: WorkspaceOperation,
+        intent: cg.creamgod.boarderless.domain.history.WorkspaceHistoryIntent? = null,
+        beforeHistory: cg.creamgod.boarderless.domain.history.WorkspaceHistory? = null,
     ) {
         check(before.id.value == scope.workspaceId && session.workspace.id == before.id)
         check(session.userId == scope.userId && session.clientId == scope.clientId)
@@ -128,7 +140,13 @@ internal class WorkspaceDraftJournalStore(
         check(current.operations.size < 200)
         check(operation.operationId.isNotBlank())
         check(operation.applyTo(before) is OperationResult.Applied)
-        save(current.copy(operations = current.operations + operation))
+        beforeHistory?.let { check(it.workspace == before) }
+        val baseline = if (current.operations.isEmpty()) beforeHistory ?: current.baseHistory else current.baseHistory
+        check(current.operations.none { it.operationId == operation.operationId })
+        save(current.copy(operations = current.operations + operation,
+            baseHistory = baseline,
+            historyIntents = if (intent == null) current.historyIntents
+                else current.historyIntents + (operation.operationId to intent)))
     }
 
     fun markSubmitted(
@@ -150,18 +168,23 @@ internal class WorkspaceDraftJournalStore(
         transactionId: String,
         version: Long,
         seq: Long,
+        confirmedHistory: cg.creamgod.boarderless.domain.history.WorkspaceHistory? = null,
     ) {
         val current = load(scope) ?: return
         if (current.lastAcknowledgedTransactionId == transactionId) return
         check(current.headTransactionId == transactionId && current.operations.firstOrNull()?.operationId == operationId)
         check(version > current.baseVersion && seq > current.baseServerSeq)
         val after = (current.operations.first().applyTo(current.baseWorkspace) as OperationResult.Applied).workspace
+        confirmedHistory?.let { check(it.workspace == after) }
         save(
             current.copy(
                 baseWorkspace = after,
                 baseVersion = version,
                 baseServerSeq = seq,
                 operations = current.operations.drop(1),
+                historyIntents = current.historyIntents - operationId,
+                baseHistory = confirmedHistory ?: current.baseHistory?.applyRecorded(current.operations.first(),
+                    checkNotNull(current.historyIntents[operationId]))?.history,
                 headTransactionId = null,
                 lastAcknowledgedTransactionId = transactionId,
             ),
@@ -275,6 +298,12 @@ internal fun validateWorkspaceDraftJournal(journal: WorkspaceDraftJournal) {
     check(journal.baseWorkspace.id.value == journal.scope.workspaceId && journal.operations.size <= 200)
     check(journal.baseVersion in 0..9_007_199_254_740_991L && journal.baseServerSeq in 0..9_007_199_254_740_991L)
     check(journal.operations.all { it.operationId.isNotBlank() })
+    check(journal.operations.map { it.operationId }.distinct().size == journal.operations.size)
+    check(journal.historyIntents.keys.all { key -> journal.operations.any { it.operationId == key } })
+    journal.baseHistory?.let {
+        check(it.workspace == journal.baseWorkspace)
+        check(journal.replayHistory()?.workspace == journal.replay())
+    }
     check(journal.headTransactionId?.isNotBlank() != false && journal.lastAcknowledgedTransactionId?.isNotBlank() != false)
     journal.replay()
 }

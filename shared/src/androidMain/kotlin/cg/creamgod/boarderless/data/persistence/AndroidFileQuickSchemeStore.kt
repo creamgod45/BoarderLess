@@ -8,7 +8,14 @@ fun androidFileQuickSchemeStore(context: Context): QuickSchemeRepository =
     AndroidFileQuickSchemeStore(File(context.applicationContext.filesDir.canonicalFile, "quick-schemes"))
 
 internal class AndroidFileQuickSchemeStore(root: File) : QuickSchemeRepository {
-    private val delegate = PersistentQuickSchemeStore(AndroidAtomicLocalRecordStore(root, 4 * 1024 * 1024))
+    override val supportsIdentifiedSave = true
+    override fun pendingIdentifiedSaves() = synchronized(this) { delegate.pendingIdentifiedSaves() }
+    override fun stageIdentifiedSave(intent: QuickSchemeSaveIntent) = synchronized(this) { delegate.stageIdentifiedSave(intent) }
+    override fun saveIdentified(requestId: String, payload: String, name: String?, schemaVersion: Int, sourceWorkspaceId: String?): QuickScheme =
+        synchronized(this) { delegate.saveIdentified(requestId, payload, name, schemaVersion, sourceWorkspaceId) }
+    private val records = AndroidAtomicLocalRecordStore(root, 4 * 1024 * 1024)
+    private val delegate = PersistentQuickSchemeStore(records)
+    override val cloudSyncRuntime = CloudSchemeRuntime { records.backgroundAwaited() }
     override fun list(): List<QuickScheme> = synchronized(this) { delegate.list() }
     override fun save(payload: String, name: String?, schemaVersion: Int, sourceWorkspaceId: String?): QuickScheme =
         synchronized(this) { delegate.save(payload, name, schemaVersion, sourceWorkspaceId) }

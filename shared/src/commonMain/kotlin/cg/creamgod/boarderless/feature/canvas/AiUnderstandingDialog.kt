@@ -69,13 +69,14 @@ internal fun AiUnderstandingDialog(
     var open by remember { mutableStateOf(true) }
     var localLogging by remember { mutableStateOf(false) }
     var diagnostics by remember { mutableStateOf<List<AiProbeDiagnostic>>(emptyList()) }
+    var previousAttempt by remember { mutableStateOf(false) }
 
     fun resetApproval() {
         consent = false
         answer = ""
         message = null
         complete = false
-        diagnostics = emptyList()
+        previousAttempt = diagnostics.isNotEmpty()
     }
     val close = {
         open = false
@@ -106,6 +107,9 @@ internal fun AiUnderstandingDialog(
                     }
                     BasicText(Strings.aiProbe.warning(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
                     val latest = diagnostics.lastOrNull()
+                    if (previousAttempt) {
+                        BasicText(Strings.aiProbe.previousAttempt(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
+                    }
                     BasicText(
                         aiProbeDiagnosticLabel(latest) + (latest?.failure?.let { " · ${it.name}" } ?: "") +
                             (latest?.httpStatus?.let { " · HTTP $it" } ?: ""),
@@ -124,6 +128,10 @@ internal fun AiUnderstandingDialog(
                     )
                     if (latest?.stage == AiProbeStage.Failed) {
                         BasicText(aiProbeDiagnosticHint(latest), style = TextStyle(color = colors.contentText, fontSize = 12.sp))
+                    }
+                    latest?.reply?.let {
+                        BasicText(Strings.aiProbe.replySummary(it.textBytes, it.toolCalls, it.argumentBytes),
+                            style = TextStyle(color = colors.contentMuted, fontSize = 11.sp))
                     }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         ShellButton(Strings.aiProbe.debugCopy(), enabled = diagnostics.isNotEmpty(), onClick = {
@@ -309,12 +317,14 @@ internal fun AiUnderstandingDialog(
                                 answer = ""
                                 message = null
                                 diagnostics = emptyList()
+                                previousAttempt = false
+                                val timeline = AiProbeDiagnosticTimeline()
                                 var lastRecorded: AiProbeDiagnostic? = null
                                 fun recordDiagnostic(event: AiProbeDiagnostic) {
-                                    if (lastRecorded == event) return
+                                    val displayed = timeline.record(event) ?: return
                                     lastRecorded = event
-                                    log?.record(event)
-                                    if (open) diagnostics = (diagnostics + event).takeLast(24)
+                                    log?.record(displayed)
+                                    if (open) diagnostics = (diagnostics + displayed).takeLast(24)
                                 }
                                 recordDiagnostic(AiProbeDiagnostic(AiProbeStage.Preparing))
                                 job =
@@ -393,10 +403,15 @@ internal fun AiUnderstandingDialog(
                             })
                         }
                         AiProbeField(Strings.aiProbe.response(), answer, {
-                            if (!busy && it.encodeToByteArray().size <= 128 * 1024) {
-                                answer = it
-                                complete = true
-                                message = null
+                            if (!busy) {
+                                if (aiTextWithinUtf8Limit(it, 128 * 1024)) {
+                                    answer = it
+                                    complete = true
+                                    message = null
+                                } else {
+                                    // Keep the original valid answer; never check a silently repaired paste.
+                                    message = Strings.aiProbe.inputRejected()
+                                }
                             }
                         }, enabled = !busy, multiline = true)
                         ShellButton(Strings.aiProbe.check(), enabled = packet != null && complete && !busy && answer.isNotBlank(), onClick = {
@@ -439,6 +454,8 @@ internal fun aiProbeStageLabel(stage: AiProbeStage?): String =
 
 internal fun aiProbeDiagnosticLabel(event: AiProbeDiagnostic?): String =
     if (event?.failure == AiProbeFailure.ConsentDenied) Strings.aiProbe.consentDeclined()
+    else if (event?.authenticationGuidance() == AiAuthenticationGuidance.Forbidden) Strings.aiProbe.debugAccessDenied()
+    else if (event?.authenticationGuidance() != null) Strings.aiProbe.debugAuthenticationRejected()
     else aiProbeStageLabel(event?.stage)
 
 internal fun aiProbeDiagnosticHint(event: AiProbeDiagnostic): String =
@@ -460,8 +477,11 @@ internal fun aiProbeDiagnosticHint(event: AiProbeDiagnostic): String =
 
         AiProbeFailure.HttpRejected -> {
             when {
+                event.authenticationGuidance() == AiAuthenticationGuidance.MissingCredentials -> Strings.aiProbe.debugHintMissingCredentials()
+                event.authenticationGuidance() == AiAuthenticationGuidance.BasicChallenge -> Strings.aiProbe.debugHintBasicChallenge()
+                event.authenticationGuidance() == AiAuthenticationGuidance.Forbidden -> Strings.aiProbe.debugHintForbidden()
+                event.authenticationGuidance() == AiAuthenticationGuidance.Unauthorized -> Strings.aiProbe.debugHintAuth()
                 event.providerError?.rejection == AiWireRejection.ReasoningToolsInChat -> Strings.aiProbe.debugHintReasoningTools()
-                event.httpStatus == 401 || event.httpStatus == 403 -> Strings.aiProbe.debugHintAuth()
                 event.httpStatus == 404 -> Strings.aiProbe.debugHintEndpoint()
                 event.httpStatus == 400 || event.httpStatus == 422 -> Strings.aiProbe.debugHintRequest()
                 event.httpStatus == 429 -> Strings.aiProbe.debugHintLimit()
@@ -477,6 +497,8 @@ internal fun aiProbeDiagnosticHint(event: AiProbeDiagnostic): String =
         AiProbeFailure.ResponseFormat, AiProbeFailure.StreamFormat, AiProbeFailure.UnsupportedMode -> {
             Strings.aiProbe.debugHintFormat()
         }
+
+        AiProbeFailure.EmptyResponse -> Strings.aiProbe.debugHintEmpty()
 
         AiProbeFailure.Incomplete, AiProbeFailure.OutputLimit -> {
             Strings.aiProbe.debugHintIncomplete()

@@ -71,15 +71,23 @@ internal class DesktopWorkspaceDraftPersistence(
             WorkspaceDraftBundleTransitions.stage(current, entry)
         }
     }
+    override fun appendWithIntent(scope: PendingSubmissionScope, session: WorkspaceSession, before: Workspace,
+        operation: WorkspaceOperation, intent: cg.creamgod.boarderless.domain.history.WorkspaceHistoryIntent,
+        beforeHistory: cg.creamgod.boarderless.domain.history.WorkspaceHistory?) {
+        mutate(scope) { WorkspaceDraftBundleTransitions.append(it, scope, session, before, operation, randomUuid(), intent, beforeHistory) }
+    }
 
     override fun acknowledge(
         entry: PendingWorkspaceSubmission,
         version: Long,
         seq: Long,
-    ) {
+    ) = acknowledgeWithHistory(entry, version, seq, null)
+
+    override fun acknowledgeWithHistory(entry: PendingWorkspaceSubmission, version: Long, seq: Long,
+        history: cg.creamgod.boarderless.domain.history.WorkspaceHistory?) {
         val current = requireNotNull(store.read(entry.scope))
         val bundle = requireNotNull(current.bundle)
-        val settled = WorkspaceDraftBundleTransitions.acknowledge(bundle, entry, version, seq)
+        val settled = WorkspaceDraftBundleTransitions.acknowledge(bundle, entry, version, seq, history)
         // An exact settlement needs no new generation. Still force its existing record and
         // directory: a fresh read alone cannot resolve a prior unknown durability barrier.
         if (settled == bundle) {

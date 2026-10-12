@@ -32,12 +32,13 @@ internal fun WorkspaceDraftReviewDialog(
     saveChoosesFolder: Boolean,
     saveUsesBrowserDownload: Boolean,
     imported: Boolean = false,
+    includeRemoteChanges: Boolean = false,
     onCheckMerge: (suspend (WorkspaceDraftMergePlan, Map<DraftMergeFieldId, DraftMergeChoice>) -> DraftMergePreflightResult)? = null,
     onReloadReview: ((WorkspaceSession) -> Unit)? = null,
     onDismiss: () -> Unit,
 ) {
     val colors = BoarderLessTheme.colors
-    val differences = remember(review) { review.differences() }
+    val differences = remember(review, includeRemoteChanges) { review.differences(includeRemoteChanges) }
     val mergePlan = remember(review, imported) { if (imported) WorkspaceDraftMergePlan(review) else null }
     var mergeChoices by remember(review) { mutableStateOf<Map<DraftMergeFieldId, DraftMergeChoice>>(emptyMap()) }
     var mergeMessage by remember(review) { mutableStateOf<String?>(null) }
@@ -148,6 +149,13 @@ internal fun WorkspaceDraftReviewDialog(
                     }
                     message?.let { BasicText(it, style = TextStyle(color = colors.contentMuted, fontSize = 12.sp)) }
                     LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        item {
+                            val merged = remember(mergePlan, mergeChoices) {
+                                mergePlan?.takeIf { mergeChoices.size == it.fields.size }
+                                    ?.let { runCatching { it.resolve(mergeChoices) }.getOrNull() }
+                            }
+                            WorkspaceComparisonPreview(review, merged)
+                        }
                         if (mergePlan != null) {
                             item {
                                 BasicText(Strings.draftMerge.title(), style = TextStyle(color = colors.contentText, fontSize = 14.sp))
@@ -328,6 +336,9 @@ internal fun WorkspaceDraftReviewDialog(
                                 )
                                 val values =
                                     when (difference) {
+                                        is WorkspaceDraftDifference.DocumentChange -> {
+                                            listOf(difference.before, difference.draft, difference.remote)
+                                        }
                                         is WorkspaceDraftDifference.ObjectChange -> {
                                             listOf(difference.before, difference.draft, difference.remote)
                                                 .map { it?.let(::draftObjectJson) }

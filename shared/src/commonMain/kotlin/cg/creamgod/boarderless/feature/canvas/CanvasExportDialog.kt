@@ -47,6 +47,7 @@ import kotlinx.coroutines.launch
         if (capture == null) return@LaunchedEffect
         try {
             check(capture.isCurrent(live()))
+            check(capture.scene.objects.values.none { it is ExternalMediaNode }) { "External media export is not supported yet" }
             val loaded = mutableMapOf<CanvasObjectId, ImageBitmap>()
             for (node in capture.scene.objects.values.filterIsInstance<MediaNode>()) {
                 check(capture.isCurrent(live()))
@@ -88,7 +89,7 @@ import kotlinx.coroutines.launch
                             if (transparent) Color.Transparent else canvasBackgroundColor(backgroundToken, colors),
                             Modifier.fillMaxWidth().height(260.dp))
                         BasicText("${measured.layout.pixelWidth} × ${measured.layout.pixelHeight}", style = TextStyle(color = colors.contentMuted))
-                    } else BasicText(if (measured == null) Strings.canvasExport.invalid() else if (frameFailed) Strings.canvasExport.mediaFailed() else Strings.canvasExport.loading(), style = TextStyle(color = colors.contentMuted))
+                    } else BasicText(if (measured == null) Strings.canvasExport.invalid() else if (capture?.scene?.objects?.values?.any { it is ExternalMediaNode } == true) Strings.giphy.exportPending() else if (frameFailed) Strings.canvasExport.mediaFailed() else Strings.canvasExport.loading(), style = TextStyle(color = colors.contentMuted))
                 } else BasicText(Strings.canvasExport.invalid(), style = TextStyle(color = colors.contentMuted))
                 val latestState by rememberUpdatedState(state)
                 val current = capture?.isCurrent(live()) == true

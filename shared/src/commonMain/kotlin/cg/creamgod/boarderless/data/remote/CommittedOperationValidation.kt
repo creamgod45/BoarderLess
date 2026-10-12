@@ -56,7 +56,7 @@ internal fun AcceptedOperationsDto.validateAcknowledgement(
             committed.clientSeq !in 0..MaxSafeSequence || committed.baseVersion !in 0..MaxSafeSequence ||
             committed.baseVersion != request.baseVersion || committed.workspaceVersion != workspaceVersion ||
             committed.operationType != submitted.kind || committed.schemaVersion != 1 ||
-            committed.committedAt.isBlank()
+            committed.committedAt.isBlank() || !committed.payload.preservesSubmittedValues(submitted.payload)
         ) {
             invalid()
         }

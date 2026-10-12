@@ -150,6 +150,9 @@ internal object WorkspaceDraftScopeBundleCodec {
                 require(journal.headTransactionId == pending.request.transactionId)
                 require(journal.operations.firstOrNull()?.operationId == pending.localOperationId)
                 require(journal.baseVersion == pending.request.baseVersion)
+                pending.historyIntent?.let { intent ->
+                    require(journal.historyIntents[pending.localOperationId] == intent)
+                }
                 // An already acknowledged wire is not an unresolved head. Migration must reconcile explicitly.
                 require(journal.lastAcknowledgedTransactionId != pending.request.transactionId)
             }

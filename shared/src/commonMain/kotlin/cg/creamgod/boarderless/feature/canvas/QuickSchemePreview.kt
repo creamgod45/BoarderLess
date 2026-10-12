@@ -33,7 +33,7 @@ import kotlin.math.min
                 runCatching {
                     require(validateClipboardPayload(payload) == null)
                     val ids =
-                        payload.groups.map { it.originalId } + payload.nodes.map { it.originalId } + payload.media.map { it.originalId }
+                        payload.groups.map { it.originalId } + payload.nodes.map { it.originalId } + payload.media.map { it.originalId } + payload.externalMedia.map { it.originalId }
                     clipboardMaterialization(
                         payload,
                         Vec2.Zero,
@@ -92,10 +92,10 @@ internal fun clipboardPreviewViewport(
     density: Float,
 ): Viewport {
     val routes = clipboardGeometryRoutes(payload).values.flatten()
-    val lefts = payload.nodes.map { it.x } + payload.groups.map { it.x } + payload.media.map { it.x }
-    val tops = payload.nodes.map { it.y } + payload.groups.map { it.y } + payload.media.map { it.y }
-    val rights = payload.nodes.map { it.x + it.width } + payload.groups.map { it.x + it.width } + payload.media.map { it.x + it.width }
-    val bottoms = payload.nodes.map { it.y + it.height } + payload.groups.map { it.y + it.height } + payload.media.map { it.y + it.height }
+    val lefts = payload.nodes.map { it.x } + payload.groups.map { it.x } + payload.media.map { it.x } + payload.externalMedia.map { it.x }
+    val tops = payload.nodes.map { it.y } + payload.groups.map { it.y } + payload.media.map { it.y } + payload.externalMedia.map { it.y }
+    val rights = payload.nodes.map { it.x + it.width } + payload.groups.map { it.x + it.width } + payload.media.map { it.x + it.width } + payload.externalMedia.map { it.x + it.width }
+    val bottoms = payload.nodes.map { it.y + it.height } + payload.groups.map { it.y + it.height } + payload.media.map { it.y + it.height } + payload.externalMedia.map { it.y + it.height }
     if (lefts.isEmpty()) return Viewport()
     val roots = payload.sequenceDiagrams.map { it.containerId.value }.toSet()
     val rotatedRoots = payload.groups.filter { it.originalId in roots }.flatMap {
@@ -124,7 +124,7 @@ private fun QuickSchemeObjectsPreview(
                 .background(colors.canvas.copy(alpha = 0.72f))
                 .border(1.dp, colors.contentBorder, RoundedCornerShape(12.dp)),
     ) {
-        if (payload.nodes.isEmpty() && payload.groups.isEmpty() && payload.media.isEmpty()) return@Canvas
+        if (payload.nodes.isEmpty() && payload.groups.isEmpty() && payload.media.isEmpty() && payload.externalMedia.isEmpty()) return@Canvas
         val geometryRoutes = clipboardGeometryRoutes(payload)
         val viewport = clipboardPreviewViewport(boundsPayload, size.width, size.height, density)
         val scale = viewport.zoom
@@ -162,7 +162,8 @@ private fun QuickSchemeObjectsPreview(
 
         val centersById =
             payload.nodes.associate { it.originalId to project(it.x + it.width / 2f, it.y + it.height / 2f) } +
-                payload.media.associate { it.originalId to project(it.x + it.width / 2f, it.y + it.height / 2f) }
+                payload.media.associate { it.originalId to project(it.x + it.width / 2f, it.y + it.height / 2f) } +
+                payload.externalMedia.associate { it.originalId to project(it.x + it.width / 2f, it.y + it.height / 2f) }
         payload.relations.forEach { relation ->
             val start = centersById[relation.sourceId] ?: return@forEach
             val end = centersById[relation.targetId] ?: return@forEach
@@ -215,6 +216,12 @@ private fun QuickSchemeObjectsPreview(
                     borderWidth = 1f * density,
                 )
             }
+        }
+        payload.externalMedia.forEach { media ->
+            val topLeft = project(media.x, media.y)
+            val mediaSize = Size((media.width * scale).coerceAtLeast(8f * density), (media.height * scale).coerceAtLeast(6f * density))
+            drawRoundRect(colors.canvas, topLeft, mediaSize, CornerRadius(4f * density))
+            drawRoundRect(colors.accent, topLeft, mediaSize, CornerRadius(4f * density), style = Stroke(1f * density))
         }
         payload.media.forEach { media ->
             val topLeft = project(media.x, media.y)

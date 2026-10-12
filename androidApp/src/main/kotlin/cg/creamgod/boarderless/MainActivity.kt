@@ -279,6 +279,8 @@ class MainActivity : ComponentActivity() {
             val workspaceStorageRuntime =
                 remember {
                     cg.creamgod.boarderless.data.WorkspaceStorageRuntime(
+                        serverRepository = { cg.creamgod.boarderless.data.remote.androidRealtimeBackendRepository(applicationContext) },
+                        serverRepositoryWithSubmission = { cg.creamgod.boarderless.data.remote.androidRealtimeBackendRepository(applicationContext, it) },
                         localRepository = { cg.creamgod.boarderless.data.persistence.androidFileWorkspaceRepository(applicationContext) },
                         mediaRuntimeFor = { repository ->
                             val previews = AndroidAssetPreviewLoader(applicationContext.cacheDir)

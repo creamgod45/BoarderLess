@@ -26,3 +26,6 @@ internal actual external fun browserBundleFixtureExerciseLeases(done: (String?, 
 
 @JsFun("() => globalThis.boarderlessBundleFixture.failNextRemoval()")
 internal actual external fun browserBundleFixtureFailNextRemoval()
+
+@JsFun("(base64) => globalThis.boarderlessBundleFixture.selectBytes(base64)")
+internal actual external fun browserBundleFixtureSelectBytes(base64: String)

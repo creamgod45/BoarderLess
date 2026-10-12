@@ -38,6 +38,7 @@ internal fun describeHistoryOperation(
 ): String {
     val undo = direction == HistoryDirection.Undo
     return when (operation) {
+        is cg.creamgod.boarderless.domain.history.LocalWorkspaceContentOperation -> Strings.localSync.historyAction()
         is CreateObjectsOperation -> {
             describeObjectCount(created = !undo, operation.objects.size)
         }

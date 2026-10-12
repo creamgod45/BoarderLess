@@ -8,6 +8,8 @@ internal sealed interface WorkspaceSubmissionStep {
     data class Accepted(
         val session: WorkspaceSession,
         val acceptedToken: Long,
+        val submittedOperation: cg.creamgod.boarderless.domain.history.WorkspaceOperation? = null,
+        val mediaReferenceOrigins: List<cg.creamgod.boarderless.domain.history.MediaReferenceHistoryOrigin> = emptyList(),
     ) : WorkspaceSubmissionStep
 
     data class Conflict(
@@ -46,6 +48,8 @@ internal suspend fun submitNextWorkspaceChange(
                             workspace = pending.workspaceAfter,
                         ),
                     acceptedToken = pending.token,
+                    submittedOperation = pending.operation,
+                    mediaReferenceOrigins = outcome.mediaReferenceOrigins,
                 )
             }
 

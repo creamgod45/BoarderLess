@@ -15,7 +15,7 @@ import kotlin.time.Clock
 internal class IosFileAssetGateway(
     private val root: String,
     private val validateSession: suspend (WorkspaceSession) -> Unit,
-) : AssetTransferGateway, AssetDownloadGateway {
+) : PinnedLocalAssetGateway, AssetDownloadGateway {
     private val catalog by lazy {
         privateRoot()
         PersistentLocalAssetCatalog({ IosAtomicLocalRecordStore("$root/metadata", 4 * 1024 * 1024) },
@@ -80,8 +80,13 @@ internal class IosFileAssetGateway(
         val asset = WorkspaceAsset(NSUUID().UUIDString.lowercase(), session.workspace.id, session.userId,
             source.mediaType.trim().lowercase(), source.byteSize, source.checksum, source.width, source.height, source.durationMs,
             AssetStatus.Pending, Clock.System.now().toString())
-        catalog.add(asset)
-        AssetUploadTicket(asset, "boarderless-local:${asset.id}")
+        preparePinned(session, asset)
+    }
+    override suspend fun preparePinned(session: WorkspaceSession, pending: WorkspaceAsset): AssetUploadTicket = withContext(Dispatchers.Default) {
+        validateSession(session); validatePinnedLocalAsset(session, pending)
+        val stored = catalog.ensurePinned(pending)
+        currentCoroutineContext().ensureActive()
+        AssetUploadTicket(stored, "boarderless-local:${stored.id}")
     }
     private fun writeAll(fd: Int, bytes: ByteArray) = bytes.usePinned { pinned ->
         var offset = 0

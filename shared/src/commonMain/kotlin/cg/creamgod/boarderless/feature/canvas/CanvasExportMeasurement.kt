@@ -14,12 +14,24 @@ import cg.creamgod.boarderless.domain.model.*
 import kotlin.math.roundToInt
 
 internal data class CanvasExportMeasuredScene(val layout: CanvasExportLayout, val labels: Map<RelationId, MeasuredRelationLabel>)
+internal data class CanvasMeasuredPaint(val bounds: List<CanvasPaintBounds>, val labels: Map<RelationId, MeasuredRelationLabel>)
 
 @Composable internal fun rememberCanvasExportMeasurement(workspace: Workspace, scale: Float, runtime: CanvasExportRuntime = CanvasExportRuntime.Unavailable): Result<CanvasExportMeasuredScene> {
+    val paint = rememberCanvasPaintMeasurement(workspace, scale)
+    return remember(paint, scale, runtime) {
+        paint.mapCatching { CanvasExportMeasuredScene(
+            canvasExportLayout(it.bounds, scale = scale, maxDimension = runtime.maxDimension, maxPixels = runtime.maxPixels), it.labels,
+        ) }
+    }
+}
+
+/** Measurement without allocating a raster or imposing export dimensions; also used by
+ * read-only conflict previews of large workspaces. */
+@Composable internal fun rememberCanvasPaintMeasurement(workspace: Workspace, scale: Float): Result<CanvasMeasuredPaint> {
     val measurer = rememberTextMeasurer(cacheSize = 1024)
     val density = LocalDensity.current
     val colors = BoarderLessTheme.colors
-    return remember(workspace, scale, runtime, measurer, density, colors) {
+    return remember(workspace, scale, measurer, density, colors) {
         runCatching {
             require(scale.isFinite() && scale > 0f && scale <= 8f)
             val membership = SequenceCanvasMembership(workspace)
@@ -66,7 +78,7 @@ internal data class CanvasExportMeasuredScene(val layout: CanvasExportLayout, va
                 paint += CanvasPaintBounds((label.position.x - 2f) / scale, (label.position.y - 2f) / scale,
                     (label.position.x + label.size.width + 2f) / scale, (label.position.y + label.size.height + 2f) / scale)
             }
-            CanvasExportMeasuredScene(canvasExportLayout(paint, scale = scale, maxDimension = runtime.maxDimension, maxPixels = runtime.maxPixels), labels)
+            CanvasMeasuredPaint(paint, labels)
         }
     }
 }

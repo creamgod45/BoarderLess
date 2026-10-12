@@ -13,6 +13,26 @@ import javax.imageio.ImageIO
 import kotlin.test.*
 
 class DesktopFileAssetGatewayTest {
+    @Test fun pinnedPendingIdentityReopensAndVerifiedReadyCannotBeRelabeled() = temporary { root -> runBlocking {
+        val repo = DesktopFileWorkspaceRepository(root.resolve("documents"))
+        val owner = repo.openOrCreateWorkspace(); val selected = source(root)
+        try {
+            val pending = WorkspaceAsset("00112233-4455-6677-8899-aabbccddeeff", owner.workspace.id, owner.userId,
+                selected.mediaType, selected.byteSize, selected.checksum, selected.width, selected.height, selected.durationMs,
+                AssetStatus.Pending, "2026-10-11T00:00:00Z")
+            val gateway = assertIs<PinnedLocalAssetGateway>(repo.localAssetGateway)
+            val ticket = gateway.preparePinned(owner, pending)
+            val reopened = DesktopFileWorkspaceRepository(root.resolve("documents"))
+            val resumed = assertIs<PinnedLocalAssetGateway>(reopened.localAssetGateway)
+            assertEquals(ticket, resumed.preparePinned(owner, pending))
+            assertFails { resumed.preparePinned(owner, pending.copy(checksum = "sha256:" + "b".repeat(64))) }
+            resumed.upload(ticket, selected) {}
+            val ready = resumed.confirm(owner, ticket)
+            assertEquals(ready, resumed.preparePinned(owner, pending).asset)
+            assertEquals(listOf(ready), reopened.listAssets(owner))
+            assertFails { resumed.preparePinned(owner.copy(role = WorkspaceMemberRole.Viewer), pending) }
+        } finally { selected.release() }
+    } }
     private fun temporary(block: (Path) -> Unit) {
         val root = Files.createTempDirectory("boarderless-local-media")
         try {

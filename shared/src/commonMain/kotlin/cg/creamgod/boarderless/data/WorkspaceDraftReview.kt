@@ -45,6 +45,16 @@ sealed interface WorkspaceDraftDifference {
     val id: String
     val remoteComparison: DraftRemoteComparison
 
+    data class DocumentChange(
+        val fieldName: String,
+        val before: String,
+        val draft: String,
+        val remote: String,
+    ) : WorkspaceDraftDifference {
+        override val id: String get() = "document:$fieldName"
+        override val remoteComparison get() = compareDraft(before, draft, remote)
+    }
+
     data class ObjectChange(
         val objectId: CanvasObjectId,
         val before: CanvasObject?,
@@ -78,17 +88,25 @@ private fun <T> compareDraft(
     }
 
 /** Include only local draft effects. Unrelated remote changes still invalidate the global baseline gate. */
-fun WorkspaceDraftReview.differences(): List<WorkspaceDraftDifference> =
+fun WorkspaceDraftReview.differences(includeRemoteChanges: Boolean = false): List<WorkspaceDraftDifference> =
     buildList {
-        (baseline.objects.keys + proposed.objects.keys).sortedBy { it.value }.forEach { id ->
+        fun metadata(field: String, before: String, after: String, remote: String) {
+            if (before != after || (includeRemoteChanges && before != remote)) {
+                add(WorkspaceDraftDifference.DocumentChange(field, before, after, remote))
+            }
+        }
+        metadata("title", DraftReviewJson.encodeToString(baseline.title), DraftReviewJson.encodeToString(proposed.title), DraftReviewJson.encodeToString(current.title))
+        metadata("canvasStyle", DraftReviewJson.encodeToString(baseline.canvasStyle), DraftReviewJson.encodeToString(proposed.canvasStyle), DraftReviewJson.encodeToString(current.canvasStyle))
+        metadata("sequenceDiagrams", DraftReviewJson.encodeToString(baseline.sequenceDiagrams), DraftReviewJson.encodeToString(proposed.sequenceDiagrams), DraftReviewJson.encodeToString(current.sequenceDiagrams))
+        (baseline.objects.keys + proposed.objects.keys + if (includeRemoteChanges) current.objects.keys else emptySet()).sortedBy { it.value }.forEach { id ->
             val before = baseline.objects[id]
             val after = proposed.objects[id]
-            if (before != after) add(WorkspaceDraftDifference.ObjectChange(id, before, after, current.objects[id]))
+            if (before != after || (includeRemoteChanges && before != current.objects[id])) add(WorkspaceDraftDifference.ObjectChange(id, before, after, current.objects[id]))
         }
-        (baseline.relations.keys + proposed.relations.keys).sortedBy { it.value }.forEach { id ->
+        (baseline.relations.keys + proposed.relations.keys + if (includeRemoteChanges) current.relations.keys else emptySet()).sortedBy { it.value }.forEach { id ->
             val before = baseline.relations[id]
             val after = proposed.relations[id]
-            if (before != after) add(WorkspaceDraftDifference.RelationChange(id, before, after, current.relations[id]))
+            if (before != after || (includeRemoteChanges && before != current.relations[id])) add(WorkspaceDraftDifference.RelationChange(id, before, after, current.relations[id]))
         }
     }
 

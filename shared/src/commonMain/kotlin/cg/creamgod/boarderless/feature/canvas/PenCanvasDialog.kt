@@ -13,8 +13,9 @@ import cg.creamgod.boarderless.designsystem.*
 import cg.creamgod.boarderless.domain.history.*
 import cg.creamgod.boarderless.domain.model.*
 import cg.creamgod.boarderless.i18n.Strings
+import kotlinx.coroutines.CancellationException
 
-internal enum class PenCanvasInsertResult { Saved, Retry, Stale, Invalid }
+internal enum class PenCanvasInsertResult { Saved, Retry, Unconfirmed, Stale, Invalid }
 
 internal data class PenCanvasLive(
     val session: WorkspaceSession?,
@@ -40,13 +41,15 @@ internal data class PenCanvasLive(
     selection: Set<CanvasObjectId>,
     supported: Boolean,
     readLive: () -> PenCanvasLive,
-    commit: (WorkspaceOperation, CanvasObjectId) -> Boolean,
+    commit: suspend (WorkspaceOperation, CanvasObjectId) -> Boolean,
     onDismiss: () -> Unit,
+    onReviewOriginalSubmission: (() -> Unit)? = null,
 ) {
     val original = remember { (selection.singleOrNull()?.let(baseline.objects::get) as? TextNode)?.takeIf { it.vectorPath != null } }
     val editing = remember { original?.let { runCatching { PenCanvasEditing(owner, baseline, it) }.getOrNull() } }
     val capture = remember { PenCanvasCreation(owner, baseline, position) }
     var prepared by remember { mutableStateOf<WorkspaceOperation?>(null) }
+    var publicationAttempted by remember { mutableStateOf(false) }
     val latestLive by rememberUpdatedState(readLive)
     val latestCommit by rememberUpdatedState(commit)
     if (original != null && editing == null) {
@@ -62,6 +65,7 @@ internal data class PenCanvasLive(
     }
     PenEditorDialog(
         onDismiss = onDismiss,
+        onReviewOriginalSubmission = onReviewOriginalSubmission,
         initialText = original?.text ?: "",
         initialTextPlacement = original?.textPlacement,
         initialDraft = editing?.draft ?: PenPathDraft(CanvasSize(400f, 300f)),
@@ -69,6 +73,7 @@ internal data class PenCanvasLive(
         onInsert =
             if (supported) {
                 apply@{ path, text, placement ->
+                    if (publicationAttempted) return@apply PenCanvasInsertResult.Unconfirmed
                     val current = latestLive()
                     if (!current.ready ||
                         !(editing?.isCurrent(current.session, current.workspace) ?: capture.isCurrent(current.session, current.workspace))
@@ -91,12 +96,15 @@ internal data class PenCanvasLive(
                             return@apply PenCanvasInsertResult.Invalid
                         }
                     val target = original?.id ?: (operation as CreateObjectsOperation).objects.single().id
+                    publicationAttempted = true
                     try {
-                        if (latestCommit(operation, target)) PenCanvasInsertResult.Saved else PenCanvasInsertResult.Retry
+                        if (latestCommit(operation, target)) PenCanvasInsertResult.Saved else PenCanvasInsertResult.Unconfirmed
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
                     } catch (
                         _: Exception,
                     ) {
-                        PenCanvasInsertResult.Retry
+                        PenCanvasInsertResult.Unconfirmed
                     }
                 }
             } else {

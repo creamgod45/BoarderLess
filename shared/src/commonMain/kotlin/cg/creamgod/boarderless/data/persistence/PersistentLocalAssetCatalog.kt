@@ -56,6 +56,22 @@ internal class PersistentLocalAssetCatalog(
         require(catalog.entries.size < 4096 && catalog.entries.none { it.id == asset.id })
         write(generation, catalog.copy(entries = catalog.entries + asset.stored()))
     }
+    /** Exact retry confirms the existing generation, including an already verified Ready.
+     * A changed descriptor cannot overwrite/relabel another original. */
+    fun ensurePinned(asset: WorkspaceAsset): WorkspaceAsset = lock.withLock {
+        validateLocalAssetId(asset.id)
+        require(asset.status == AssetStatus.Pending)
+        val (generation, catalog) = read()
+        val existing = catalog.entries.singleOrNull { it.id == asset.id }?.asset()
+        if (existing == null) {
+            add(asset)
+            asset
+        } else {
+            require(existing == asset || existing == asset.copy(status = AssetStatus.Ready)) { "Pinned asset identity changed" }
+            files.confirmDurable(Key, requireNotNull(generation))
+            existing
+        }
+    }
     /** Called only after the original's hash and publication barriers have succeeded. */
     fun ready(expected: WorkspaceAsset): WorkspaceAsset = lock.withLock {
         val (generation, catalog) = read()
@@ -73,7 +89,7 @@ internal class PersistentLocalAssetCatalog(
         require(current == expected && current.status == AssetStatus.Pending)
         write(generation, catalog.copy(entries = catalog.entries.filterNot { it.id == current.id }))
     }
-    private companion object {
+    companion object {
         val Key = SHA256().digest("BoarderLess.local-asset-catalog.v1".encodeToByteArray()).joinToString("") {
             (it.toInt() and 255).toString(16).padStart(2, '0')
         }

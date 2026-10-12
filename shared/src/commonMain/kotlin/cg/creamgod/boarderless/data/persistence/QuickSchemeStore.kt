@@ -5,6 +5,12 @@ import com.russhwolf.settings.Settings
 import kotlinx.serialization.Serializable
 
 interface QuickSchemeRepository {
+    val cloudSyncRuntime: CloudSchemeRuntime? get() = null
+    fun pendingIdentifiedSaves(): List<QuickSchemeSaveIntent> = emptyList()
+    fun stageIdentifiedSave(intent: QuickSchemeSaveIntent): Unit = error("Identified scheme save unavailable")
+    val supportsIdentifiedSave: Boolean get() = false
+    fun saveIdentified(requestId: String, payload: String, name: String? = null, schemaVersion: Int = 1,
+        sourceWorkspaceId: String? = null): QuickScheme = error("Identified scheme save unavailable")
     fun save(
         payload: String,
         name: String? = null,
@@ -22,6 +28,14 @@ interface QuickSchemeRepository {
     ): QuickScheme?
 
     fun delete(id: Int): Boolean
+}
+
+/** Private pending definition, not a saved library item, canvas operation or cloud receipt. */
+@Serializable data class QuickSchemeSaveIntent(val requestId: String, val scheme: QuickScheme) {
+    init {
+        require(requestId.matches(Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")))
+        require(scheme.id == 0)
+    }
 }
 
 class QuickSchemeStore(

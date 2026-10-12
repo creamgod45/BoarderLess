@@ -138,6 +138,21 @@ data class MediaNode(
     }
 }
 
+/** Provider identity, never a Workspace asset or a persisted media URL. */
+@Serializable
+data class ExternalMediaNode(
+    override val id: CanvasObjectId,
+    override val version: Long = 1,
+    override val parentId: CanvasObjectId? = null,
+    override val zIndex: Long = 0,
+    override val locked: Boolean = false,
+    override val transform: CanvasTransform,
+    val reference: cg.creamgod.boarderless.domain.media.ExternalMediaReference,
+    val altText: String = "",
+) : CanvasObject {
+    init { require(version >= 1); require(altText.length <= 8192) }
+}
+
 fun CanvasObject.withTransform(
     transform: CanvasTransform,
     version: Long = this.version + 1,
@@ -146,6 +161,7 @@ fun CanvasObject.withTransform(
         is TextNode -> copy(transform = transform, version = version)
         is GroupFrame -> copy(transform = transform, version = version)
         is MediaNode -> copy(transform = transform, version = version)
+        is ExternalMediaNode -> copy(transform = transform, version = version)
     }
 
 fun CanvasObject.withVersion(version: Long): CanvasObject =
@@ -153,6 +169,7 @@ fun CanvasObject.withVersion(version: Long): CanvasObject =
         is TextNode -> copy(version = version)
         is GroupFrame -> copy(version = version)
         is MediaNode -> copy(version = version)
+        is ExternalMediaNode -> copy(version = version)
     }
 
 fun CanvasObject.withParentId(
@@ -163,4 +180,5 @@ fun CanvasObject.withParentId(
         is TextNode -> copy(parentId = parentId, version = version)
         is GroupFrame -> copy(parentId = parentId, version = version)
         is MediaNode -> copy(parentId = parentId, version = version)
+        is ExternalMediaNode -> copy(parentId = parentId, version = version)
     }

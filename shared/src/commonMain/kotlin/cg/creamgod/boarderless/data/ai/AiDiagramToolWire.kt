@@ -218,6 +218,26 @@ internal fun aiDiagramToolDefinitions(
     )
 }
 
+/** Fixed app-authored working rules. Sent inside the first user message (never as a new role) so the
+ * reviewed body shows exactly what the provider receives and no extra authority is introduced. */
+internal const val AI_DIAGRAM_GUIDANCE =
+    "You edit a diagram only through the provided tools. Work in as few rounds as possible.\n" +
+        "Workflow:\n" +
+        "- In your first turn call read_approved_graph (and list_diagram_capabilities if unsure) together; never call them again.\n" +
+        "- Plan the whole result first. Create ALL new nodes in ONE create_nodes call and ALL new relations in ONE create_relations call. " +
+        "You may issue several tool calls in a single turn.\n" +
+        "- Finish with validate_diagram, then answer with a short summary of what you added.\n" +
+        "Layout rules:\n" +
+        "- Use the x, y, width and height of existing objects from read_approved_graph. New nodes must not overlap existing objects or each other " +
+        "and should keep at least 40 units of gap. Tool results list any overlaps; fix them with layout_nodes in the same turn.\n" +
+        "- Put new content in free space (for example to the right of, or below, the existing bounding box) unless the task says otherwise.\n" +
+        "- Align to a 40-unit grid, keep similar node sizes, and flow top-to-bottom or left-to-right.\n" +
+        "- Write edge captions in the relation label. Never create a node only to hold an edge caption.\n" +
+        "- Choose shapes by meaning (start/end, decision, process) from the capabilities, and one color per actor or lane.\n" +
+        "- Every decision node needs one labeled outgoing relation per outcome. Do not connect a failure branch into the success path.\n" +
+        "- Every new node must be connected to the diagram.\n\n" +
+        "User task:\n"
+
 /** History is complete paired assistant/tool turns only; arbitrary roles/URLs cannot be injected.
  * At most eight rounds/64 calls. Output bounds count UTF-8 including JSON escaping.
  */
@@ -242,7 +262,7 @@ internal fun aiDiagramToolRequestBody(
                 add(
                     buildJsonObject {
                         put("role", "user")
-                        put("content", prompt)
+                        put("content", AI_DIAGRAM_GUIDANCE + prompt)
                     },
                 )
                 for (turn in turns) {

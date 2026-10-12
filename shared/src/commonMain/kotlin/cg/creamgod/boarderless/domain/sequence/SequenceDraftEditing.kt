@@ -11,6 +11,41 @@ data class SequenceStepLocation(
     }
 }
 
+/** Read an explicit semantic branch; never flatten parallel/alternative execution paths. */
+fun SequenceDiagramDraft.stepsAt(location: SequenceStepLocation): List<SequenceStep> {
+    val snapshot = validatedSnapshot()
+    if (location.blockId == null) return snapshot.steps
+    fun find(items: List<SequenceStep>): SequenceBlock? {
+        for (item in items) if (item is SequenceBlock) {
+            if (item.id == location.blockId) return item
+            for (branch in item.branches) find(branch.steps)?.let { return it }
+        }
+        return null
+    }
+    val block = requireNotNull(find(snapshot.steps)) { "Missing sequence block" }
+    require(location.branchIndex in block.branches.indices)
+    return block.branches[location.branchIndex].steps
+}
+
+fun SequenceDiagramDraft.renameBranch(location: SequenceStepLocation, label: String): SequenceDiagramDraft {
+    require(location.blockId != null)
+    val snapshot = validatedSnapshot()
+    var found = false
+    fun visit(items: List<SequenceStep>): List<SequenceStep> = items.map { item ->
+        if (item !is SequenceBlock) item
+        else if (item.id == location.blockId) {
+            require(location.branchIndex in item.branches.indices)
+            found = true
+            item.copy(branches = item.branches.mapIndexed { index, branch ->
+                if (index == location.branchIndex) branch.copy(label = label) else branch
+            })
+        } else item.copy(branches = item.branches.map { it.copy(steps = visit(it.steps)) })
+    }
+    val result = snapshot.copy(steps = visit(snapshot.steps)).validatedSnapshot()
+    require(found) { "Missing sequence block" }
+    return result
+}
+
 fun SequenceDiagramDraft.reorderParticipants(ids: List<String>): SequenceDiagramDraft {
     val snapshot = validatedSnapshot()
     require(ids.size == snapshot.participants.size && ids.toSet() == snapshot.participants.map { it.id }.toSet())

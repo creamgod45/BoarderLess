@@ -36,6 +36,28 @@ class SessionPreferences(
 
     internal val submissionMutex = Mutex()
     internal var sequenceAllocator: ClientSequenceAllocator? = null
+    private val migrationCatalog = LegacyMigrationCatalogStore(settings)
+
+    internal fun registerLegacyScope(scope: PendingSubmissionScope) {
+        if (nativeClientIdentity == null) migrationCatalog.register(scope)
+    }
+
+    /** Existing safety/stopped manifests carry discoverable scopes; plain draft/pending
+     * manifests still require the saved or explicitly supplied complete scope catalog. */
+    internal fun captureCataloguedLegacySequenceForMigration(scope: PendingSubmissionScope,
+        additionalScopes: List<PendingSubmissionScope>, legacyArchiveCatalog: List<StoppedSubmissionLocator>): LegacySequenceCapture {
+        val savedCatalog = migrationCatalog.read()
+        val archives = pendingSubmissions.stoppedInventoryForMigration(legacyArchiveCatalog)
+        val fences = fenceAttempts.inventoryForMigration()
+        val deletions = deletionEvidence.inventoryForMigration()
+        val known = (savedCatalog + additionalScopes + scope + archives.map { it.scope } +
+            fences.map { it.scope } + deletions.map { it.scope }).distinct()
+            .sortedBy(WorkspaceDraftScopeBundleCodec::scopeHash)
+        val capture = captureLegacySequenceForMigration(scope, known, legacyArchiveCatalog, emptyList())
+        check(migrationCatalog.read() == savedCatalog)
+        check(capture.stopped == archives && capture.fenceAttempts == fences && capture.deletionEvidence == deletions)
+        return capture
+    }
 
     /** Quiescent migration read only. Never calls the clientId/default-counter getters, which
      * could initialize missing identity or map missing evidence to zero. A double read detects

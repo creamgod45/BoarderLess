@@ -28,6 +28,7 @@ sealed interface OperationResult {
 }
 
 sealed interface OperationError {
+    data object LocalWorkspaceContentConflict : OperationError
     data object SequenceDiagramStateConflict : OperationError
 
     data class CanvasStyleVersionConflict(
@@ -417,7 +418,10 @@ data class UpdateRelationAttributesOperation(
                     colorToken = current.colorToken,
                     geometry = current.geometry,
                 )
-            if (currentAttributes != change.before) {
+            // Legacy absence and the formal full-auto geometry describe the same route.
+            // The server represents an explicit reset as full auto (not JSON null).
+            if (currentAttributes.copy(geometry = currentAttributes.geometry ?: cg.creamgod.boarderless.domain.model.RelationGeometry()) !=
+                change.before.copy(geometry = change.before.geometry ?: cg.creamgod.boarderless.domain.model.RelationGeometry())) {
                 return OperationResult.Rejected(OperationError.RelationStateConflict(change.relationId))
             }
             if (change.after.geometry?.allowsEndpoints(current.sourceObjectId, current.targetObjectId) == false ||
@@ -891,7 +895,7 @@ data class UpdateMediaNodeAttributesOperation(
             val current =
                 workspace.objects[change.objectId]
                     ?: return OperationResult.Rejected(OperationError.MissingObject(change.objectId))
-            if (current !is MediaNode) {
+            if (current !is MediaNode && current !is cg.creamgod.boarderless.domain.model.ExternalMediaNode) {
                 return OperationResult.Rejected(OperationError.UnsupportedObject(change.objectId))
             }
             if (current.version != change.expectedVersion) {
@@ -899,17 +903,22 @@ data class UpdateMediaNodeAttributesOperation(
                     OperationError.VersionConflict(change.objectId, change.expectedVersion, current.version),
                 )
             }
-            val currentAttributes = MediaNodeAttributes(current.zIndex, current.locked, current.altText)
+            val currentAttributes = MediaNodeAttributes(current.zIndex, current.locked, when (current) {
+                is MediaNode -> current.altText
+                is cg.creamgod.boarderless.domain.model.ExternalMediaNode -> current.altText
+                else -> error("Unreachable media type")
+            })
             if (currentAttributes != change.before) {
                 return OperationResult.Rejected(OperationError.StateConflict(change.objectId))
             }
             replacements[current.id] =
-                current.copy(
-                    version = current.version + 1,
-                    zIndex = change.after.zIndex,
-                    locked = change.after.locked,
-                    altText = change.after.altText,
-                )
+                when (current) {
+                    is MediaNode -> current.copy(version = current.version + 1, zIndex = change.after.zIndex,
+                        locked = change.after.locked, altText = change.after.altText)
+                    is cg.creamgod.boarderless.domain.model.ExternalMediaNode -> current.copy(version = current.version + 1,
+                        zIndex = change.after.zIndex, locked = change.after.locked, altText = change.after.altText)
+                    else -> error("Unreachable media type")
+                }
         }
         return OperationResult.Applied(
             workspace.copy(

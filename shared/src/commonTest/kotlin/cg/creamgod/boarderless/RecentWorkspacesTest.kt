@@ -2,6 +2,8 @@ package cg.creamgod.boarderless
 
 import cg.creamgod.boarderless.data.MaxRecentWorkspaces
 import cg.creamgod.boarderless.data.RecentWorkspace
+import cg.creamgod.boarderless.data.RecentWorkspaceStore
+import cg.creamgod.boarderless.data.WorkspaceStorageMode
 import cg.creamgod.boarderless.data.WorkspaceLaunchRequests
 import cg.creamgod.boarderless.data.WorkspaceSummary
 import cg.creamgod.boarderless.data.reconciledWith
@@ -52,8 +54,41 @@ class RecentWorkspacesTest {
         assertNull(WorkspaceLaunchRequests.pending.value)
 
         WorkspaceLaunchRequests.open("w1")
-        assertEquals(WorkspaceId("w1"), WorkspaceLaunchRequests.pending.value)
-        WorkspaceLaunchRequests.consume(WorkspaceId("w1"))
+        assertEquals(WorkspaceId("w1"), WorkspaceLaunchRequests.pending.value?.workspaceId)
+        WorkspaceLaunchRequests.consume(requireNotNull(WorkspaceLaunchRequests.pending.value))
+        assertNull(WorkspaceLaunchRequests.pending.value)
+    }
+
+    @Test
+    fun identicalIdsRemainIndependentAcrossStorageModesAfterReopenAndReconcile() {
+        val settings = InMemorySettings()
+        val local = RecentWorkspaceStore(settings, WorkspaceStorageMode.Local)
+        val server = RecentWorkspaceStore(settings, WorkspaceStorageMode.Server)
+        local.recordOpened(WorkspaceId("same"), "本機")
+        server.recordOpened(WorkspaceId("same"), "伺服器")
+        local.rename(WorkspaceId("same"), "本機改名")
+        server.reconcile(emptyList())
+        val reopened = RecentWorkspaceStore(settings, WorkspaceStorageMode.Local)
+        assertEquals("本機改名", reopened.items.single().title)
+        assertEquals(WorkspaceStorageMode.Local, reopened.items.single().storageMode)
+        assertTrue(server.items.isEmpty())
+        assertTrue(RecentWorkspaceStore(settings).items.isEmpty())
+    }
+
+    @Test
+    fun scopedRequestsRejectUnknownModesAndCannotBeConsumedBySameIdInAnotherMode() {
+        val mode = WorkspaceStorageMode.Local
+        WorkspaceLaunchRequests.open("same", mode.token)
+        val local = requireNotNull(WorkspaceLaunchRequests.pending.value)
+        assertTrue(local.matches(mode))
+        assertFalse(local.matches(WorkspaceStorageMode.Server))
+        WorkspaceLaunchRequests.open("replacement", "unknown")
+        assertEquals(local, WorkspaceLaunchRequests.pending.value)
+        WorkspaceLaunchRequests.open("same", "server")
+        WorkspaceLaunchRequests.consume(local)
+        val server = requireNotNull(WorkspaceLaunchRequests.pending.value)
+        assertEquals(WorkspaceStorageMode.Server, server.storageMode)
+        WorkspaceLaunchRequests.consume(server)
         assertNull(WorkspaceLaunchRequests.pending.value)
     }
 

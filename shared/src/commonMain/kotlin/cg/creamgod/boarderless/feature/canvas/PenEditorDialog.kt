@@ -32,19 +32,24 @@ import cg.creamgod.boarderless.designsystem.*
 import cg.creamgod.boarderless.designsystem.color.*
 import cg.creamgod.boarderless.domain.model.*
 import cg.creamgod.boarderless.i18n.Strings
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 
 /** Authoring stays private until an explicit insert succeeds. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun PenEditorDialog(
     onDismiss: () -> Unit,
-    onInsert: ((VectorPath, String, TextPlacement?) -> PenCanvasInsertResult)? = null,
+    onInsert: (suspend (VectorPath, String, TextPlacement?) -> PenCanvasInsertResult)? = null,
     initialText: String = "",
     initialTextPlacement: TextPlacement? = null,
     initialDraft: PenPathDraft = PenPathDraft(CanvasSize(400f, 300f)),
     editingExisting: Boolean = false,
+    onReviewOriginalSubmission: (() -> Unit)? = null,
 ) {
     val colors = BoarderLessTheme.colors
+    val scope = rememberCoroutineScope()
+    var saving by remember { mutableStateOf(false) }
     val textMeasurer = rememberTextMeasurer()
     var labelText by remember { mutableStateOf(initialText) }
     var textPlacement by remember { mutableStateOf(initialTextPlacement) }
@@ -76,7 +81,7 @@ internal fun PenEditorDialog(
     val latestAdd by rememberUpdatedState(addMode)
     val latestViewport by rememberUpdatedState(viewport)
     var attemptedPath by remember { mutableStateOf<VectorPath?>(null) }
-    val cameraBusy = gesture != null || panning || colorEdit != null || attemptedPath != null
+    val cameraBusy = saving || gesture != null || panning || colorEdit != null || attemptedPath != null
     val draft = colorEdit?.preview() ?: gesture?.working ?: history.draft
     val path = remember(draft) { if (draft.anchors.size >= 2) draft.toVectorPath() else null }
 
@@ -86,6 +91,12 @@ internal fun PenEditorDialog(
     }
 
     fun close() {
+        if (saving) return
+        if (attemptedPath != null) {
+            // Closing an unconfirmed publication only closes this editor; it is not rollback.
+            onDismiss()
+            return
+        }
         if (colorEdit !=
             null
         ) {
@@ -123,28 +134,47 @@ internal fun PenEditorDialog(
                             if (editingExisting) Strings.penDraft.applyPath() else Strings.penDraft.insert(),
                             hint = if (editingExisting) Strings.penDraft.hintApplyPath() else Strings.penDraft.hintInsert(),
                             enabled =
-                                (attemptedPath != null || path != null) && gesture == null && !panning && colorEdit == null,
+                                !saving && attemptedPath == null && path != null && gesture == null && !panning && colorEdit == null,
                             onClick = {
                                 val candidate = attemptedPath ?: path
-                                if (candidate != null) {
-                                    when (onInsert(candidate, labelText, textPlacement)) {
-                                        PenCanvasInsertResult.Saved -> {
-                                            onDismiss()
-                                        }
-
-                                        PenCanvasInsertResult.Invalid -> {
-                                            attemptedPath = null
-                                            problem = Strings.penDraft.invalidPath()
-                                        }
-
-                                        else -> {
+                                if (candidate != null && !saving && attemptedPath == null) {
+                                    val frozenText = labelText
+                                    val frozenPlacement = textPlacement
+                                    saving = true
+                                    scope.launch {
+                                        try {
+                                            when (onInsert(candidate, frozenText, frozenPlacement)) {
+                                                PenCanvasInsertResult.Saved -> onDismiss()
+                                                PenCanvasInsertResult.Invalid -> {
+                                                    attemptedPath = null
+                                                    problem = Strings.penDraft.invalidPath()
+                                                }
+                                                PenCanvasInsertResult.Stale -> {
+                                                    problem = Strings.penDraft.sourceChanged()
+                                                }
+                                                PenCanvasInsertResult.Retry, PenCanvasInsertResult.Unconfirmed -> {
+                                                    attemptedPath = candidate
+                                                    problem = Strings.penDraft.publicationUnconfirmed()
+                                                }
+                                            }
+                                        } catch (cancelled: CancellationException) {
                                             attemptedPath = candidate
-                                            problem = Strings.penDraft.insertFailed()
+                                            problem = Strings.penDraft.publicationUnconfirmed()
+                                            throw cancelled
                                         }
+                                        catch (_: Exception) {
+                                            attemptedPath = candidate
+                                            problem = Strings.penDraft.publicationUnconfirmed()
+                                        } finally { saving = false }
                                     }
                                 }
                             },
                         )
+                    }
+                    problem?.let { BasicText(it, style = TextStyle(color = colors.accent, fontSize = 11.sp)) }
+                    if (attemptedPath != null) ShellButton(Strings.common.close(), enabled = !saving, onClick = ::close)
+                    if (attemptedPath != null && !saving) onReviewOriginalSubmission?.let { reviewOriginal ->
+                        ShellButton(Strings.draftReview.originalTransactions(), onClick = { close(); reviewOriginal() })
                     }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(ButtonGap)) {
                         ShellButton(Strings.penDraft.alignmentGuides(), accent = showAlignment, enabled = !cameraBusy,
@@ -370,8 +400,8 @@ internal fun PenEditorDialog(
                                     }
                                 },
                             )
-                            ShellButton(if (discardArmed) Strings.penDraft.confirmDiscard() else Strings.common.close(), onClick = ::close)
-                            if (discardArmed) ShellButton(Strings.common.cancel(), onClick = { discardArmed = false })
+                            ShellButton(if (discardArmed) Strings.penDraft.confirmDiscard() else Strings.common.close(), enabled = !saving, onClick = ::close)
+                            if (discardArmed) ShellButton(Strings.common.cancel(), enabled = !saving, onClick = { discardArmed = false })
                         }
                         BasicText(Strings.penDraft.instructions(), style = TextStyle(color = colors.contentMuted, fontSize = 11.sp))
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -455,7 +485,7 @@ internal fun PenEditorDialog(
                                 onClick = { viewport = PenEditorViewport.reset(history.draft.viewBox) },
                             )
                         }
-                        problem?.let { BasicText(it, style = TextStyle(color = colors.accent, fontSize = 11.sp)) }
+                        if (saving) BasicText(Strings.status.savingChanges(1), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
                     }
                     Canvas(
                         Modifier
@@ -464,8 +494,8 @@ internal fun PenEditorDialog(
                             .clipToBounds()
                             .background(colors.canvas)
                             .onSizeChanged { previewSize = it }
-                            .pointerInput(previewSize, panMode, showAlignment, snapAlignment, colorEdit != null, attemptedPath != null) {
-                                if (colorEdit != null || attemptedPath != null) return@pointerInput
+                            .pointerInput(previewSize, panMode, showAlignment, snapAlignment, colorEdit != null, attemptedPath != null, saving) {
+                                if (saving || colorEdit != null || attemptedPath != null) return@pointerInput
                                 val padding = 24.dp.toPx()
                                 awaitEachGesture {
                                     val down = awaitFirstDown()

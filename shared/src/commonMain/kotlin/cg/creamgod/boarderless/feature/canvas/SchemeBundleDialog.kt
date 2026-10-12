@@ -14,19 +14,32 @@ import cg.creamgod.boarderless.data.*
 import cg.creamgod.boarderless.data.persistence.QuickScheme
 import cg.creamgod.boarderless.data.persistence.QuickSchemeRepository
 import cg.creamgod.boarderless.data.persistence.AwaitedQuickSchemeRepository
-import cg.creamgod.boarderless.data.remote.BackendAssetTransferGateway
+import cg.creamgod.boarderless.data.persistence.QuickSchemeSaveIntent
+import cg.creamgod.boarderless.data.remote.randomUuid
 import cg.creamgod.boarderless.designsystem.*
 import cg.creamgod.boarderless.domain.model.Workspace
 import cg.creamgod.boarderless.i18n.Strings
 import kotlinx.coroutines.*
 
 /** Save may have completed before an IO error. Re-read exact content before allocating a library ID. */
-internal fun saveMaterializedBundle(library: QuickSchemeRepository, prepared: QuickScheme): QuickScheme =
+internal fun saveMaterializedBundle(library: QuickSchemeRepository, prepared: QuickScheme, requestId: String? = null): QuickScheme =
+    if (requestId != null && library.supportsIdentifiedSave)
+        run {
+            library.stageIdentifiedSave(QuickSchemeSaveIntent(requestId, prepared.copy(id = 0)))
+            library.saveIdentified(requestId, prepared.payload, prepared.name, prepared.schemaVersion, prepared.sourceWorkspaceId)
+        }
+    else
     library.list().filter { it.name == prepared.name.trim() && it.payload == prepared.payload &&
         it.schemaVersion == prepared.schemaVersion && it.sourceWorkspaceId == prepared.sourceWorkspaceId }.minByOrNull { it.id }
         ?: library.save(prepared.payload, prepared.name, prepared.schemaVersion, prepared.sourceWorkspaceId)
 
-internal suspend fun saveMaterializedBundle(library: AwaitedQuickSchemeRepository, prepared: QuickScheme): QuickScheme =
+internal suspend fun saveMaterializedBundle(library: AwaitedQuickSchemeRepository, prepared: QuickScheme, requestId: String? = null): QuickScheme =
+    if (requestId != null && library.supportsIdentifiedSave)
+        run {
+            library.stageIdentifiedSave(QuickSchemeSaveIntent(requestId, prepared.copy(id = 0)))
+            library.saveIdentified(requestId, prepared.payload, prepared.name, prepared.schemaVersion, prepared.sourceWorkspaceId)
+        }
+    else
     library.list().filter { it.name == prepared.name.trim() && it.payload == prepared.payload &&
         it.schemaVersion == prepared.schemaVersion && it.sourceWorkspaceId == prepared.sourceWorkspaceId }.minByOrNull { it.id }
         ?: library.save(prepared.payload, prepared.name, prepared.schemaVersion, prepared.sourceWorkspaceId)
@@ -53,12 +66,13 @@ internal fun schemeBundleScopeMatches(owner: WorkspaceSession, baseline: Workspa
     val baseline = remember { sourceBaseline }
     val exportScheme = remember { requestedExportScheme }
     val scope = rememberCoroutineScope()
-    val gateway = remember(repository) { repository.localAssetGateway ?: BackendAssetTransferGateway() }
+    val gateway = remember(repository) { repository.localAssetGateway ?: requireNotNull(repository.syncAssetGatewayFactory).invoke() }
     val latestRead by rememberUpdatedState(readLive)
     val latestSaved by rememberUpdatedState(onSaved)
     val latestDismiss by rememberUpdatedState(onDismiss)
     var reviewed by remember { mutableStateOf<ReviewedSchemeBundle?>(null) }
     var prepared by remember { mutableStateOf<QuickScheme?>(null) }
+    val saveRequestId = remember { randomUuid() }
     var confirmed by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var downloads by remember { mutableStateOf<List<SchemeBundleDestination>>(emptyList()) }
@@ -67,6 +81,7 @@ internal fun schemeBundleScopeMatches(owner: WorkspaceSession, baseline: Workspa
     var job by remember { mutableStateOf<Job?>(null) }
     val selected = exportScheme ?: reviewed?.scheme
     val payload = remember(selected) { selected?.let(::decodeQuickSchemePayload) }
+    val referenceImportAllowed = exportScheme != null || payload?.externalMedia?.isNotEmpty() != true || repository.supportsExternalMedia
     val liveState = readLive()
     val current = schemeBundleScopeMatches(owner, baseline, liveState) && (exportScheme != null || liveState.session?.canEditContent == true)
     fun valid(): Boolean {
@@ -145,6 +160,7 @@ internal fun schemeBundleScopeMatches(owner: WorkspaceSession, baseline: Workspa
                     BasicText(it.name, style = TextStyle(color = colors.contentText, fontSize = 14.sp))
                     payload?.let { definition -> QuickSchemePreview(definition, Modifier.fillMaxWidth().height(240.dp)) }
                     val count = reviewed?.assets?.size ?: payload?.media?.flatMap { listOfNotNull(it.assetId, it.thumbnailAssetId) }?.distinct()?.size ?: 0
+                    if (payload?.externalMedia?.isNotEmpty() == true) BasicText(Strings.bundle.externalReferences(payload.externalMedia.size), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
                     BasicText(Strings.bundle.assetCount(count), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
                     BasicText(Strings.bundle.destination(baseline.title), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
                     reviewed?.assets?.forEachIndexed { index, asset ->
@@ -154,15 +170,16 @@ internal fun schemeBundleScopeMatches(owner: WorkspaceSession, baseline: Workspa
                     }
                 }
                 val sourceAvailable = exportScheme == null || payload?.media?.isEmpty() == true || exportScheme.sourceWorkspaceId == baseline.id.value
+                if (!referenceImportAllowed) BasicText(Strings.giphy.unsupportedWorkspace(), style = TextStyle(color = colors.danger, fontSize = 12.sp))
                 if (!sourceAvailable) BasicText(Strings.bundle.openSource(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
                 if (!current) BasicText(Strings.sequence.stale(), style = TextStyle(color = colors.danger, fontSize = 12.sp))
                 if (busy) BasicText(Strings.bundle.working(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
                 problem?.let { BasicText(it, style = TextStyle(color = colors.danger, fontSize = 12.sp)) }
                 ShellButton(if (confirmed) Strings.schemes.confirmed() else Strings.bundle.confirm(),
-                    enabled = selected != null && current && sourceAvailable && !busy,
+                    enabled = selected != null && current && sourceAvailable && referenceImportAllowed && !busy,
                     accent = confirmed, onClick = { confirmed = !confirmed })
                 ShellButton(if (exportScheme == null) Strings.bundle.importSave() else if (runtime.usesBrowserDownload) Strings.bundle.exportDownload() else Strings.bundle.exportSave(),
-                    enabled = confirmed && selected != null && current && sourceAvailable && !busy &&
+                    enabled = confirmed && selected != null && current && sourceAvailable && referenceImportAllowed && !busy &&
                         (exportScheme != null || (owner.canEditContent && runtime.receipts != null)), onClick = {
                         busy = true
                         problem = null
@@ -187,6 +204,7 @@ internal fun schemeBundleScopeMatches(owner: WorkspaceSession, baseline: Workspa
                                 } else {
                                     require(authority.canEditContent)
                                     val bundle = checkNotNull(reviewed)
+                                    require(repository.supportsExternalMedia || checkNotNull(decodeQuickSchemePayload(bundle.scheme)).externalMedia.isEmpty())
                                     val digest = bundle.digest.joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
                                     val receipts = checkNotNull(runtime.receipts).invoke(authority, digest, bundle.assets)
                                     if (prepared == null) prepared = QuickSchemeBundleCodec.materialize(bundle, authority, gateway, ::valid, ::fresh,
@@ -195,7 +213,7 @@ internal fun schemeBundleScopeMatches(owner: WorkspaceSession, baseline: Workspa
                                         { sourceId, media -> receipts.ready(bundle.assets.single { it.sourceId == sourceId }, media) })
                                     fresh()
                                     check(valid())
-                                    val saved = saveMaterializedBundle(library, checkNotNull(prepared))
+                                    val saved = saveMaterializedBundle(library, checkNotNull(prepared), saveRequestId)
                                     check(valid())
                                     latestSaved(saved)
                                     close()

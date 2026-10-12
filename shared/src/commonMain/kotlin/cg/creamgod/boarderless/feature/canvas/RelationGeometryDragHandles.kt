@@ -12,6 +12,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.geometry.Offset
 import cg.creamgod.boarderless.data.remote.randomUuid
 import cg.creamgod.boarderless.designsystem.BoarderLessTheme
 import cg.creamgod.boarderless.domain.model.*
@@ -47,7 +48,22 @@ internal fun RelationGeometryDragHandles(
             listOf(RelationGeometryHandle.LoopExtent to ((points[1] + points[2]) * 0.5f))
         } else if (route is RelationRoute.Manual) {
             val preview = (rendered.geometry?.route as? RelationRoute.Manual)?.waypoints ?: route.waypoints
-            preview.mapIndexed { index, point -> RelationGeometryHandle.Waypoint(index) to point }
+            val insertionIndex = if (preview.size == route.waypoints.size + 1) {
+                preview.indices.firstOrNull { removed -> preview.filterIndexed { index, _ -> index != removed } == route.waypoints }
+            } else null
+            val existingHandles = route.waypoints.mapIndexed { index, point ->
+                val previewIndex = index + if (insertionIndex != null && index >= insertionIndex) 1 else 0
+                RelationGeometryHandle.Waypoint(index) to (preview.getOrNull(previewIndex) ?: point)
+            }
+            val originalPoints = relationWorldRoute(relation, workspace.objects).orEmpty()
+            val insertionHandles = if (route.waypoints.size < 32) originalPoints.zipWithNext().mapIndexedNotNull { index, (a, b) ->
+                val screen = viewport.worldToScreen(b) - viewport.worldToScreen(a)
+                // Avoid laying a new touch target on top of the endpoint/vertex handles.
+                if (screen.x * screen.x + screen.y * screen.y < 56f * 56f * density * density) null
+                else RelationGeometryHandle.InsertWaypoint(index) to
+                    (if (index == insertionIndex) preview[index] else (a + b) * .5f)
+            } else emptyList()
+            insertionHandles + existingHandles
         } else {
             listOf(
                 RelationGeometryHandle.NewWaypoint to
@@ -79,7 +95,12 @@ internal fun RelationGeometryDragHandles(
         ) {
             Canvas(Modifier.fillMaxSize()) {
                 drawCircle(colors.canvas, 7 * density)
-                drawCircle(colors.selection, 5 * density)
+                if (handle is RelationGeometryHandle.InsertWaypoint) {
+                    val markCenter = Offset(size.width * .5f, size.height * .5f)
+                    drawCircle(colors.selection, 3 * density)
+                    drawLine(colors.canvas, markCenter - Offset(2 * density, 0f), markCenter + Offset(2 * density, 0f), density)
+                    drawLine(colors.canvas, markCenter - Offset(0f, 2 * density), markCenter + Offset(0f, 2 * density), density)
+                } else drawCircle(colors.selection, 5 * density)
             }
         }
     }

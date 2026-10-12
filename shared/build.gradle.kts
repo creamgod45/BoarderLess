@@ -225,6 +225,7 @@ kotlin {
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.androidx.lifecycle.runtimeCompose)
             implementation(libs.ktor.client.core)
+            implementation(libs.ktor.client.websockets)
             implementation(libs.ktor.client.contentNegotiation)
             implementation(libs.ktor.client.engineDefaults)
             implementation(libs.ktor.serialization.kotlinxJson)
@@ -283,9 +284,12 @@ tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
 
 // Karma loads these scripts outside the compiled Kotlin test bundle.
 tasks.matching { it.name == "jsBrowserTest" || it.name == "wasmJsBrowserTest" }.configureEach {
+    inputs.dir(layout.projectDirectory.dir("karma.config.d"))
     inputs.file(rootProject.layout.projectDirectory.file("webApp/src/webMain/resources/media-import.js"))
     inputs.file(rootProject.layout.projectDirectory.file("webApp/src/webMain/resources/image-export.js"))
     inputs.file(rootProject.layout.projectDirectory.file("webApp/src/webMain/resources/durable-records.js"))
+    inputs.file(rootProject.layout.projectDirectory.file("webApp/src/webMain/resources/local-originals.js"))
+    inputs.file(layout.projectDirectory.file("src/webTest/resources/local-originals-fixture.js"))
     inputs.file(rootProject.layout.projectDirectory.file("webApp/src/webMain/resources/scheme-bundle.js"))
     inputs.file(layout.projectDirectory.file("src/webTest/resources/scheme-bundle-fixture.js"))
     inputs.file(layout.projectDirectory.file("src/webTest/resources/durable-records-fixture.js"))

@@ -20,6 +20,8 @@ internal object WorkspaceDraftBundleTransitions {
         before: Workspace,
         operation: WorkspaceOperation,
         newDraftId: String,
+        intent: cg.creamgod.boarderless.domain.history.WorkspaceHistoryIntent? = null,
+        beforeHistory: cg.creamgod.boarderless.domain.history.WorkspaceHistory? = null,
     ): WorkspaceDraftScopeBundle {
         require(session.userId == scope.userId && session.clientId == scope.clientId)
         require(session.workspace.id == before.id && before.id.value == scope.workspaceId)
@@ -40,9 +42,14 @@ internal object WorkspaceDraftBundleTransitions {
             )
         require(!journal.quarantined && journal.replay() == before && journal.operations.size < 200)
         require(operation.operationId.isNotBlank() && journal.operations.none { it.operationId == operation.operationId })
+        beforeHistory?.let { require(it.workspace == before) }
+        val baseline = if (journal.operations.isEmpty()) beforeHistory ?: journal.baseHistory else journal.baseHistory
         val result =
             (previous ?: WorkspaceDraftScopeBundle(scope = scope)).copy(
-                journal = journal.copy(operations = journal.operations + operation),
+                journal = journal.copy(operations = journal.operations + operation,
+                    baseHistory = baseline,
+                    historyIntents = if (intent == null) journal.historyIntents
+                        else journal.historyIntents + (operation.operationId to intent)),
                 pending = previous?.pending,
                 acknowledged = previous?.acknowledged,
                 legacyImportDigest = previous?.legacyImportDigest,
@@ -65,6 +72,10 @@ internal object WorkspaceDraftBundleTransitions {
         }
         val journal = requireNotNull(previous.journal)
         require(!journal.quarantined && journal.headTransactionId == null)
+        pending.historyIntent?.let { intent ->
+            require(journal.operations.firstOrNull()?.operationId == pending.localOperationId &&
+                journal.historyIntents[pending.localOperationId] == intent)
+        }
         require(journal.lastAcknowledgedTransactionId != pending.request.transactionId)
         return snapshot(previous.copy(journal = journal.copy(headTransactionId = pending.request.transactionId), pending = pending))
     }
@@ -224,6 +235,7 @@ internal object WorkspaceDraftBundleTransitions {
         submitted: PendingWorkspaceSubmission,
         version: Long,
         seq: Long,
+        confirmedHistory: cg.creamgod.boarderless.domain.history.WorkspaceHistory? = null,
     ): WorkspaceDraftScopeBundle {
         val previous = snapshot(current)
         require(previous.scope == submitted.scope)
@@ -238,6 +250,7 @@ internal object WorkspaceDraftBundleTransitions {
         require(version > journal.baseVersion && seq > journal.baseServerSeq)
         val operation = journal.operations.first()
         val after = (operation.applyTo(journal.baseWorkspace) as OperationResult.Applied).workspace
+        confirmedHistory?.let { require(it.workspace == after) }
         return snapshot(
             previous.copy(
                 pending = null,
@@ -248,6 +261,9 @@ internal object WorkspaceDraftBundleTransitions {
                         baseVersion = version,
                         baseServerSeq = seq,
                         operations = journal.operations.drop(1),
+                        historyIntents = journal.historyIntents - operation.operationId,
+                        baseHistory = confirmedHistory ?: journal.baseHistory?.applyRecorded(operation,
+                            requireNotNull(journal.historyIntents[operation.operationId]))?.history,
                         headTransactionId = null,
                         lastAcknowledgedTransactionId = submitted.request.transactionId,
                     ),

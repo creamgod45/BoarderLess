@@ -71,6 +71,8 @@ internal class AiSseHttpTransport(
     fun events(request: AiCoworkRequest): Flow<AiSseDataEvent> =
         flow {
             var consumerFailure: Throwable? = null
+            var receivedFrame = false
+            var responseSummary: AiProbeDiagnostic? = null
             try {
                 channelFlow {
                     currentCoroutineContext().ensureActive()
@@ -123,7 +125,7 @@ internal class AiSseHttpTransport(
                                         authenticationChallenge = aiAuthenticationChallenge(response.headers),
                                         responseRequestId = responseRequestId,
                                         responseHeadersMillis = responseHeadersMillis,
-                                    ),
+                                    ).also { responseSummary = it },
                                 )
                                 if (response.status.value != 200) {
                                     val providerError = if (typeCategory == AiProbeResponseType.Json) {
@@ -184,6 +186,13 @@ internal class AiSseHttpTransport(
                         }
                 }.buffer(Channel.RENDEZVOUS).collect { delivery ->
                     try {
+                        // Tool-only replies need visible progress too. This means a
+                        // bounded UTF-8 SSE frame arrived, NOT that its JSON/tool call
+                        // was accepted or that a complete model response was received.
+                        if (!receivedFrame) {
+                            receivedFrame = true
+                            onDiagnostic(requireNotNull(responseSummary).copy(stage = AiProbeStage.Receiving))
+                        }
                         emit(delivery.event)
                     } catch (failure: Throwable) {
                         consumerFailure = failure

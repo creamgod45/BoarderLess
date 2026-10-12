@@ -219,6 +219,29 @@ class GiphyClientTest {
         ).forEach { assertFalse(isGiphyMediaUrl(it)) }
     }
 
+    @Test fun durableReferenceRoundTripFetchesFreshUrlAndDoesNotReviveMissingContent() = runTest {
+        val original = GiphyItem("gif-id", url = "https://giphy.com/gifs/old", images = mapOf(
+            "original" to GiphyRendition(url = "https://media.giphy.com/old.gif?token=old")))
+        val serialized = kotlinx.serialization.json.Json.encodeToString(
+            cg.creamgod.boarderless.domain.media.ExternalMediaReference.serializer(), original.durableReference())
+        assertEquals("{\"provider\":\"giphy\",\"id\":\"gif-id\"}", serialized)
+        val reopened = kotlinx.serialization.json.Json.decodeFromString(
+            cg.creamgod.boarderless.domain.media.ExternalMediaReference.serializer(), serialized)
+        var calls = 0
+        val client = GiphyClient("fixture", HttpClient(MockEngine { request ->
+            assertEquals("gif-id", request.url.parameters["ids"])
+            calls++
+            respond(if (calls == 1) """{"data":[{"id":"gif-id","images":{"original":{"url":"https://media.giphy.com/new.gif?token=new"}}}],"meta":{"status":200}}"""
+                else """{"data":[],"meta":{"status":200}}""")
+        }), GiphyRequestBudget({ 0 }))
+        try {
+            assertEquals("https://media.giphy.com/new.gif?token=new", client.resolveReferences(listOf(reopened)).single().images.getValue("original").url)
+            assertTrue(client.resolveReferences(listOf(reopened)).isEmpty())
+            assertEquals(2, calls)
+            assertEquals(original.durableReference(), reopened)
+        } finally { client.close() }
+    }
+
     @Test fun lookupBatchesReferencesAndKeepsProviderOrderAndMissingIds() =
         runTest {
             var calls = 0
@@ -260,7 +283,7 @@ class GiphyClientTest {
                     GiphyRequestBudget({ 0 }, limit = 1),
                 )
             try {
-                listOf(emptyList(), listOf(""), listOf("a,b"), listOf("a\n"), List(101) { "id$it" }).forEach {
+                listOf(emptyList(), listOf(""), listOf("a,b"), listOf("a\n"), listOf("https://media.giphy.com/gif"), listOf("../file"), listOf("a".repeat(129)), List(101) { "id$it" }).forEach {
                     assertEquals(GiphyIssue.InvalidQuery, assertFailsWith<GiphyException> { client.resolve(it) }.issue)
                 }
                 assertEquals(0, calls)

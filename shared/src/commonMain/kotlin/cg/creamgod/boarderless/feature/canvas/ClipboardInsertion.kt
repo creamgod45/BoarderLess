@@ -19,13 +19,13 @@ internal fun prepareClipboardInsertion(
     newId: () -> String = ::randomUuid,
 ): ClipboardInsertion {
     require(validateClipboardPayload(payload) == null)
-    val originals = payload.groups.map { it.originalId } + payload.nodes.map { it.originalId } + payload.media.map { it.originalId }
+    val originals = payload.groups.map { it.originalId } + payload.nodes.map { it.originalId } + payload.media.map { it.originalId } + payload.externalMedia.map { it.originalId }
     val idMap = originals.associateWith { CanvasObjectId(newId()) }
     require(idMap.values.distinct().size == idMap.size && idMap.values.none { it in workspace.objects })
     val relationIds = payload.relations.map { RelationId(newId()) }
     require(relationIds.distinct().size == relationIds.size && relationIds.none { it in workspace.relations })
     val positions =
-        payload.groups.map { Vec2(it.x, it.y) } + payload.nodes.map { Vec2(it.x, it.y) } + payload.media.map { Vec2(it.x, it.y) }
+        payload.groups.map { Vec2(it.x, it.y) } + payload.nodes.map { Vec2(it.x, it.y) } + payload.media.map { Vec2(it.x, it.y) } + payload.externalMedia.map { Vec2(it.x, it.y) }
     val origin = Vec2(positions.minOf(Vec2::x), positions.minOf(Vec2::y))
     val offset = targetWorldPosition?.let { it - origin } ?: defaultOffset
     val materialized =
@@ -73,8 +73,9 @@ internal fun clipboardMaterialization(
         (
             payload.groups.map { it.originalId to it.zOffset } +
                 payload.nodes.map { it.originalId to it.zOffset } +
-                payload.media.map { it.originalId to it.zOffset }
-        ).sortedBy { (_, zOffset) -> zOffset }
+                payload.media.map { it.originalId to it.zOffset } + payload.externalMedia.map { it.originalId to it.zOffset }
+        ).also { require(top <= Long.MAX_VALUE - it.size.toLong()) { "Clipboard layer order would overflow" } }
+            .sortedBy { (_, zOffset) -> zOffset }
             .mapIndexed { index, (id, _) -> id to (top + index + 1L) }
             .toMap()
     val groups =
@@ -133,6 +134,12 @@ internal fun clipboardMaterialization(
                 thumbnailAssetId = copied.thumbnailAssetId,
             )
         }
+    val externalMedia = payload.externalMedia.map { copied ->
+        ExternalMediaNode(idMap.getValue(copied.originalId), parentId = copied.parentOriginalId?.let(idMap::get),
+            zIndex = zOrder.getValue(copied.originalId), locked = copied.locked,
+            transform = CanvasTransform(Vec2(copied.x + offset.x, copied.y + offset.y), CanvasSize(copied.width, copied.height), copied.rotationDegrees),
+            reference = copied.reference, altText = copied.altText)
+    }
     val relations =
         payload.relations.mapIndexed { index, copied ->
             val sourceId = idMap.getValue(copied.sourceId)
@@ -167,7 +174,7 @@ internal fun clipboardMaterialization(
     return Workspace(
         WorkspaceId("clipboard_materialization"),
         "Clipboard",
-        objects = (groups + nodes + media).associateBy { it.id },
+        objects = (groups + nodes + media + externalMedia).associateBy { it.id },
         relations = relations.associateBy { it.id },
         sequenceDiagrams = diagrams.associateBy { it.containerId },
     )

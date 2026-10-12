@@ -101,7 +101,7 @@ class ClipboardPayloadValidationTest {
         )
         assertEquals(
             ClipboardPayloadIssue.UnsupportedVersion,
-            validateClipboardPayload(ClipboardPayload(version = 9, nodes = listOf(node("a")))),
+            validateClipboardPayload(ClipboardPayload(version = 10, nodes = listOf(node("a")))),
         )
         assertEquals(ClipboardPayloadIssue.Empty, validateClipboardPayload(ClipboardPayload(nodes = emptyList())))
     }

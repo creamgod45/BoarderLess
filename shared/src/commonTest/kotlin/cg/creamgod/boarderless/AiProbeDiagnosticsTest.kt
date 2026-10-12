@@ -1,6 +1,9 @@
 package cg.creamgod.boarderless
 
 import cg.creamgod.boarderless.data.ai.*
+import cg.creamgod.boarderless.feature.canvas.aiProbeDiagnosticLabel
+import cg.creamgod.boarderless.feature.canvas.aiProbeDiagnosticHint
+import cg.creamgod.boarderless.i18n.Strings
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.*
 import io.ktor.client.plugins.HttpTimeout
@@ -11,6 +14,27 @@ import kotlin.test.*
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AiProbeDiagnosticsTest {
+    @Test fun authenticationGuidanceDoesNotInventRejectingLayerOrKeyValidity() {
+        val rejected = AiProbeDiagnostic(AiProbeStage.Failed, AiProbeFailure.HttpRejected, 401)
+        assertEquals(AiAuthenticationGuidance.Unauthorized, rejected.authenticationGuidance())
+        assertEquals(Strings.aiProbe.debugAuthenticationRejected(), aiProbeDiagnosticLabel(rejected))
+        assertEquals(Strings.aiProbe.debugHintAuth(), aiProbeDiagnosticHint(rejected))
+        assertEquals(Strings.aiProbe.debugAccessDenied(), aiProbeDiagnosticLabel(rejected.copy(httpStatus = 403)))
+        assertEquals(Strings.aiProbe.debugHintMissingCredentials(), aiProbeDiagnosticHint(
+            rejected.copy(preparedAuthentication = AiPreparedAuthentication.None)))
+        assertEquals(Strings.aiProbe.debugHintBasicChallenge(), aiProbeDiagnosticHint(
+            rejected.copy(authenticationChallenge = AiAuthenticationChallenge.Basic)))
+        assertEquals(AiAuthenticationGuidance.MissingCredentials,
+            rejected.copy(preparedAuthentication = AiPreparedAuthentication.None).authenticationGuidance())
+        assertEquals(AiAuthenticationGuidance.BasicChallenge,
+            rejected.copy(preparedAuthentication = AiPreparedAuthentication.Bearer,
+                authenticationChallenge = AiAuthenticationChallenge.Basic).authenticationGuidance())
+        assertEquals(AiAuthenticationGuidance.Forbidden,
+            rejected.copy(httpStatus = 403, preparedAuthentication = AiPreparedAuthentication.None).authenticationGuidance())
+        assertNull(rejected.copy(httpStatus = 400).authenticationGuidance())
+        assertNull(rejected.copy(failure = AiProbeFailure.WorkspaceBackend).authenticationGuidance())
+        assertNull(rejected.copy(stage = AiProbeStage.HttpResponse).authenticationGuidance())
+    }
     @Test fun rejectionReportsPreparedHeaderShapeAndSafeChallengeOnly() = runTest {
         val events = mutableListOf<AiProbeDiagnostic>()
         var calls = 0

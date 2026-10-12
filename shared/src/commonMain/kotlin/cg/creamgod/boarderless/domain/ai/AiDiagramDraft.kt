@@ -153,6 +153,9 @@ internal class AiDiagramDraft(
     private val proposalId = randomUuid()
     private var argumentBytes = 0L
 
+    /** Overlaps among approved objects that existed before any tool ran; never reported as AI mistakes. */
+    private val baselineOverlaps: Set<Pair<CanvasObjectId, CanvasObjectId>> by lazy { overlappingPairs(baseline!!, references.values.toSet()) }
+
     init {
         require(identifier(requestId) && identifier(sessionId))
         require(approved.size <= 128 && approved.all { it in workspace.objects })
@@ -263,6 +266,76 @@ internal class AiDiagramDraft(
         requireTool(values.isNotEmpty() && values.size <= 128 && values.map(ids).distinct().size == values.size)
     }
 
+    private fun overlappingPairs(
+        graph: Workspace,
+        ids: Set<CanvasObjectId>,
+    ): Set<Pair<CanvasObjectId, CanvasObjectId>> {
+        val nodes = ids.mapNotNull { graph.objects[it] }
+        fun isAncestor(
+            ancestor: CanvasObject,
+            node: CanvasObject,
+        ): Boolean {
+            var current = node.parentId
+            val seen = mutableSetOf<CanvasObjectId>()
+            while (current != null && seen.add(current)) {
+                if (current == ancestor.id) return true
+                current = graph.objects[current]?.parentId
+            }
+            return false
+        }
+        val result = mutableSetOf<Pair<CanvasObjectId, CanvasObjectId>>()
+        for (i in nodes.indices) {
+            for (j in i + 1 until nodes.size) {
+                val a = nodes[i]
+                val b = nodes[j]
+                // A group is expected to contain its own descendants.
+                if (isAncestor(a, b) || isAncestor(b, a)) continue
+                val ta = a.transform
+                val tb = b.transform
+                val overlaps =
+                    ta.position.x < tb.position.x + tb.size.width && tb.position.x < ta.position.x + ta.size.width &&
+                        ta.position.y < tb.position.y + tb.size.height && tb.position.y < ta.position.y + ta.size.height
+                if (overlaps) result += if (a.id.value < b.id.value) a.id to b.id else b.id to a.id
+            }
+        }
+        return result
+    }
+
+    /** New overlaps only (axis-aligned bounds, rotation ignored), as logical IDs the model can act on. */
+    private fun newOverlaps(
+        graph: Workspace,
+        refs: Map<String, CanvasObjectId>,
+    ): JsonArray {
+        val byId = refs.entries.associate { it.value to it.key }
+        val found = overlappingPairs(graph, refs.values.toSet()) - baselineOverlaps
+        return JsonArray(
+            found.take(20).map { (a, b) ->
+                buildJsonObject {
+                    put("a", byId.getValue(a))
+                    put("b", byId.getValue(b))
+                }
+            },
+        )
+    }
+
+    private fun placedNodes(
+        graph: Workspace,
+        refs: Map<String, CanvasObjectId>,
+        names: Collection<String>,
+    ): JsonArray =
+        JsonArray(
+            names.mapNotNull { name ->
+                val node = refs[name]?.let(graph.objects::get) ?: return@mapNotNull null
+                buildJsonObject {
+                    put("id", name)
+                    put("x", node.transform.position.x)
+                    put("y", node.transform.position.y)
+                    put("width", node.transform.size.width)
+                    put("height", node.transform.size.height)
+                }
+            },
+        )
+
     private fun approvedGraph(
         graph: Workspace = working!!,
         refs: Map<String, CanvasObjectId> = references,
@@ -314,7 +387,13 @@ internal class AiDiagramDraft(
                                     put("color", node.colorToken)
                                 }
 
-                                is MediaNode -> {
+                                is cg.creamgod.boarderless.domain.model.ExternalMediaNode -> {
+                                    put("kind", "external-media")
+                                    put("text", node.altText)
+                                    put("mediaKind", "giphy")
+                                }
+
+                            is MediaNode -> {
                                     put("kind", "media")
                                     put("text", node.altText)
                                     put("mediaKind", node.mediaKind.token)
@@ -360,6 +439,7 @@ internal class AiDiagramDraft(
         return try {
             requireBoundedDraftJsonDepth(call.arguments)
             strictArguments(call.arguments)
+            val priorReferenceKeys = references.keys.toSet()
             var nextReferences = references
             var nextRelations = relationReferences.toMap()
             val operation: WorkspaceOperation? =
@@ -391,6 +471,7 @@ internal class AiDiagramDraft(
                             } else {
                                 buildJsonObject {
                                     put("valid", true)
+                                    put("overlaps", newOverlaps(working!!, references))
                                     put("proposalItems", items.size)
                                     put("committed", false)
                                 }
@@ -624,6 +705,9 @@ internal class AiDiagramDraft(
                 AiDiagramToolStatus.Proposed,
                 buildJsonObject {
                     put("logicalIds", JsonArray((nextReferences.keys + nextRelations.keys).map(::JsonPrimitive)))
+                    // Geometry feedback lets the model correct collisions in the same session instead of guessing.
+                    put("placed", placedNodes(applied.workspace, nextReferences, nextReferences.keys - priorReferenceKeys))
+                    put("overlaps", newOverlaps(applied.workspace, nextReferences))
                     put("proposalItems", items.size)
                     put("committed", false)
                 },

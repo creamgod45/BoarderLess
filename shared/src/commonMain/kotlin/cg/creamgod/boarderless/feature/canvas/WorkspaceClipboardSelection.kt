@@ -28,7 +28,7 @@ internal fun workspaceClipboardPayload(
             it.sourceObjectId in nodeIds && it.targetObjectId in nodeIds
         }
     return ClipboardPayload(
-        version = if (objects.filterIsInstance<TextNode>().any { it.textPlacement != null }) 8 else if (diagrams.isEmpty()) 6 else 7,
+        version = if (objects.any { it is ExternalMediaNode }) 9 else if (objects.filterIsInstance<TextNode>().any { it.textPlacement != null }) 8 else if (diagrams.isEmpty()) 6 else 7,
         sequenceDiagrams = diagrams.map { it.validatedSnapshot() },
         nodes =
             nodes.map { node ->
@@ -83,6 +83,12 @@ internal fun workspaceClipboardPayload(
                     zOffset = node.zIndex - minimumZ,
                 )
             },
+        externalMedia = objects.filterIsInstance<ExternalMediaNode>().map { node ->
+            ClipboardExternalMedia(node.id.value, node.transform.position.x, node.transform.position.y,
+                node.transform.size.width, node.transform.size.height, node.transform.rotationDegrees,
+                node.reference, node.altText, node.parentId?.takeIf { it in includedIdSet }?.value, node.locked,
+                node.zIndex - minimumZ)
+        },
         relations =
             relations.map { relation ->
                 ClipboardRelation(

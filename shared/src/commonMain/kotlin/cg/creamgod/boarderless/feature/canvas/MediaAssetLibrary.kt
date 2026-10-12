@@ -273,5 +273,6 @@ internal fun assetRejectionReasonLabel(reason: AssetRejectionReason): String =
         AssetRejectionReason.DimensionsExceeded -> Strings.media.rejectionDimensionsExceeded()
         AssetRejectionReason.InvalidDuration -> Strings.media.rejectionInvalidDuration()
         AssetRejectionReason.DurationExceeded -> Strings.media.rejectionDurationExceeded()
+        AssetRejectionReason.DeclaredMetadataMismatch -> Strings.media.rejectionDeclaredMetadataMismatch()
         AssetRejectionReason.Unknown -> Strings.media.rejectionUnknown()
     }

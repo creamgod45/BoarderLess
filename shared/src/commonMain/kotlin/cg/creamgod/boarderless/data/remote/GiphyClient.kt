@@ -1,5 +1,8 @@
 package cg.creamgod.boarderless.data.remote
 
+import cg.creamgod.boarderless.domain.media.ExternalMediaProvider
+import cg.creamgod.boarderless.domain.media.ExternalMediaReference
+import cg.creamgod.boarderless.domain.media.isExternalMediaId
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.get
@@ -35,6 +38,12 @@ class GiphyException(
     val url: String = "",
     val images: Map<String, GiphyRendition> = emptyMap(),
 )
+
+/** The only GIPHY data that may enter a durable canvas or portable scheme. */
+fun GiphyItem.durableReference(): ExternalMediaReference {
+    if (!isExternalMediaId(id)) throw GiphyException(GiphyIssue.InvalidResponse)
+    return ExternalMediaReference(ExternalMediaProvider.Giphy, id)
+}
 
 @Serializable data class GiphyPagination(
     val offset: Int = 0,
@@ -88,7 +97,18 @@ class GiphyRequestBudget(
         key: String,
         retrySeconds: Long?,
     ) = mutex.withLock {
-        blockedUntil[key] = nowMillis() + (retrySeconds?.coerceIn(1, 3600) ?: 3600) * 1000
+        val until = nowMillis() + (retrySeconds?.coerceIn(1, 3600) ?: 3600) * 1000
+        blockedUntil[key] = maxOf(blockedUntil[key] ?: 0L, until)
+    }
+
+    /** Read-only local advisory; does not consume quota or contact GIPHY. */
+    suspend fun remainingDelayMillis(key: String): Long = mutex.withLock {
+        val now = nowMillis()
+        val recent = calls[key].orEmpty().filter { now - it < 3_600_000 }
+        val quotaWait = if (recent.size >= limit) {
+            (3_600_000L - (now - checkNotNull(recent.minOrNull())).coerceAtLeast(0)).coerceAtLeast(0)
+        } else 0L
+        maxOf(quotaWait, ((blockedUntil[key] ?: 0L) - now).coerceAtLeast(0))
     }
 }
 
@@ -106,11 +126,12 @@ class GiphyClient(
     private val budget: GiphyRequestBudget = processBudget,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
+    suspend fun retryDelayMillis(): Long = budget.remainingDelayMillis(apiKey)
 
     /** Resolve up to 100 visible references in one request. Missing IDs remain missing, not deleted nodes. */
     suspend fun resolve(ids: List<String>): List<GiphyItem> {
         if (apiKey.isBlank()) throw GiphyException(GiphyIssue.MissingKey)
-        if (ids.size !in 1..100 || ids.any { id -> id.isBlank() || id.any { it == ',' || it.isWhitespace() || it.code < 32 } }) {
+        if (ids.size !in 1..100 || ids.any { !isExternalMediaId(it) }) {
             throw GiphyException(GiphyIssue.InvalidQuery)
         }
         currentCoroutineContext().ensureActive()
@@ -165,6 +186,12 @@ class GiphyClient(
         }
     }
 
+    /** Re-resolve durable identities; never substitute metadata from an earlier response. */
+    suspend fun resolveReferences(references: List<ExternalMediaReference>): List<GiphyItem> {
+        if (references.any { it.provider != ExternalMediaProvider.Giphy }) throw GiphyException(GiphyIssue.InvalidQuery)
+        return resolve(references.map { it.id })
+    }
+
     suspend fun browse(
         query: String?,
         offset: Int = 0,
@@ -210,7 +237,7 @@ class GiphyClient(
                 }
             currentCoroutineContext().ensureActive()
             if (payload.meta.status != 200 || payload.pagination.offset != offset || payload.pagination.count != payload.data.size ||
-                payload.data.size > 20
+                payload.data.size > 20 || payload.data.any { !isExternalMediaId(it.id) }
             ) {
                 throw GiphyException(GiphyIssue.InvalidResponse)
             }

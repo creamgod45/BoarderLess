@@ -32,6 +32,7 @@ import cg.creamgod.boarderless.i18n.resolveLanguage
 fun App(
     workspaceRepository: cg.creamgod.boarderless.data.CanvasWorkspaceRepository? = null,
     workspaceStorageRuntime: cg.creamgod.boarderless.data.WorkspaceStorageRuntime? = null,
+    syncServerRepository: (() -> cg.creamgod.boarderless.data.CanvasWorkspaceRepository)? = null,
     qaRuntime: QaRuntime = QaRuntime.Disabled,
     mediaImportRuntime: MediaImportRuntime = MediaImportRuntime.Unavailable,
     menuBridge: WorkspaceMenuBridge? = null,
@@ -54,20 +55,62 @@ fun App(
         activateLanguage(resolveLanguage(languagePreference, systemLanguageTag, Localization.languages))
         languageReady = true
     }
-    var storageMode by remember { mutableStateOf(if (workspaceStorageRuntime != null) uiPreferences.workspaceStorageMode else null) }
-    var storagePreferenceFailed by remember { mutableStateOf(false) }
-    val activeRepository = remember(workspaceStorageRuntime, workspaceRepository, storageMode) {
-        workspaceStorageRuntime?.let { runtime ->
-            when (storageMode) {
-                cg.creamgod.boarderless.data.WorkspaceStorageMode.Local -> runtime.localRepository()
-                cg.creamgod.boarderless.data.WorkspaceStorageMode.Server -> runtime.serverRepository()
-                null -> null
+    val initialStorageChoice = remember(workspaceStorageRuntime) {
+        runCatching {
+            if (workspaceStorageRuntime == null) null else {
+                val requested = cg.creamgod.boarderless.data.WorkspaceLaunchRequests.pending.value?.storageMode
+                if (requested != null) uiPreferences.workspaceStorageMode = requested
+                // An old server-mode preference must never make ordinary startup depend on
+                // network availability. Explicit external workspace requests retain their scope.
+                requested ?: workspaceStorageRuntime.initialMode
             }
-        } ?: workspaceRepository
+        }
     }
-    val activeMediaRuntime = remember(activeRepository, workspaceStorageRuntime, mediaImportRuntime) {
-        if (workspaceStorageRuntime != null && activeRepository != null) workspaceStorageRuntime.mediaRuntimeFor(activeRepository)
-        else mediaImportRuntime
+    val initialSession = remember(workspaceStorageRuntime, workspaceRepository) {
+        runCatching {
+            val runtime = workspaceStorageRuntime
+            val mode = initialStorageChoice.getOrNull()
+            if (runtime != null && mode != null) {
+                val created = runtime.createRepository(mode)
+                try { created to runtime.mediaRuntimeFor(created) }
+                catch (failure: Exception) {
+                    if (created !== workspaceRepository) runCatching { created.close() }
+                    throw failure
+                }
+            } else workspaceRepository to mediaImportRuntime
+        }
+    }
+    var storageMode by remember(workspaceStorageRuntime, workspaceRepository) {
+        mutableStateOf(if (initialSession.isFailure) null else initialStorageChoice.getOrNull())
+    }
+    var storagePreferenceFailed by remember(workspaceStorageRuntime, workspaceRepository) {
+        mutableStateOf(initialStorageChoice.isFailure || initialSession.isFailure)
+    }
+    var activeSession by remember(workspaceStorageRuntime, workspaceRepository) {
+        mutableStateOf(initialSession.getOrNull())
+    }
+    val activeRepository = activeSession?.first
+    val activeMediaRuntime = if (workspaceStorageRuntime == null) mediaImportRuntime else activeSession?.second ?: mediaImportRuntime
+    fun chooseStorage(chosen: cg.creamgod.boarderless.data.WorkspaceStorageMode): Boolean {
+        val runtime = workspaceStorageRuntime ?: return false
+        if (chosen == storageMode && activeSession != null && !storagePreferenceFailed) return true
+        var candidate: cg.creamgod.boarderless.data.CanvasWorkspaceRepository? = null
+        return try {
+            // Acquire platform storage/lease before discarding the current screen or
+            // persisting the choice. Failure retains the active repository and canvas.
+            val created = runtime.createRepository(chosen)
+            candidate = created
+            val preparedMedia = runtime.mediaRuntimeFor(created)
+            uiPreferences.workspaceStorageMode = chosen
+            activeSession = created to preparedMedia
+            storageMode = chosen
+            storagePreferenceFailed = false
+            true
+        } catch (_: Exception) {
+            candidate?.let { if (it !== activeRepository) runCatching { it.close() } }
+            storagePreferenceFailed = true
+            false
+        }
     }
     // Wait for the first catalog so the UI never flashes English before switching language.
     if (!languageReady) return
@@ -75,13 +118,16 @@ fun App(
         Box(modifier = Modifier.fillMaxSize()) {
             if (workspaceStorageRuntime != null && storageMode == null) {
                 cg.creamgod.boarderless.feature.canvas.WorkspaceStorageChooser(storagePreferenceFailed) { chosen ->
-                    runCatching { uiPreferences.workspaceStorageMode = chosen }
-                        .onSuccess { storagePreferenceFailed = false; storageMode = chosen }
-                        .onFailure { storagePreferenceFailed = true }
+                    chooseStorage(chosen)
                 }
             } else key(activeRepository) {
                 WorkspaceScreen(
                     workspaceRepository = activeRepository,
+                    syncServerRepository = workspaceStorageRuntime?.serverRepository ?: syncServerRepository,
+                    workspaceStorageMode = if (workspaceStorageRuntime == null) null else storageMode,
+                    onRequestStorageMode = if (workspaceStorageRuntime == null) null else ({ chosen ->
+                        chooseStorage(chosen)
+                    }),
                     onChooseStorageMode = if (workspaceStorageRuntime == null) null else ({ storageMode = null; storagePreferenceFailed = false }),
                     mediaImportRuntime = activeMediaRuntime,
                     draftBackupRuntime = draftBackupRuntime,

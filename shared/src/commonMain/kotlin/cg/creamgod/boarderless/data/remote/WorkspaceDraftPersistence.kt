@@ -39,6 +39,13 @@ internal interface WorkspaceDraftPersistence {
 
     fun stage(entry: PendingWorkspaceSubmission)
 
+    fun appendWithIntent(scope: PendingSubmissionScope, session: WorkspaceSession, before: Workspace,
+        operation: WorkspaceOperation, intent: cg.creamgod.boarderless.domain.history.WorkspaceHistoryIntent,
+        beforeHistory: cg.creamgod.boarderless.domain.history.WorkspaceHistory? = null) {
+        check(intent == cg.creamgod.boarderless.domain.history.WorkspaceHistoryIntent.Edit)
+        append(scope, session, before, operation)
+    }
+
     fun acknowledge(
         entry: PendingWorkspaceSubmission,
         version: Long,
@@ -50,6 +57,12 @@ internal interface WorkspaceDraftPersistence {
         id: String,
         current: WorkspaceSession,
     ): WorkspaceDraftJournal
+
+    fun acknowledgeWithHistory(entry: PendingWorkspaceSubmission, version: Long, seq: Long,
+        history: cg.creamgod.boarderless.domain.history.WorkspaceHistory?) {
+        check(history == null) { "Confirmed history handover is unavailable" }
+        acknowledge(entry, version, seq)
+    }
 
     fun remove(
         scope: PendingSubmissionScope,
@@ -67,6 +80,10 @@ internal class SettingsWorkspaceDraftPersistence(
     private val journals: WorkspaceDraftJournalStore,
     private val submissions: PendingWorkspaceSubmissionStore,
 ) : WorkspaceDraftPersistence {
+    override fun appendWithIntent(scope: PendingSubmissionScope, session: WorkspaceSession, before: Workspace,
+        operation: WorkspaceOperation, intent: cg.creamgod.boarderless.domain.history.WorkspaceHistoryIntent,
+        beforeHistory: cg.creamgod.boarderless.domain.history.WorkspaceHistory?) =
+        journals.append(scope, session, before, operation, intent, beforeHistory)
     override fun journal(scope: PendingSubmissionScope) = journals.load(scope)
 
     override fun pending(scope: PendingSubmissionScope) = submissions.load(scope)
@@ -85,6 +102,11 @@ internal class SettingsWorkspaceDraftPersistence(
     ) = journals.append(scope, session, before, operation)
 
     override fun stage(entry: PendingWorkspaceSubmission) {
+        entry.historyIntent?.let { intent ->
+            val journal = checkNotNull(journals.load(entry.scope))
+            check(journal.operations.firstOrNull()?.operationId == entry.localOperationId &&
+                journal.historyIntents[entry.localOperationId] == intent)
+        }
         submissions.save(entry)
         journals.markSubmitted(entry.scope, entry.localOperationId, entry.request.transactionId)
     }
@@ -93,8 +115,11 @@ internal class SettingsWorkspaceDraftPersistence(
         entry: PendingWorkspaceSubmission,
         version: Long,
         seq: Long,
-    ) {
-        journals.acknowledge(entry.scope, entry.localOperationId, entry.request.transactionId, version, seq)
+    ) = acknowledgeWithHistory(entry, version, seq, null)
+
+    override fun acknowledgeWithHistory(entry: PendingWorkspaceSubmission, version: Long, seq: Long,
+        history: cg.creamgod.boarderless.domain.history.WorkspaceHistory?) {
+        journals.acknowledge(entry.scope, entry.localOperationId, entry.request.transactionId, version, seq, history)
         check(submissions.acknowledge(entry.scope, entry.request.transactionId))
         journals.removeEmptyAcknowledged(entry.scope, entry.request.transactionId)
     }

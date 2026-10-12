@@ -4,6 +4,9 @@ import cg.creamgod.boarderless.domain.model.Workspace
 import cg.creamgod.boarderless.domain.model.withVersion
 import cg.creamgod.boarderless.domain.sequence.hasValidSequenceBindings
 
+@kotlinx.serialization.Serializable
+enum class WorkspaceHistoryIntent { Edit, Undo, Redo }
+
 data class HistoryResult(
     val history: WorkspaceHistory,
     val error: OperationError? = null,
@@ -12,6 +15,7 @@ data class HistoryResult(
     val succeeded: Boolean get() = error == null
 }
 
+@kotlinx.serialization.Serializable
 data class WorkspaceHistory(
     val workspace: Workspace,
     private val undoStack: List<WorkspaceOperation> = emptyList(),
@@ -21,6 +25,58 @@ data class WorkspaceHistory(
     val canRedo: Boolean get() = redoStack.isNotEmpty()
     val undoOperations: List<WorkspaceOperation> get() = undoStack
     val redoOperations: List<WorkspaceOperation> get() = redoStack
+
+    /** Reconstruct a saved intention using the original stack, not ID heuristics.
+     * Exact matching prevents a changed intent from silently selecting another action. */
+    fun applyRecorded(operation: WorkspaceOperation, intent: WorkspaceHistoryIntent): HistoryResult {
+        val result = when (intent) {
+            WorkspaceHistoryIntent.Edit -> execute(operation)
+            WorkspaceHistoryIntent.Undo -> undo(remoteRestoration = true)
+            WorkspaceHistoryIntent.Redo -> redo(remoteRestoration = true)
+        }
+        require(result.succeeded && result.appliedOperation == operation) { "Saved history intention does not match its stack" }
+        return result
+    }
+
+    /** Seed a fully verified committed action without applying it again. Ordinary undo
+     * preconditions still check the latest workspace; this is not a forced rollback. */
+    fun withRecoveredCommit(submitted: WorkspaceOperation,
+        origins: List<MediaReferenceHistoryOrigin>,
+        intent: WorkspaceHistoryIntent = WorkspaceHistoryIntent.Edit): WorkspaceHistory {
+        require(undoStack.isEmpty() && redoStack.isEmpty())
+        val restored = copy(undoStack = listOf(submitted.inverse()))
+            .withCommittedMediaReferences(submitted, origins)
+        return if (intent == WorkspaceHistoryIntent.Undo) {
+            restored.copy(undoStack = emptyList(), redoStack = restored.undoStack)
+        } else restored
+    }
+
+    /** Bind only a confirmed submitted operation's exact inverse still in history.
+     * The backend must revalidate these local hints against its durable original evidence. */
+    fun withCommittedMediaReferences(submitted: WorkspaceOperation,
+        origins: List<MediaReferenceHistoryOrigin>): WorkspaceHistory {
+        if (origins.isEmpty()) return this
+        val expected = submitted.inverse()
+        fun attach(stored: WorkspaceOperation, original: WorkspaceOperation): WorkspaceOperation {
+            require(stored.operationId == original.operationId)
+            return when {
+                stored is TransactionOperation && original is TransactionOperation -> {
+                    require(stored.operations.size == original.operations.size)
+                    stored.copy(operations = stored.operations.zip(original.operations).map { (child, expectedChild) -> attach(child, expectedChild) })
+                }
+                stored is UpdateMediaReferenceOperation && original is UpdateMediaReferenceOperation -> {
+                    require(stored.changes.map { it.copy(historyOrigin = null) } == original.changes.map { it.copy(historyOrigin = null) })
+                    stored.copy(changes = stored.changes.map { change ->
+                        val origin = origins.singleOrNull { it.objectId == change.objectId && it.before == change.after &&
+                            it.after == change.before && it.objectVersionBefore + 1 == change.expectedVersion }
+                        if (origin == null) change else change.copy(historyOrigin = origin)
+                    })
+                }
+                else -> stored
+            }
+        }
+        return copy(undoStack = undoStack.map { if (it.operationId == expected.operationId) attach(it, expected) else it })
+    }
 
     fun execute(operation: WorkspaceOperation): HistoryResult =
         when (val result = operation.checkedApplyTo(workspace)) {
@@ -91,6 +147,9 @@ private fun WorkspaceOperation.rebasedFor(
     remoteRestoration: Boolean,
 ): WorkspaceOperation =
     when (this) {
+        is LocalWorkspaceContentOperation -> {
+            if (sameLocalWorkspaceContent(before, workspace)) copy(before = workspace) else this
+        }
         is CreateObjectsOperation -> {
             if (!remoteRestoration || restoreVersions.isNotEmpty()) {
                 this

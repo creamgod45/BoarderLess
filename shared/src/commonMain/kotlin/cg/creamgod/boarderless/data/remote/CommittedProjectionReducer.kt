@@ -42,6 +42,7 @@ private fun nextProjectionVersion(version: Long): Long = if (version in 1 until 
 internal fun reduceCommittedCatchUpPage(
     current: WorkspaceStateDto,
     page: FullCatchUpOperationsDto,
+    capabilities: BackendCanvasReadCapabilities = BackendCanvasReadCapabilities(),
 ): WorkspaceStateDto {
     if (page.hasMore || page.lastServerSeq !in current.throughServerSeq..MaxProjectionSequence ||
         page.operations.size > MaxCatchUpReplayRecords ||
@@ -77,6 +78,7 @@ internal fun reduceCommittedCatchUpPage(
                 first.serverSeq,
                 records.last().serverSeq,
                 first.workspaceVersion,
+                capabilities,
             )
         offset = end
     }
@@ -95,6 +97,7 @@ internal fun reduceCommittedProjection(
     fromServerSeq: Long,
     toServerSeq: Long,
     workspaceVersion: Long,
+    capabilities: BackendCanvasReadCapabilities = BackendCanvasReadCapabilities(),
 ): WorkspaceStateDto {
     if (current.workspaceId != workspaceId || current.workspaceVersion !in 0 until MaxProjectionSequence ||
         current.throughServerSeq !in 0 until MaxProjectionSequence ||
@@ -104,7 +107,11 @@ internal fun reduceCommittedProjection(
     ) {
         invalidReplay()
     }
-    current.toDomainWorkspace("Replay validation")
+    current.toDomainWorkspace("Replay validation", capabilities)
+    var canvasStyle = current.canvasStyle
+    var canvasStyleVersion = current.canvasStyleVersion
+    var sequenceDiagrams = current.sequenceDiagrams
+    var sequenceDiagramsVersion = current.sequenceDiagramsVersion
     val objects = current.objects.associateBy { it.objectId }.toMutableMap()
     val relations = current.relations.associateBy { it.relationId }.toMutableMap()
 
@@ -141,6 +148,48 @@ internal fun reduceCommittedProjection(
     for (record in records) {
         val p = record.payload
         when (record.operationType) {
+            "restore_media_references" -> {
+                if (!capabilities.mediaReferenceRestore) invalidReplay()
+                p.keysOnly("objectId", "expectedObjectVersion", "originalTransactionId", "originalOperationId", "targetSide", "restoredReference", "objectVersion")
+                val id = p.id("objectId")
+                val old = objects[id] ?: invalidReplay()
+                if (old.objectType != "media" || old.locked) invalidReplay()
+                val expected = (p["expectedObjectVersion"] as? JsonPrimitive)?.takeUnless { it.isString }?.longOrNull ?: invalidReplay()
+                val next = (p["objectVersion"] as? JsonPrimitive)?.takeUnless { it.isString }?.longOrNull ?: invalidReplay()
+                if (expected != old.objectVersion || next != nextProjectionVersion(expected)) invalidReplay()
+                if (p.id("targetSide") !in setOf("before", "after")) invalidReplay()
+                val uuid = Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+                if (!uuid.matches(p.id("originalTransactionId")) || !uuid.matches(p.id("originalOperationId"))) invalidReplay()
+                val restored = p.optionalObject("restoredReference") ?: invalidReplay()
+                restored.keysOnly("assetId", "thumbnailAssetId")
+                if (restored.keys != setOf("assetId", "thumbnailAssetId") || !uuid.matches(restored.id("assetId"))) invalidReplay()
+                restored.optionalText("thumbnailAssetId")?.let { if (!uuid.matches(it)) invalidReplay() }
+                // Only apply authenticated committed references. No Ready revival or GET
+                // authority is inferred; preserve mediaKind and every unrelated property.
+                objects[id] = old.copy(objectVersion = next, properties = JsonObject(old.properties + restored))
+            }
+            "update_sequence_diagrams" -> {
+                if (!capabilities.sequenceDiagrams) invalidReplay()
+                p.keysOnly("expectedSequenceDiagramsVersion", "before", "after", "sequenceDiagramsVersion")
+                fun version(key: String): Long = (p[key] as? JsonPrimitive)?.takeUnless { it.isString }?.longOrNull ?: invalidReplay()
+                val expected = version("expectedSequenceDiagramsVersion")
+                val next = version("sequenceDiagramsVersion")
+                if (expected != sequenceDiagramsVersion || expected !in 0 until MaxProjectionSequence || next != expected + 1) invalidReplay()
+                val before = sequenceDiagramsFromWire(p.getValue("before"))
+                if (before.associateBy { it.containerId } != sequenceDiagrams.associateBy { it.containerId }) invalidReplay()
+                sequenceDiagrams = sequenceDiagramsFromWire(p.getValue("after"))
+                sequenceDiagramsVersion = next
+            }
+            "update_canvas_style" -> {
+                if (!capabilities.canvasStyle) invalidReplay()
+                p.keysOnly("expectedCanvasStyleVersion", "canvasStyle", "canvasStyleVersion")
+                fun version(key: String): Long = (p[key] as? JsonPrimitive)?.takeUnless { it.isString }?.longOrNull ?: invalidReplay()
+                val expected = version("expectedCanvasStyleVersion")
+                val next = version("canvasStyleVersion")
+                if (expected != canvasStyleVersion || expected !in 0 until MaxProjectionSequence || next != expected + 1) invalidReplay()
+                canvasStyle = Json.decodeFromJsonElement(cg.creamgod.boarderless.domain.model.CanvasStyle.serializer(), p.getValue("canvasStyle"))
+                canvasStyleVersion = next
+            }
             "create_object" -> {
                 p.keysOnly("objectId", "objectType", "parentId", "zIndex", "locked", "transform", "properties")
                 val id = p.id("objectId")
@@ -244,7 +293,11 @@ internal fun reduceCommittedProjection(
             throughServerSeq = toServerSeq,
             objects = objects.values.toList(),
             relations = relations.values.toList(),
+            canvasStyle = canvasStyle,
+            canvasStyleVersion = canvasStyleVersion,
+            sequenceDiagrams = sequenceDiagrams,
+            sequenceDiagramsVersion = sequenceDiagramsVersion,
         )
-    result.toDomainWorkspace("Replay validation")
+    result.toDomainWorkspace("Replay validation", capabilities)
     return result
 }

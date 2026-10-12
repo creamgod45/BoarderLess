@@ -15,6 +15,8 @@ class WorkspaceMediaRoutingTest {
         object : LocalDocumentLock { override fun <T> withLock(block: () -> T): T = block() }, { "unused" })
     private class Gateway : AssetTransferGateway, AssetDownloadGateway {
         var closes = 0
+        var configuredScope: String? = null
+        override val downloadServerScope get() = configuredScope
         override fun close() { closes++ }
         override suspend fun prepare(session: WorkspaceSession, source: AssetTransferSource): AssetUploadTicket = error("unused")
         override suspend fun upload(ticket: AssetUploadTicket, source: AssetTransferSource, onProgress: (Long) -> Unit) = error("unused")
@@ -39,5 +41,20 @@ class WorkspaceMediaRoutingTest {
         val repo = object : CanvasWorkspaceRepository by documents() { override val localAssetGateway = uploadOnly }
         assertFails { withWorkspaceAssetDownloadGateway(repo) { called = true } }
         assertFalse(called)
+    }
+    @Test fun remoteGatewayMustMatchConfiguredScopeAndIsClosedOnSuccessFailureOrMismatch() = runTest {
+        val gateway = Gateway().apply { configuredScope = "a".repeat(64) }
+        val repo = object : CanvasWorkspaceRepository by documents() {
+            override val isLocalOnly = false
+            override val syncServerScope = "a".repeat(64)
+            override val syncAssetGatewayFactory: () -> AssetTransferGateway = { gateway }
+        }
+        assertEquals(42, withWorkspaceAssetDownloadGateway(repo) { assertSame(gateway, it); 42 })
+        assertEquals(1, gateway.closes)
+        assertFails { withWorkspaceAssetDownloadGateway(repo) { error("consumer failure") } }
+        assertEquals(2, gateway.closes)
+        gateway.configuredScope = "b".repeat(64); var called = false
+        assertFails { withWorkspaceAssetDownloadGateway(repo) { called = true } }
+        assertFalse(called); assertEquals(3, gateway.closes)
     }
 }

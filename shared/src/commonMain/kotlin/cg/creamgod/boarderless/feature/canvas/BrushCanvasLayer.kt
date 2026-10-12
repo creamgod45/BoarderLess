@@ -26,12 +26,16 @@ import cg.creamgod.boarderless.domain.history.WorkspaceOperation
 import cg.creamgod.boarderless.domain.model.*
 import cg.creamgod.boarderless.i18n.Strings
 import kotlin.math.hypot
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable internal fun BrushCanvasLayer(viewport: Viewport, readLive: () -> PenCanvasLive,
-    commit: (WorkspaceOperation, CanvasObjectId) -> Boolean, onClose: () -> Unit,
+    commit: suspend (WorkspaceOperation, CanvasObjectId) -> Boolean, onClose: () -> Unit,
     onToolbarHeight: (Int) -> Unit) {
     val colors = BoarderLessTheme.colors
+    val scope = rememberCoroutineScope()
+    var saving by remember { mutableStateOf(false) }
     val latestLive by rememberUpdatedState(readLive)
     val latestCommit by rememberUpdatedState(commit)
     val latestToolbarHeight by rememberUpdatedState(onToolbarHeight)
@@ -45,10 +49,25 @@ import kotlin.math.hypot
     var colorModel by remember { mutableStateOf(ColorModel.Hsb) }
     val drawing = points.isNotEmpty()
     fun save(draft: BrushCanvasDraft) {
-        if (!draft.isCurrent(latestLive())) { pending = draft; problem = Strings.brush.changed(); return }
-        if (runCatching { latestCommit(draft.operation, draft.objectId) }.getOrDefault(false)) {
-            pending = null; problem = null
-        } else { pending = draft; problem = Strings.brush.failed() }
+        if (saving) return
+        pending = draft // Keep the complete stroke visible until durable publication is acknowledged.
+        if (!draft.isCurrent(latestLive())) { problem = Strings.brush.changed(); return }
+        saving = true
+        problem = null
+        scope.launch {
+            try {
+                if (!draft.isCurrent(latestLive())) {
+                    problem = Strings.brush.changed()
+                } else if (latestCommit(draft.operation, draft.objectId)) {
+                    pending = null
+                    problem = null
+                } else {
+                    problem = Strings.brush.failed()
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { problem = Strings.brush.failed() }
+            finally { saving = false }
+        }
     }
     Box(Modifier.fillMaxSize()) {
         Canvas(Modifier.fillMaxSize().pointerInput(viewport, width, color, picker) {
@@ -56,7 +75,7 @@ import kotlin.math.hypot
             // Restarting against the same mouse event can turn a held stroke into repeated taps.
             awaitEachGesture {
                 val down = awaitFirstDown()
-                if (pending != null || picker != null) { down.consume(); return@awaitEachGesture }
+                if (saving || pending != null || picker != null) { down.consume(); return@awaitEachGesture }
                 val live = latestLive(); val owner = live.session
                 if (!live.ready || owner == null) return@awaitEachGesture
                 val samples = mutableListOf(viewport.screenToWorld(Vec2(down.position.x, down.position.y)))
@@ -109,10 +128,11 @@ import kotlin.math.hypot
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(ButtonGap), verticalArrangement = Arrangement.spacedBy(ButtonGap)) {
                     listOf(2f, 4f, 8f, 16f).forEach { value -> ShellButton(value.toInt().toString(), enabled = !drawing && pending == null, accent = width == value, onClick = { width = value }) }
                     ShellButton(Strings.colorPicker.title(), enabled = !drawing && pending == null, onClick = { picker = color })
-                    ShellButton(Strings.common.close(), enabled = !drawing, onClick = onClose)
+                    ShellButton(Strings.common.close(), enabled = !drawing && !saving, onClick = { if (!saving) onClose() })
                 }
+                if (saving) BasicText(Strings.status.savingChanges(1), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
                 problem?.let { BasicText(it, style = TextStyle(color = colors.danger, fontSize = 12.sp)) }
-                pending?.let { draft -> ShellButton(Strings.brush.retry(), enabled = draft.isCurrent(latestLive()), onClick = { save(draft) }) }
+                pending?.let { draft -> ShellButton(Strings.brush.retry(), enabled = !saving && draft.isCurrent(latestLive()), onClick = { save(draft) }) }
             }
         }
         picker?.let { before -> ColorPickerWindow(before, requireNotNull(customNodeColor(before)), emptyList(), emptyList(), colorModel,

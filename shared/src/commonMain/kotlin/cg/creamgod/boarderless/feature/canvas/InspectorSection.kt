@@ -21,6 +21,7 @@ internal enum class PanelSection(
     CreateAndNavigate("compact-menu.create-and-navigate"),
     History("compact-menu.history"),
     CanvasView("compact-menu.canvas-view"),
+    AiChanges("ai-review.changes"),
 }
 
 internal fun togglePanelSection(

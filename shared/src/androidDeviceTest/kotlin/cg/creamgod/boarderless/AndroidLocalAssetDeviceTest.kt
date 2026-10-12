@@ -16,6 +16,20 @@ import java.util.UUID
 import kotlin.test.*
 
 class AndroidLocalAssetDeviceTest {
+    @Test fun pinnedPendingIdentityReopensAndVerifiedOriginalIsNotReset() = fixture { root ->
+        val repo = AndroidFileWorkspaceRepository(File(root, "documents")); val owner = repo.openOrCreateWorkspace(); val selected = source(root)
+        val pending = WorkspaceAsset("00112233-4455-6677-8899-aabbccddeeff", owner.workspace.id, owner.userId,
+            selected.mediaType, selected.byteSize, selected.checksum, selected.width, selected.height, selected.durationMs,
+            AssetStatus.Pending, "2026-10-11T00:00:00Z")
+        val ticket = repo.localAssetGateway.preparePinned(owner, pending)
+        val reopened = AndroidFileWorkspaceRepository(File(root, "documents")); val gateway = reopened.localAssetGateway
+        assertEquals(ticket, gateway.preparePinned(owner, pending))
+        assertFails { gateway.preparePinned(owner, pending.copy(width = 33)) }
+        gateway.upload(ticket, selected) {}
+        val ready = gateway.confirm(owner, ticket)
+        assertEquals(ready, gateway.preparePinned(owner, pending).asset)
+        assertEquals(listOf(ready), reopened.listAssets(owner))
+    }
     private fun fixture(block: suspend (File) -> Unit) = runBlocking {
         val root = File(InstrumentationRegistry.getInstrumentation().targetContext.filesDir.canonicalFile, "local-assets-test-${UUID.randomUUID()}")
         check(root.mkdir())

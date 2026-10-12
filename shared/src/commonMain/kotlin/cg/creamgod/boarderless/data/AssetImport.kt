@@ -158,7 +158,9 @@ interface AssetTransferGateway {
 
 class AssetImportCoordinator(
     private val gateway: AssetTransferGateway,
+    private val retainCheckpointOnFailure: Boolean = false,
     private val beforeComplete: suspend (assetId: String) -> Unit = {},
+    private val onRecoveryRequired: suspend (assetId: String) -> Unit = {},
 ) {
     suspend fun import(
         session: WorkspaceSession,
@@ -171,6 +173,7 @@ class AssetImportCoordinator(
         var ticket: AssetUploadTicket? = null
         var preparedValidated = false
         var completionRequested = false
+        var checkpointStarted = false
         try {
             ticket = gateway.prepare(session, source)
             requireTicketMatchesSource(ticket, session, source)
@@ -192,6 +195,9 @@ class AssetImportCoordinator(
             }
             onStage(AssetImportStage.Confirming)
             currentCoroutineContext().ensureActive()
+            // A durable identity hook can commit and then lose its ACK. Preserve that upload
+            // once entered; its receipt owns reconciliation rather than allocating a new ID.
+            checkpointStarted = retainCheckpointOnFailure
             beforeComplete(ticket.asset.id)
             currentCoroutineContext().ensureActive()
             // Set before invoking transport: a lost response does not prove the server rejected it.
@@ -248,17 +254,28 @@ class AssetImportCoordinator(
             onStage(AssetImportStage.Ready(imported))
             return imported
         } catch (error: Throwable) {
-            if (completionRequested) {
+            suspend fun preserveRecovery(assetId: String) {
+                runCatching { onStage(AssetImportStage.RecoveryRequired(assetId)) }
+                // A reminder failure cannot mask the original upload/cancellation error.
+                // No server write is retried here, and no binary/source handle is retained.
+                withContext(NonCancellable) {
+                    withTimeoutOrNull(AssetImportCleanupTimeoutMillis) {
+                        runCatching { onRecoveryRequired(assetId) }
+                    }
+                }
+            }
+            if (completionRequested || checkpointStarted) {
                 // Notification is best-effort; neither UI failure nor cancellation may mask the
                 // original error. The server's processing / expiry policy owns retained uploads.
-                runCatching { onStage(AssetImportStage.RecoveryRequired(checkNotNull(ticket).asset.id)) }
+                preserveRecovery(checkNotNull(ticket).asset.id)
             } else if (preparedValidated) {
                 ticket?.let { prepared ->
-                    withContext(NonCancellable) {
+                    val cleaned = withContext(NonCancellable) {
                         withTimeoutOrNull(AssetImportCleanupTimeoutMillis) {
-                            runCatching { gateway.abandon(session, prepared.asset.id) }
-                        }
+                            runCatching { gateway.abandon(session, prepared.asset.id) }.isSuccess
+                        } ?: false
                     }
+                    if (!cleaned) preserveRecovery(prepared.asset.id)
                 }
             }
             if (error is CancellationException) throw error

@@ -15,7 +15,7 @@ import java.util.UUID
 internal class AndroidFileAssetGateway(
     private val root: File,
     private val validateSession: suspend (WorkspaceSession) -> Unit,
-) : AssetTransferGateway, AssetDownloadGateway {
+) : PinnedLocalAssetGateway, AssetDownloadGateway {
     private val catalog by lazy {
         privateRoot()
         PersistentLocalAssetCatalog({ AndroidAtomicLocalRecordStore(File(root, "metadata"), 4 * 1024 * 1024) },
@@ -69,8 +69,13 @@ internal class AndroidFileAssetGateway(
         val asset = WorkspaceAsset(UUID.randomUUID().toString(), session.workspace.id, session.userId,
             source.mediaType.trim().lowercase(), source.byteSize, source.checksum, source.width, source.height, source.durationMs,
             AssetStatus.Pending, androidLocalDocumentTimestamp())
-        catalog.add(asset)
-        AssetUploadTicket(asset, "boarderless-local:${asset.id}")
+        preparePinned(session, asset)
+    }
+    override suspend fun preparePinned(session: WorkspaceSession, pending: WorkspaceAsset): AssetUploadTicket = withContext(Dispatchers.IO) {
+        validateSession(session); validatePinnedLocalAsset(session, pending)
+        val stored = catalog.ensurePinned(pending)
+        currentCoroutineContext().ensureActive()
+        AssetUploadTicket(stored, "boarderless-local:${stored.id}")
     }
     override suspend fun upload(ticket: AssetUploadTicket, source: AssetTransferSource, onProgress: (Long) -> Unit) = withContext(Dispatchers.IO) {
         locked {

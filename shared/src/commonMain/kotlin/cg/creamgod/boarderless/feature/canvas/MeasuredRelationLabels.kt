@@ -62,7 +62,8 @@ internal fun measureRelationLabels(
             val size = inputs.single { it.id == id }.size
             LabelBounds(position.x, position.y, position.x + size.width, position.y + size.height)
         }
-    val placements = layoutRelationLabels(inputs.filter { it.id !in manual }, paths.values, obstacles + manualBounds, 6f * density) + manual
+    val placements = layoutRelationLabels(inputs.filter { it.id !in manual }, paths.values, obstacles, 6f * density,
+        reservedLabels = manualBounds) + manual
     return labels.mapNotNull { relation ->
         placements[relation.id]?.let { position ->
             relation.id to MeasuredRelationLabel(relation.label.orEmpty(), position, inputs.single { it.id == relation.id }.size)

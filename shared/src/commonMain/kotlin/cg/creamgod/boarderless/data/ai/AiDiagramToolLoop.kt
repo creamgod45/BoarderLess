@@ -39,9 +39,11 @@ internal sealed interface AiDiagramLoopProgress {
         val text: String,
     ) : AiDiagramLoopProgress
 
+    /** Tool names and arguments are shown as typed values; `calls` and `results` are index-aligned. */
     data class Tools(
         val round: Int,
         val results: List<AiDiagramToolResult>,
+        val calls: List<AiDiagramToolCall> = emptyList(),
     ) : AiDiagramLoopProgress
 }
 
@@ -79,6 +81,7 @@ internal suspend fun runAiDiagramToolLoop(
     var round = 1
     var last: AiProbeDiagnostic? = null
     var response: AiProbeDiagnostic? = null
+    var replyDiagnostic: AiReplyDiagnostic? = null
     var observerFailure: Throwable? = null
 
     fun record(event: AiProbeDiagnostic) {
@@ -96,6 +99,7 @@ internal suspend fun runAiDiagramToolLoop(
                     authenticationChallenge = event.authenticationChallenge ?: response?.authenticationChallenge,
                     responseRequestId = event.responseRequestId ?: response?.responseRequestId,
                     responseHeadersMillis = event.responseHeadersMillis ?: response?.responseHeadersMillis,
+                    reply = event.reply ?: replyDiagnostic,
                 )
             } else {
                 event
@@ -165,6 +169,7 @@ internal suspend fun runAiDiagramToolLoop(
             round = nextRound
             last = null
             response = null
+            replyDiagnostic = null
             record(AiProbeDiagnostic(AiProbeStage.Preparing))
             guard()
             val body = aiDiagramToolRequestBody(server.body, requestId, sessionId, prompt, caps, history)
@@ -226,18 +231,21 @@ internal suspend fun runAiDiagramToolLoop(
                         AiDiagramStreamFailure.Format -> AiProbeFailure.StreamFormat
                         AiDiagramStreamFailure.Provider -> AiProbeFailure.ProviderError
                         AiDiagramStreamFailure.Unsupported -> AiProbeFailure.UnsupportedMode
-                        AiDiagramStreamFailure.Incomplete, AiDiagramStreamFailure.EmptyResponse -> AiProbeFailure.Incomplete
+                        AiDiagramStreamFailure.Incomplete -> AiProbeFailure.Incomplete
+                        AiDiagramStreamFailure.EmptyResponse -> AiProbeFailure.EmptyResponse
                         AiDiagramStreamFailure.Transport -> AiProbeFailure.Network
                     },
                 )
             }
             val reply = completed ?: stop(AiDiagramLoopFailure.Stream, AiProbeFailure.Incomplete)
+            replyDiagnostic = AiReplyDiagnostic(reply.text.encodeToByteArray(throwOnInvalidSequence = true).size,
+                reply.calls.size, reply.calls.sumOf { it.arguments.encodeToByteArray(throwOnInvalidSequence = true).size })
             currentScope()
             if (reply.calls.isEmpty()) {
                 guard()
                 currentCoroutineContext().ensureActive()
                 val result = AiDiagramLoopResult.Ready(reply.text, engine.proposal(), engine.localReferences())
-                record(AiProbeDiagnostic(AiProbeStage.Completed))
+                record(AiProbeDiagnostic(AiProbeStage.Completed, reply = replyDiagnostic))
                 // Diagnostic callback can itself close/revoke the task. Never publish afterward.
                 guard()
                 currentCoroutineContext().ensureActive()
@@ -249,7 +257,7 @@ internal suspend fun runAiDiagramToolLoop(
             totalArgumentBytes +=
                 reply.calls.sumOf {
                     it.arguments
-                        .encodeToByteArray()
+                        .encodeToByteArray(throwOnInvalidSequence = true)
                         .size
                         .toLong()
                 }
@@ -277,8 +285,11 @@ internal suspend fun runAiDiagramToolLoop(
             guard()
             currentCoroutineContext().ensureActive()
             history += AiDiagramToolTurn(reply.text, reply.calls.toList(), results.toList())
-            progress(AiDiagramLoopProgress.Tools(round, results.toList()))
+            progress(AiDiagramLoopProgress.Tools(round, results.toList(), reply.calls.toList()))
             guard()
+            // This request and its isolated tool turn have finished. Record it before
+            // preparing the next request, rather than leaving previous rounds at HTTP 200.
+            record(AiProbeDiagnostic(AiProbeStage.Completed, reply = replyDiagnostic))
         }
         return AiDiagramLoopResult.Failed(AiDiagramLoopFailure.Limit)
     } catch (cancelled: CancellationException) {

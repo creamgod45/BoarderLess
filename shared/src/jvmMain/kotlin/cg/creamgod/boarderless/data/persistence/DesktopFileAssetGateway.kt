@@ -24,7 +24,7 @@ import java.util.UUID
 class DesktopFileAssetGateway(
     private val root: Path,
     private val validateSession: suspend (WorkspaceSession) -> Unit,
-) : AssetTransferGateway,
+) : PinnedLocalAssetGateway,
     AssetDownloadGateway {
     private val metadata by lazy {
         privateRoot()
@@ -161,9 +161,24 @@ class DesktopFileAssetGateway(
                     AssetStatus.Pending,
                     Instant.now().toString(),
                 )
-            metadata.compareAndSet(key(asset.id), null, json.encodeToString(asset.stored()).encodeToByteArray())
-            AssetUploadTicket(asset, "boarderless-local:${asset.id}")
+            preparePinned(session, asset)
         }
+
+    override suspend fun preparePinned(session: WorkspaceSession, pending: WorkspaceAsset): AssetUploadTicket = withContext(Dispatchers.IO) {
+        validateSession(session); validatePinnedLocalAsset(session, pending)
+        val record = metadata.read(key(pending.id))
+        val stored = if (record == null) {
+            metadata.compareAndSet(key(pending.id), null, json.encodeToString(pending.stored()).encodeToByteArray())
+            pending
+        } else {
+            val current = read(pending.id)
+            require(current == pending || current == pending.copy(status = AssetStatus.Ready)) { "Pinned asset identity changed" }
+            metadata.confirmDurable(key(pending.id), record.generation)
+            current
+        }
+        currentCoroutineContext().ensureActive()
+        AssetUploadTicket(stored, "boarderless-local:${stored.id}")
+    }
 
     override suspend fun upload(
         ticket: AssetUploadTicket,

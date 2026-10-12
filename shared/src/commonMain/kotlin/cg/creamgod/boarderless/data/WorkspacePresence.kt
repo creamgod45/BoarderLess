@@ -86,9 +86,12 @@ internal fun acceptWorkspacePresence(
     snapshot: WorkspacePresenceSnapshot,
     nowMs: Long,
 ): WorkspacePresenceState? {
+    fun plain(value: String, maximumBytes: Int): Boolean =
+        value.isNotBlank() && value.length <= maximumBytes && value.none { it.code < 32 || it.code == 127 } &&
+            runCatching { value.encodeToByteArray(throwOnInvalidSequence = true).size <= maximumBytes }.getOrDefault(false)
     if (snapshot.workspaceId != session.workspace.id || snapshot.observerUserId != session.userId ||
         snapshot.observerClientId != session.clientId || snapshot.subscriptionId != subscriptionId ||
-        subscriptionId.isBlank() || snapshot.roomEpoch.isBlank() || snapshot.roomEpoch.length > 128 ||
+        !plain(subscriptionId, 256) || !plain(snapshot.roomEpoch, 128) ||
         snapshot.roomRevision !in 0..9_007_199_254_740_991L || snapshot.ttlMs !in 1_000..120_000 ||
         snapshot.leaseSequence !in 0..9_007_199_254_740_991L ||
         nowMs < 0 || nowMs > Long.MAX_VALUE - snapshot.ttlMs || snapshot.peers.size > 256
@@ -114,10 +117,11 @@ internal fun acceptWorkspacePresence(
         return null
     }
     if (snapshot.peers.any { peer ->
-            listOf(peer.connectionId, peer.userId, peer.clientId).any { it.isBlank() || it.length > 128 } ||
-                peer.displayName.isBlank() || peer.displayName.length > 80 || peer.displayName.any { it.code < 32 } ||
+            listOf(peer.connectionId, peer.userId, peer.clientId).any { !plain(it, 128) } ||
+                peer.displayName.length > 100 || !plain(peer.displayName, 400) ||
                 peer.selectedIds.size > 200 ||
-                peer.cursor?.let { abs(it.x) > 10_000_000f || abs(it.y) > 10_000_000f } == true
+                peer.selectedIds.any { !plain(it.value, 128) } ||
+                peer.cursor?.let { !it.x.isFinite() || !it.y.isFinite() || abs(it.x) > 10_000_000f || abs(it.y) > 10_000_000f } == true
         }
     ) {
         return null

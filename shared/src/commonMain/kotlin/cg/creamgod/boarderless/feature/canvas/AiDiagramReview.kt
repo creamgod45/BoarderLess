@@ -98,4 +98,6 @@ internal fun reviewAiDiagramApply(
     }
 }
 
-internal enum class AiDiagramApplyOutcome { Queued, Rejected }
+/** Rejected is proof the publication boundary was not entered. Unconfirmed may already
+ * have retained/committed the original transaction and must not enable direct re-apply. */
+internal enum class AiDiagramApplyOutcome { Queued, Rejected, Unconfirmed }

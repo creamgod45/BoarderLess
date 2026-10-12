@@ -11,6 +11,7 @@ import cg.creamgod.boarderless.data.RecentWorkspace
 import cg.creamgod.boarderless.data.RecentWorkspacesPublisher
 import cg.creamgod.boarderless.data.WorkspaceLaunchRequests
 
+private const val ExtraStorageMode = "cg.creamgod.boarderless.extra.STORAGE_MODE"
 private const val ExtraWorkspaceId = "cg.creamgod.boarderless.extra.WORKSPACE_ID"
 
 /** Recent workspaces as dynamic launcher shortcuts (long-press the app icon). Needs Android 7.1. */
@@ -26,14 +27,15 @@ internal class LauncherShortcuts(
                 .mapIndexed { rank, workspace ->
                     val label = workspace.title.ifBlank { context.getString(R.string.app_name) }
                     ShortcutInfo
-                        .Builder(context, "workspace:${workspace.id}")
+                        .Builder(context, "workspace:${workspace.storageMode?.token.orEmpty()}:${workspace.id}")
                         .setShortLabel(label)
                         .setLongLabel(label)
                         .setIcon(Icon.createWithResource(context, R.mipmap.ic_launcher))
                         .setIntent(
                             Intent(Intent.ACTION_VIEW)
                                 .setClass(context, MainActivity::class.java)
-                                .putExtra(ExtraWorkspaceId, workspace.id),
+                                .putExtra(ExtraWorkspaceId, workspace.id)
+                                .putExtra(ExtraStorageMode, workspace.storageMode?.token),
                         ).setRank(rank)
                         .build()
                 }
@@ -44,5 +46,7 @@ internal class LauncherShortcuts(
 
 /** Opens the workspace a launcher shortcut was started with, if any. */
 internal fun Intent.openRequestedWorkspace() {
-    getStringExtra(ExtraWorkspaceId)?.let(WorkspaceLaunchRequests::open)
+    getStringExtra(ExtraWorkspaceId)?.let { id ->
+        WorkspaceLaunchRequests.open(id, getStringExtra(ExtraStorageMode) ?: "server")
+    }
 }

@@ -130,34 +130,36 @@ private fun runDesktopApplication(
                 val binding = mediaLifecycle.bind(window, closeHidesWindow)
                 onDispose { binding.close() }
             }
-            val workspaceRepository =
-                remember(serverMode) {
-                    if (serverMode) {
-                        cg.creamgod.boarderless.data.remote.desktopNativeBackendWorkspaceRepository(
-                            Path.of(System.getProperty("user.home"), ".boarderless-storage", "server-v1"),
-                        )
-                    } else {
-                        cg.creamgod.boarderless.data.persistence.DesktopFileWorkspaceRepository(
-                            Path.of(System.getProperty("user.home"), ".boarderless-storage", "local"),
-                        )
-                    }
-                }
-            val mediaImportRuntime =
-                remember(window, mediaLifecycle, workspaceRepository) {
-                    desktopMediaImportRuntime(window, mediaLifecycle.activity) {
-                        workspaceRepository.localAssetGateway as? cg.creamgod.boarderless.data.AssetDownloadGateway
-                            ?: cg.creamgod.boarderless.data.remote
-                                .BackendAssetTransferGateway()
-                    }
-                }
+            val storageRuntime = remember(window, mediaLifecycle, serverMode) {
+                val storageRoot = Path.of(System.getProperty("user.home"), ".boarderless-storage")
+                cg.creamgod.boarderless.data.WorkspaceStorageRuntime(
+                    initialMode = if (serverMode) cg.creamgod.boarderless.data.WorkspaceStorageMode.Server
+                        else cg.creamgod.boarderless.data.WorkspaceStorageMode.Local,
+                    localRepository = { cg.creamgod.boarderless.data.persistence.DesktopFileWorkspaceRepository(storageRoot.resolve("local")) },
+                    serverRepository = { cg.creamgod.boarderless.data.remote.desktopNativeBackendWorkspaceRepository(storageRoot.resolve("server-v1")) },
+                    serverRepositoryWithSubmission = {
+                        cg.creamgod.boarderless.data.remote.desktopNativeBackendWorkspaceRepository(storageRoot.resolve("server-v1"), it)
+                    },
+                    mediaRuntimeFor = { repository ->
+                        desktopMediaImportRuntime(window, mediaLifecycle.activity) {
+                            if (repository.isLocalOnly) {
+                                requireNotNull(repository.localAssetGateway as? cg.creamgod.boarderless.data.AssetDownloadGateway)
+                            } else {
+                                val gateway = requireNotNull(repository.syncAssetGatewayFactory).invoke()
+                                try { requireNotNull(gateway as? cg.creamgod.boarderless.data.AssetDownloadGateway) }
+                                catch (failure: Throwable) { gateway.close(); throw failure }
+                            }
+                        }
+                    },
+                )
+            }
             App(
-                workspaceRepository = workspaceRepository,
+                workspaceStorageRuntime = storageRuntime,
                 qaRuntime = qaRuntime,
                 draftBackupRuntime = draftBackupRuntime,
                 draftImportRuntime = draftImportRuntime,
                 schemeBundleRuntime = schemeBundleRuntime,
                 canvasExportRuntime = canvasExportRuntime,
-                mediaImportRuntime = mediaImportRuntime,
                 menuBridge = menuBridge,
                 recentWorkspacesPublisher = recentWorkspacesPublisher,
             )

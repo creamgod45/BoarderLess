@@ -56,6 +56,8 @@ class BackendAssetTransferGateway(
 ) : AssetTransferGateway,
     AssetDownloadGateway {
     private val apiBase = "${baseUrl.trimEnd('/')}/api/v1"
+    override val downloadServerScope = org.kotlincrypto.hash.sha2.SHA256().digest(apiBase.encodeToByteArray())
+        .joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
 
     init {
         require(processingPollMillis >= 0) { "Processing poll delay must not be negative" }
@@ -358,7 +360,7 @@ private data class DownloadAssetResponse(
     val download: AssetTransferDirective,
 )
 
-private fun createAssetHttpClient(): HttpClient =
+internal fun createAssetHttpClient(): HttpClient =
     cg.creamgod.boarderless.data.platformHttpClient {
         expectSuccess = false
         install(io.ktor.client.plugins.HttpTimeout) {

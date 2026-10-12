@@ -288,7 +288,7 @@ internal object QuickSchemeBundleCodec {
                     return bytes
                 }
             }
-            val coordinator = AssetImportCoordinator(gateway) { destinationId ->
+            val coordinator = AssetImportCoordinator(gateway, retainCheckpointOnFailure = true) { destinationId ->
                 require(readBytes == asset.byteSize && hashText(digest.digest()) == asset.checksum)
                 authority()
                 beforeComplete(asset.sourceId, destinationId)
