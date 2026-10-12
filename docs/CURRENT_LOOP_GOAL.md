@@ -1,5 +1,11 @@
 # 當前 loop 剩餘目標
 
+## 2026-10-13：AI 理解驗證讀取既有 Desktop 設定（源碼已接、未驗證）
+
+- 本輪唯讀檢查安全 log 最新仍 2026-10-09T02:29:52.408199Z OpenAiChat Completed；沒有新的失敗可歸因，不代發付費請求或將舊完成紀錄當最新 APP 驗收。
+- 理解驗證 configuration 提供明確讀取圖形工具已保存非機密設定；不讀 vault token、不保存／改設定、不 HTTP。開始讀取即清目前 token／consent／answer，保留舊診斷並標為前次；loaded 後仍審端點／協定／參數、手動認證與本次授權。取消／close 不採晚到回覆；未知協定／auth／limit 欄位或過長欄位拒絕，不默默選預設協定。
+- Desktop settings 實際讀取限制 64KiB+1 偵測字元，拒 symbolic link／非 regular file、非法 UTF-8 與非 strict JSON；null 仍無法區別 missing／invalid／inaccessible，UI 不宣稱必然尚未保存。其他平台 store=null 不冒充有持久設定。未 compile／test／launch／AI request，六主線 active，最後集中驗收、效能最後。
+
 ## 2026-10-13：原 writer 釋放恢復 App 入口（源碼已接、未驗證）
 
 - WorkspaceScreen dispose 將原 repository 交給 App 保留；close 拋錯不再在有宿主時直接丟失原 handle。具 owned-drain capability 的原 repository 即使 close 當下未拋錯也保留，涵蓋背景 operation 稍後才失敗的釋放。候選 media 構造失敗時的 cleanup 同樣保留原候選。

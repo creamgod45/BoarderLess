@@ -1,5 +1,7 @@
 # Desktop AI 安全除錯記錄
 
+2026-10-13 本輪再次唯讀核對現存 log，最新仍 2026-10-09T02:29:52.408199Z OpenAiChat Completed；沒有新 AI 失敗事件。理解驗證已補明確讀取工具對話使用的非機密連線設定，開始即清當前金鑰與授權，不查 vault、不送 HTTP、不寫新 AI attempt。Desktop 設定讀取有界 64KiB 並拒非法 UTF-8／symlink／非 regular source；不可讀與缺檔仍同回 null，所以提示保留此不確定性。此為源碼更新，未編譯／驗收。
+
 2026-10-13 授權規則更新（源碼已接、未驗收）：所有工具輪次都須審閱並明確同意該次 exact request，不再提供後續 autoApprove。舊紀錄若提及此選項僅代表歷史行為；沒有為這次改動送出 AI 請求或取得新實測證據。
 
 2026-10-13 源碼補充（尚未編譯／驗收）：理解 probe 以嚴格 UTF-8 code point 累積，上限 128 KiB；跨 delta 的 UTF-16 配對可暫存，未配對／非法配對分類 ResponseFormat，超量 OutputLimit。手動貼回覆同樣嚴格限制，拒絕時原文不變且有提示。安全 log 不記錄這些字元或回覆內容。

@@ -1376,6 +1376,13 @@
     "documentOpened": "已開啟文件"
   },
   "aiProbe": {
+    "profileLoad": "讀取已保存連線設定",
+    "profileHint": "讀取圖形工具使用的同一份 Desktop 非機密設定。會清除目前金鑰與授權，不讀已保存金鑰、不更改設定，也不送出請求。請先審閱端點與參數，再輸入金鑰並授權本次請求。",
+    "profileReading": "僅讀取本機連線設定…",
+    "profileMissing": "未讀到可用的 Desktop 設定，可能尚未保存、格式無效或無法存取。保留原欄位；請在這裡輸入或檢查圖形工具設定。",
+    "profileLoaded": "連線設定已讀取；未載入金鑰、未送出請求。請審閱設定，並視需要輸入認證。",
+    "profileCancelled": "已取消讀取設定。目前金鑰與授權仍已清除，未送出請求。",
+    "profileFailed": "無法讀取支援的連線設定。保留原設定欄位，但清除目前金鑰與授權；未送出請求。",
     "consentDeclined": "未授權，本次請求未送出；任務已停止。",
     "debugHintReasoningTools": "供應商已確認：此模型的 Chat Completions 不接受額外推理與圖形工具的組合。請使用新版 GPT-5.6 工具請求（reasoning_effort=none）；不能只把 endpoint 改成 Responses，兩種請求格式不同。",
     "debugHintConfig": "AI 尚未送出：請檢查完整 endpoint、協定、模型、認證格式與 HTTP 設定。",

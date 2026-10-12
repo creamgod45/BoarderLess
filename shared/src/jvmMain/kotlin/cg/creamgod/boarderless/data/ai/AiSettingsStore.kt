@@ -158,7 +158,16 @@ internal class DesktopAiSettingsStore(
 
     override suspend fun loadSettings(): AiSavedSettings? =
         withContext(Dispatchers.IO) {
-            runCatching { json.decodeFromString<AiSavedSettings>(Files.readString(file)) }.getOrNull()
+            runCatching {
+                // Bound the actual read, not only a racy pre-read file size. Settings contain
+                // no secrets; still refuse a linked/non-regular source and malformed UTF-8.
+                require(!Files.isSymbolicLink(file) && Files.isRegularFile(file, java.nio.file.LinkOption.NOFOLLOW_LINKS))
+                val bytes = Files.newInputStream(file, java.nio.file.LinkOption.NOFOLLOW_LINKS).use { it.readNBytes(64 * 1024 + 1) }
+                require(bytes.size in 1..64 * 1024)
+                val raw = bytes.decodeToString(throwOnInvalidSequence = true)
+                val document = cg.creamgod.boarderless.data.parseStrictJsonObject(raw)
+                json.decodeFromJsonElement(AiSavedSettings.serializer(), document)
+            }.getOrNull()
         }
 
     override suspend fun saveSettings(settings: AiSavedSettings): Boolean =

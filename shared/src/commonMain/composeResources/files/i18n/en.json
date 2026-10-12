@@ -1366,6 +1366,13 @@
     "documentOpened": "Document opened"
   },
   "aiProbe": {
+    "profileLoad": "Read saved connection settings",
+    "profileHint": "Reads the same non-secret Desktop settings used by diagram tools. Your current key and approval are cleared; no saved key is read, settings are not changed, and no request is sent. Review the endpoint and parameters before entering a key and approving this request.",
+    "profileReading": "Reading local connection settings only…",
+    "profileMissing": "No readable saved Desktop settings were returned. They may be absent, invalid or inaccessible. Original fields are retained; enter settings here or check the diagram tools settings.",
+    "profileLoaded": "Connection settings loaded. No key was loaded and no request was sent. Review the settings and enter credentials if required.",
+    "profileCancelled": "Settings read cancelled. Your current key and approval remain cleared; no request was sent.",
+    "profileFailed": "Cannot read supported connection settings. Existing fields are retained, but the current key and approval are cleared. No request was sent.",
     "consentDeclined": "Not authorized. This request was not sent; the task has stopped.",
     "debugHintReasoningTools": "Provider confirmed: this model rejects reasoning with function tools in Chat Completions. Use the updated GPT-5.6 tool request (reasoning_effort=none). Changing only the endpoint to Responses will not work; its wire format differs.",
     "debugHintConfig": "AI not dispatched: check complete endpoint, dialect, model, credential format and HTTP policy.",

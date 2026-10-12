@@ -1,5 +1,11 @@
 # BoarderLess 產品 QA 品質檢驗 SOP
 
+## AI 理解驗證共用連線設定（最後集中驗收）
+
+Desktop 圖形工具保存非機密設定後，理解驗證在設定步驟明確按「讀取已保存連線設定」，應帶入相同端點、模型、協定、認證種類、版本、token limit 欄位、輸出上限、溫度與 local HTTP 選擇。讀取不應查 vault、不保存設定、不送 HTTP；原 token／answer／consent 清空，舊診斷標為前次。使用者重新審閱、輸入認證並授權本次請求。
+
+讀取期間取消／關窗，不得採晚到結果。未知 enum／超長欄位拒絕，不 fallback 協定；missing／invalid／inaccessible 不能一律說尚未保存。驗實際檔案讀取上限 64KiB、symlink／非 regular file、非法 UTF-8／duplicate JSON keys 拒絕。此步不是 AI 呼叫，不得顯示新 Connecting 或寫新 HTTP 成功 log。其他平台無 store 不顯示假持久設定入口。尚未執行驗收，視覺／遮擋由使用者判定。
+
 ## App 原 writer 恢復視窗（最後集中驗收）
 
 切換儲存模式／離開畫布、候選 media 構造失敗時驗原 repository 被保留；正常 owner drain 只能等待，不得自動重試釋放或送網路請求。close 當下成功、背景 operation 稍後 release 失敗也須保留 handle 並提供恢復入口。待確認時限制畫布編輯、Presence 分享及再次模式切換，不能反覆構造新 writer。

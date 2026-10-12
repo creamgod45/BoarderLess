@@ -70,6 +70,8 @@ internal fun AiUnderstandingDialog(
     var localLogging by remember { mutableStateOf(false) }
     var diagnostics by remember { mutableStateOf<List<AiProbeDiagnostic>>(emptyList()) }
     var previousAttempt by remember { mutableStateOf(false) }
+    val settingsStore = remember { aiSettingsStore() }
+    var profileLoading by remember { mutableStateOf(false) }
 
     fun resetApproval() {
         consent = false
@@ -77,6 +79,43 @@ internal fun AiUnderstandingDialog(
         message = null
         complete = false
         previousAttempt = diagnostics.isNotEmpty()
+    }
+    fun loadSavedConnection() {
+        if (busy || !open || settingsStore == null) return
+        resetApproval()
+        // A profile read is not consent to reuse a credential or send a request.
+        token = ""
+        busy = true; profileLoading = true
+        message = Strings.aiProbe.profileReading()
+        job = scope.launch {
+            try {
+                val saved = settingsStore.loadSettings()
+                ensureActive(); check(open)
+                if (saved == null) message = Strings.aiProbe.profileMissing()
+                else {
+                    require(AiRequestDialect.entries.any { it.name == saved.dialect })
+                    require(saved.authentication in listOf("Bearer", "x-api-key", "None"))
+                    require(AiChatTokenLimitField.entries.any { it.name == saved.chatTokenLimitField })
+                    require(saved.endpoint.length <= 4096 && saved.model.length <= 256 && saved.anthropicVersion.length <= 32)
+                    require(saved.maxTokens.length <= 64 && saved.temperature.length <= 64)
+                    val connection = saved.toConnection()
+                    endpoint = connection.endpoint
+                    model = connection.model
+                    dialect = connection.dialect
+                    auth = connection.authentication
+                    version = connection.anthropicVersion
+                    maxTokensText = connection.maxTokens
+                    temperatureText = connection.temperature
+                    chatTokenLimitField = connection.chatTokenLimitField
+                    localHttp = connection.allowInsecureLocalHttp
+                    message = Strings.aiProbe.profileLoaded()
+                }
+            } catch (cancelled: CancellationException) {
+                if (open) message = Strings.aiProbe.profileCancelled()
+                throw cancelled
+            } catch (_: Exception) { if (open) message = Strings.aiProbe.profileFailed() }
+            finally { profileLoading = false; busy = false; job = null }
+        }
     }
     val close = {
         open = false
@@ -141,7 +180,7 @@ internal fun AiUnderstandingDialog(
                             message = Strings.aiProbe.copied()
                         })
                         if (busy) {
-                            ShellButton(Strings.aiProbe.cancelRequest(), onClick = {
+                            ShellButton(if (profileLoading) Strings.common.cancel() else Strings.aiProbe.cancelRequest(), onClick = {
                                 job?.cancel()
                                 consent = false
                             })
@@ -201,7 +240,11 @@ internal fun AiUnderstandingDialog(
                                 }
                             }
                         }
-                        if (step == 1) {
+                        if (step == 1 && !profileLoading) {
+                            if (settingsStore != null) {
+                                ShellButton(Strings.aiProbe.profileLoad(), enabled = !busy, onClick = ::loadSavedConnection)
+                                BasicText(Strings.aiProbe.profileHint(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
+                            }
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 ShellButton(
                                     "OpenAI-compatible",
