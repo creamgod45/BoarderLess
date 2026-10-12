@@ -77,6 +77,28 @@ class PreparedMediaImportController internal constructor(
     }
     suspend fun prepare(ref: PreparedMediaImportReservation) = status(coordinator.prepare(request(ref)))
     suspend fun lookup(ref: PreparedMediaImportReservation) = status(coordinator.lookup(request(ref)))
+    /** Explicit bounded observation of the ORIGINAL preparation. No prepare/ticket/PUT,
+     * complete, abandonment or canvas insertion. A failed read stops rather than retries.
+     * A timeout returns only a previously verified status, never an invented ready phase. */
+    suspend fun watchProcessing(ref: PreparedMediaImportReservation,
+        onStatus: (PreparedMediaImportStatus, Int) -> Unit): PreparedMediaImportStatus? {
+        request(ref)
+        var latest: PreparedMediaImportStatus? = null
+        kotlinx.coroutines.withTimeoutOrNull(60_000) {
+            repeat(20) { index ->
+                active()
+                val observed = lookup(ref)
+                active()
+                latest = observed
+                onStatus(observed, index + 1)
+                active()
+                if (observed.phase != "completionAccepted") return@withTimeoutOrNull
+                if (index < 19) kotlinx.coroutines.delay(3_000)
+            }
+        }
+        active()
+        return latest
+    }
     suspend fun ticket(ref: PreparedMediaImportReservation, ticketRequestId: String): PreparedMediaImportTicket {
         val wire = request(ref)
         coordinator.reserveTicket(wire, ticketRequestId)

@@ -94,7 +94,8 @@ import kotlinx.coroutines.*
             catch (_: Exception) {
                 unknownWrite()
                 message = if (localVisibilityChange) Strings.media.v2ArchiveUnconfirmed()
-                    else Strings.media.transferUnavailable() + "\n" + Strings.media.v2UnknownOutcome()
+                    else if (networkWrite) Strings.media.transferUnavailable() + "\n" + Strings.media.v2UnknownOutcome()
+                    else Strings.media.v2ReadFailed()
             }
             finally { busy = false; job = null }
         }
@@ -239,6 +240,23 @@ import kotlinx.coroutines.*
                                     status = controller.lookup(ref); knownIdentity = true
                                     needsLookup = false; originalRetryAllowed = false; message = Strings.media.v2StepDone()
                                 } })
+                            if (status?.phase == "completionAccepted") {
+                                BasicText(Strings.media.v2WatchHint(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
+                                ShellButton(Strings.media.v2Watch(), enabled = !busy && !needsLookup,
+                                    onClick = { run {
+                                        val latest = controller.watchProcessing(ref) { observed, reads ->
+                                            status = observed; knownIdentity = true
+                                            needsLookup = false; originalRetryAllowed = false
+                                            message = Strings.media.v2Watching(reads.toString())
+                                        }
+                                        message = when (latest?.phase) {
+                                            "ready" -> Strings.media.v2ReadyHint()
+                                            "completionAccepted", null -> Strings.media.v2WatchEnded()
+                                            "prepared" -> Strings.media.v2PreparedHint()
+                                            else -> Strings.media.v2TerminalHint()
+                                        }
+                                    } })
+                            }
                             if (selectedArchived) ShellButton(label = Strings.media.v2Unarchive(), enabled = !busy,
                                 onClick = { run(localVisibilityChange = true) {
                                     controller.unarchive(ref); selectedArchived = false

@@ -458,6 +458,11 @@
     "externalReferencePending": "Canvas insertion awaits external-reference support. GIPHY media is not uploaded to workspace storage. Official attribution is displayed; production integration approval remains pending."
   },
   "media": {
+    "v2Watch": "Watch original processing status",
+    "v2WatchHint": "Approve up to 20 server status reads, about 3 seconds apart, stopping after 60 seconds at most. Verified identity or lease changes are saved in the original local record. This does not reupload, complete again or insert a node. Cancel anytime; choose insertion separately when ready.",
+    "v2Watching": "Reading original processing status · check {count}/20",
+    "v2WatchEnded": "Observation ended without a new ready result. The original preparation is retained; you can check again later. No upload or completion was retried.",
+    "v2ReadFailed": "The local action or status read did not finish. Original upload records are retained; check the original status before any write. No upload was automatically retried.",
     "v2Title": "Media upload and recovery · v2",
     "v2CleanupPending": "A device-local file handle could not be released. It is not reused. Retry local cleanup before choosing or uploading another file; saved requests and server assets are unchanged.",
     "v2RetryCleanup": "Retry releasing device-local file handles",

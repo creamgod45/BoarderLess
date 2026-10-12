@@ -150,7 +150,12 @@ internal class PickedAssetUploadCoordinator(
         // A receipt can observe only an already locally reserved lease, not authorize one.
         val next = receipt.lease?.takeIf { it.ticketRequestId == bound.ticketRequestIds.lastOrNull() }
             ?.let(bound::bindLease) ?: bound
-        store.save(current.generation, next)
+        if (next == current.value) {
+            // Repeated status observations should not manufacture new local generations.
+            // Still confirm the original durable record after the HTTP await; a concurrent
+            // change is recovery, not permission to overwrite it with a cached value.
+            require(store.readDurable(request) == current) { "Upload reservation changed during receipt observation" }
+        } else store.save(current.generation, next)
         active()
         return receipt
     }

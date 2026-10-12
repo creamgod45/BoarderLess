@@ -486,6 +486,11 @@
     "externalReferencePending": "畫布插入待外部引用支援；不會將 GIPHY 圖片上傳至工作區儲存。已顯示官方品牌標示，正式整合審核仍待完成。"
   },
   "media": {
+    "v2Watch": "持續查詢原素材處理狀態",
+    "v2WatchHint": "同意最多 20 次伺服器狀態讀取，約每 3 秒一次，最長 60 秒即停止。已核對的 identity／lease 變更會保存至原本機記錄；不重傳、不再次 complete，也不插入 Node。可隨時取消；ready 後另行選擇插入。",
+    "v2Watching": "查詢原素材處理狀態 · 第 {count}/20 次",
+    "v2WatchEnded": "查詢已結束，尚未取得新的 ready 結果。原 preparation 保留，可稍後再查；沒有重試上傳或 complete。",
+    "v2ReadFailed": "本機操作或狀態讀取未完成。原上傳記錄保留；進行寫入前請核對原狀態，沒有自動重試上傳。",
     "v2Title": "素材上傳與恢復 · v2",
     "v2CleanupPending": "裝置原檔 handle 尚未釋放，不會重用。請先重試本機清理，再選檔或上傳；未更動已保存請求或伺服器素材。",
     "v2RetryCleanup": "重試釋放裝置原檔 handle",

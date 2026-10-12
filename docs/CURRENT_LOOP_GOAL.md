@@ -1,5 +1,11 @@
 # 當前 loop 剩餘目標
 
+## 2026-10-13：素材 processing 明確有界狀態觀察（源碼已接、未驗證）
+
+- v2 completionAccepted 顯示「持續查詢原素材處理狀態」，使用者明確啟動才最多 20 次 status read、每次完成後間隔 3 秒、60 秒上限；離開 processing 即停止，read failure 不自動重試。取消／scope 失效保留原 reservation，不 prepare／ticket／PUT／complete／abandon 或插 Node。
+- 核原 requestId／digest／identity／ready asset descriptor；新的 identity／lease 仍沿原 durable 記錄保存，相同內容改確認原 durable generation 未變，不反覆 CAS。並行改動拒絕，不採快取覆蓋；觀察結束不造 ready，ready 仍另按插入。
+- 唯讀／本機操作一般失敗提示與 networkWrite 未確認分開，不說讀取失敗就是新上傳失敗。未 compile／test／HTTP／launch，六主線 active；全部業務完成後集中跨端驗收，效能最後。
+
 ## 2026-10-13：AI 理解驗證讀取既有 Desktop 設定（源碼已接、未驗證）
 
 - 本輪唯讀檢查安全 log 最新仍 2026-10-09T02:29:52.408199Z OpenAiChat Completed；沒有新的失敗可歸因，不代發付費請求或將舊完成紀錄當最新 APP 驗收。

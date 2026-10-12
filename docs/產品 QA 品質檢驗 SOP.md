@@ -1,5 +1,11 @@
 # BoarderLess 產品 QA 品質檢驗 SOP
 
+## 素材驗證處理中的有界觀察（最後集中驗收）
+
+completionAccepted 才顯示明確持續查詢，開窗與 complete 成功不自動啟動。驗最多 20 次、60 秒上限、processing 間隔 3 秒；ready／rejected／missing／abandoned／prepared 即停止，read 失敗不自動重試。timeout 不造 ready、不造空素材；原 request ID、reservation 與未確認結果保留。ready 後另行插入，沒有自動新增 Node。
+
+觀察只讀伺服器 status／ready descriptor，不 prepare／ticket／PUT／complete／abandon。核對 identity／lease 變更仍保存原本機記錄；相同內容應確認原 durable generation 不變，不製造新 generation。另一操作改記錄時拒絕，不覆蓋；取消／scope 切換不得採晚到狀態。驗手動停止、狀態錯誤、metadata mismatch、local CAS 不明與本機來源 cleanup 共存；原上傳不能因觀察失敗自動重送。視覺與遮擋交使用者判定，尚未執行。
+
 ## AI 理解驗證共用連線設定（最後集中驗收）
 
 Desktop 圖形工具保存非機密設定後，理解驗證在設定步驟明確按「讀取已保存連線設定」，應帶入相同端點、模型、協定、認證種類、版本、token limit 欄位、輸出上限、溫度與 local HTTP 選擇。讀取不應查 vault、不保存設定、不送 HTTP；原 token／answer／consent 清空，舊診斷標為前次。使用者重新審閱、輸入認證並授權本次請求。
