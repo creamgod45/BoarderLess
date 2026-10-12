@@ -8995,6 +8995,7 @@ fun WorkspaceScreen(
         }
 
         relationInsertion?.let { draft ->
+            val insertionOwner = relationInsertionOwner
             fun insertionCurrent() =
                 !connectionFailed && !workspaceSwitchInProgress && session?.canEditContent == true &&
                     session?.userId == relationInsertionOwner?.userId && session?.clientId == relationInsertionOwner?.clientId &&
@@ -9007,18 +9008,21 @@ fun WorkspaceScreen(
                     pendingDraftRecovery == null && !pendingRecoveryBusy && !mediaImportBusy
             RelationInsertionDialog(draft, isCurrent = { insertionCurrent() }, onConfirm = { plan ->
                 if (!insertionCurrent()) {
-                    false
+                    RelationInsertionApplyResult.Rejected
                 } else if (executeAwaited(plan.operation)) {
-                    selectedRelationId = null
-                    selectedIds = setOf(plan.node.id)
-                    true
+                    if (session?.userId == insertionOwner?.userId && session?.clientId == insertionOwner?.clientId &&
+                        session?.workspace?.id == draft.baseline.id && !workspaceSwitchInProgress) {
+                        selectedRelationId = null
+                        selectedIds = setOf(plan.node.id)
+                        RelationInsertionApplyResult.Queued
+                    } else RelationInsertionApplyResult.Unconfirmed
                 } else {
-                    false
+                    RelationInsertionApplyResult.Unconfirmed
                 }
             }, onDismiss = {
                 relationInsertion = null
                 relationInsertionOwner = null
-            })
+            }, onReviewPending = { insertionOwner?.let { openOriginalSubmissionReviewFor(it) } })
         }
 
         if ((showAiUnderstanding || showAiDiagram) && !connectionFailed && !workspaceSwitchInProgress) {

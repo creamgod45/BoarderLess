@@ -1,5 +1,11 @@
 # 當前 loop 剩餘目標
 
+## 2026-10-13：連線插入節點原交易恢復入口（源碼已接、未驗證）
+
+- RelationInsertionDialog 不再以 Boolean 混用 preflight 拒絕與送出不明；Rejected 只來自 executeAwaited 前已確認不送出，需重新 consent。Queued 只代表原操作已交 queue，不是 server ACK；false／取消／exception／跨 scope 回饋為 Unconfirmed，固定原 plan IDs 並凍結欄位與再次 consent／Apply。
+- 未確認固定區提供 captured owner 的中央原交易審閱入口，關窗只取消目前 coroutine 不撤銷已提交交易。Close／saving／unconfirmed 留在固定頂區，預覽／欄位放獨立 scroll，長內容不把關閉推至末尾。原 split relation 交易、Undo 與 endpoint 不改。
+- 未 compile／test／launch／HTTP，六主線 active；全部業務完成後集中驗收，視覺／遮擋由使用者判定，效能最後。
+
 ## 2026-10-13：素材 processing 明確有界狀態觀察（源碼已接、未驗證）
 
 - v2 completionAccepted 顯示「持續查詢原素材處理狀態」，使用者明確啟動才最多 20 次 status read、每次完成後間隔 3 秒、60 秒上限；離開 processing 即停止，read failure 不自動重試。取消／scope 失效保留原 reservation，不 prepare／ticket／PUT／complete／abandon 或插 Node。

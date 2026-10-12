@@ -1,5 +1,11 @@
 # BoarderLess 產品 QA 品質檢驗 SOP
 
+## 連線插入節點保存不明（最後集中驗收）
+
+插入節點僅明確 consent＋Apply 才送原 split transaction；首次 attempt 起欄位與 consent／Apply 凍結。只有 executeAwaited 前拒絕可解除凍結、重新授權；queue 接受不是 server ACK。false／timeout cancellation／exception／scope 切換不得讓使用者再次套用原交易。
+
+未確認提示與 Close 固定在頂區，長預覽／欄位獨立滾動；關閉只取消等待，不撤銷可能已提交的交易。直接「原交易審閱」用原 captured actor／client／workspace，保留 journal／pending 與原 IDs、不重配節點／連線／operation IDs，不自動 retry／fence。確認 restore Undo／Redo 與端點保留不回歸。視覺與遮擋由使用者判定，目前未驗收。
+
 ## 素材驗證處理中的有界觀察（最後集中驗收）
 
 completionAccepted 才顯示明確持續查詢，開窗與 complete 成功不自動啟動。驗最多 20 次、60 秒上限、processing 間隔 3 秒；ready／rejected／missing／abandoned／prepared 即停止，read 失敗不自動重試。timeout 不造 ready、不造空素材；原 request ID、reservation 與未確認結果保留。ready 後另行插入，沒有自動新增 Node。

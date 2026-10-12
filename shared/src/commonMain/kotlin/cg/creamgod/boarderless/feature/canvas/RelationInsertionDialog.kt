@@ -17,14 +17,18 @@ import cg.creamgod.boarderless.domain.model.*
 import cg.creamgod.boarderless.i18n.Strings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+
+internal enum class RelationInsertionApplyResult { Rejected, Queued, Unconfirmed }
 
 /** Explicit preview and confirmation. No operation is staged by merely selecting a relation. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable internal fun RelationInsertionDialog(
     draft: RelationInsertionDraft,
     isCurrent: () -> Boolean,
-    onConfirm: suspend (RelationInsertionPlan) -> Boolean,
+    onConfirm: suspend (RelationInsertionPlan) -> RelationInsertionApplyResult,
     onDismiss: () -> Unit,
+    onReviewPending: (() -> Unit)? = null,
 ) {
     val colors = BoarderLessTheme.colors
     val scope = rememberCoroutineScope()
@@ -41,6 +45,10 @@ import kotlinx.coroutines.launch
     var confirmed by remember { mutableStateOf(false) }
     var attempted by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf(false) }
+    var unconfirmed by remember { mutableStateOf(false) }
+    var job by remember { mutableStateOf<Job?>(null) }
+    fun close() { job?.cancel(); onDismiss() }
+    DisposableEffect(draft) { onDispose { job?.cancel() } }
     val plan =
         remember(text, shape, label, intent, x, y, width, height) {
             runCatching {
@@ -56,12 +64,19 @@ import kotlinx.coroutines.launch
                 )
             }.getOrNull()
         }
-    Dialog(onDismissRequest = { if (!saving) onDismiss() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    Dialog(onDismissRequest = ::close, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).imePadding(), contentAlignment = Alignment.Center) {
             GlassSurface(Modifier.widthIn(max = 680.dp).fillMaxWidth(.94f).fillMaxHeight(.86f)) {
-                Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     BasicText(Strings.relationInsert.title(), style = TextStyle(color = colors.contentText, fontSize = 18.sp))
                     BasicText(Strings.relationInsert.explanation(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
+                    if (unconfirmed) BasicText(Strings.relationInsert.unconfirmed(), style = TextStyle(color = colors.danger, fontSize = 12.sp))
+                    if (saving) BasicText(Strings.status.savingChanges(1), style = TextStyle(color = colors.contentMuted))
+                    if (attempted && !saving) onReviewPending?.let { review ->
+                        ShellButton(Strings.draftReview.originalTransactions(), onClick = { close(); review() })
+                    }
+                    ShellButton(Strings.common.close(), onClick = ::close)
+                    Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     BasicText(
                         when (draft.original.direction) {
                             RelationDirection.Backward -> Strings.relationInsert.backward()
@@ -193,30 +208,33 @@ import kotlinx.coroutines.launch
                             style = TextStyle(color = colors.danger, fontSize = 12.sp),
                         )
                     }
-                    ShellButton(Strings.relationInsert.consent(), accent = confirmed, enabled = !saving && plan != null && isCurrent(), onClick = {
+                    ShellButton(Strings.relationInsert.consent(), accent = confirmed, enabled = !attempted && !saving && plan != null && isCurrent(), onClick = {
                         confirmed =
                             !confirmed
                     })
                     ShellButton(
                         Strings.relationInsert.apply(),
-                        enabled = !saving && confirmed && plan != null && isCurrent(),
+                        enabled = !attempted && !saving && confirmed && plan != null && isCurrent(),
                         onClick = apply@{
-                            if (saving || !confirmed || !isCurrent()) return@apply
+                            if (attempted || saving || !confirmed || !isCurrent()) return@apply
                             confirmed = false
                             attempted = true
                             val prepared = checkNotNull(plan)
                             saving = true
-                            scope.launch {
+                            job = scope.launch {
                                 try {
-                                    if (isCurrent() && onConfirm(prepared)) onDismiss() else error = true
-                                } catch (cancelled: CancellationException) { throw cancelled }
-                                catch (_: Exception) { error = true }
-                                finally { saving = false }
+                                    when (if (isCurrent()) onConfirm(prepared) else RelationInsertionApplyResult.Rejected) {
+                                        RelationInsertionApplyResult.Queued -> onDismiss()
+                                        RelationInsertionApplyResult.Rejected -> { attempted = false; error = true }
+                                        RelationInsertionApplyResult.Unconfirmed -> { unconfirmed = true; error = false }
+                                    }
+                                } catch (cancelled: CancellationException) { unconfirmed = true; throw cancelled }
+                                catch (_: Exception) { unconfirmed = true; error = false }
+                                finally { saving = false; job = null }
                             }
                         },
                     )
-                    if (saving) BasicText(Strings.status.savingChanges(1), style = TextStyle(color = colors.contentMuted))
-                    ShellButton(Strings.common.cancel(), enabled = !saving, onClick = { if (!saving) onDismiss() })
+                    }
                 }
             }
         }

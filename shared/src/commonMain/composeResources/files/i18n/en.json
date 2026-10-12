@@ -1557,6 +1557,7 @@
       "toolOutput": "Output"
   },
   "relationInsert": {
+    "unconfirmed": "Insertion is unconfirmed. Review the original transaction before another edit; do not apply again. Closing this window does not undo or cancel a committed transaction.",
       "title": "Insert node in connection",
       "explanation": "Replace the connection with two connections and a new node in one transaction. Label and intent stay on the first segment; the second segment has neither. Nothing is saved until confirmed.",
       "backward": "The actual arrow order is reversed: target → new node → source.",
