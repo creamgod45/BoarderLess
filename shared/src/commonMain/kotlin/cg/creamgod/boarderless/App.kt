@@ -10,6 +10,10 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.tooling.preview.Preview
 import cg.creamgod.boarderless.data.DraftBackupRuntime
@@ -66,6 +70,30 @@ fun App(
             }
         }
     }
+    var retiredRepositories by remember(workspaceStorageRuntime, workspaceRepository) {
+        mutableStateOf<List<cg.creamgod.boarderless.data.CanvasWorkspaceRepository>>(emptyList())
+    }
+    var showWriterRecovery by remember(workspaceStorageRuntime, workspaceRepository) { mutableStateOf(false) }
+    fun retainRetired(original: cg.creamgod.boarderless.data.CanvasWorkspaceRepository, closeFailed: Boolean) {
+        val backend = original as? cg.creamgod.boarderless.data.remote.BackendWorkspaceRepository
+        if (closeFailed || backend?.supportsOwnedWriterDrain == true) {
+            if (retiredRepositories.none { it === original }) retiredRepositories = retiredRepositories + original
+            if (closeFailed) showWriterRecovery = true
+        }
+    }
+    // Read-only wait on the original owner, not release retry, HTTP or writer takeover.
+    // A failed wait retains the handle and requires explicit user recovery.
+    LaunchedEffect(retiredRepositories) {
+        for (original in retiredRepositories.toList()) {
+            val backend = original as? cg.creamgod.boarderless.data.remote.BackendWorkspaceRepository
+            if (backend?.supportsOwnedWriterDrain != true) { showWriterRecovery = true; continue }
+            try {
+                backend.awaitOwnedWriterDrain()
+                retiredRepositories = retiredRepositories.filterNot { it === original }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (_: Exception) { showWriterRecovery = true }
+        }
+    }
     val initialSession = remember(workspaceStorageRuntime, workspaceRepository) {
         runCatching {
             val runtime = workspaceStorageRuntime
@@ -74,7 +102,11 @@ fun App(
                 val created = runtime.createRepository(mode)
                 try { created to runtime.mediaRuntimeFor(created) }
                 catch (failure: Exception) {
-                    if (created !== workspaceRepository) runCatching { created.close() }
+                    if (created !== workspaceRepository) {
+                        var failed = false
+                        try { created.close() } catch (_: Exception) { failed = true }
+                        retainRetired(created, failed)
+                    }
                     throw failure
                 }
             } else workspaceRepository to mediaImportRuntime
@@ -93,6 +125,7 @@ fun App(
     val activeMediaRuntime = if (workspaceStorageRuntime == null) mediaImportRuntime else activeSession?.second ?: mediaImportRuntime
     fun chooseStorage(chosen: cg.creamgod.boarderless.data.WorkspaceStorageMode): Boolean {
         val runtime = workspaceStorageRuntime ?: return false
+        if (retiredRepositories.isNotEmpty()) { showWriterRecovery = true; return false }
         if (chosen == storageMode && activeSession != null && !storagePreferenceFailed) return true
         var candidate: cg.creamgod.boarderless.data.CanvasWorkspaceRepository? = null
         return try {
@@ -107,7 +140,11 @@ fun App(
             storagePreferenceFailed = false
             true
         } catch (_: Exception) {
-            candidate?.let { if (it !== activeRepository) runCatching { it.close() } }
+            candidate?.let { if (it !== activeRepository) {
+                var failed = false
+                try { it.close() } catch (_: Exception) { failed = true }
+                retainRetired(it, failed)
+            } }
             storagePreferenceFailed = true
             false
         }
@@ -123,12 +160,17 @@ fun App(
             } else key(activeRepository) {
                 WorkspaceScreen(
                     workspaceRepository = activeRepository,
+                    onRepositoryRetired = ::retainRetired,
+                    hostStorageRecoveryBlocked = retiredRepositories.isNotEmpty(),
                     syncServerRepository = workspaceStorageRuntime?.serverRepository ?: syncServerRepository,
                     workspaceStorageMode = if (workspaceStorageRuntime == null) null else storageMode,
                     onRequestStorageMode = if (workspaceStorageRuntime == null) null else ({ chosen ->
                         chooseStorage(chosen)
                     }),
-                    onChooseStorageMode = if (workspaceStorageRuntime == null) null else ({ storageMode = null; storagePreferenceFailed = false }),
+                    onChooseStorageMode = if (workspaceStorageRuntime == null) null else ({
+                        if (retiredRepositories.isNotEmpty()) showWriterRecovery = true
+                        else { storageMode = null; storagePreferenceFailed = false }
+                    }),
                     mediaImportRuntime = activeMediaRuntime,
                     draftBackupRuntime = draftBackupRuntime,
                     draftImportRuntime = draftImportRuntime,
@@ -154,6 +196,20 @@ fun App(
                         uiPreferences.language = preference
                     },
                 )
+            }
+            if (retiredRepositories.isNotEmpty()) {
+                cg.creamgod.boarderless.designsystem.ShellButton(
+                    cg.creamgod.boarderless.i18n.Strings.workspaceStorage.writerRecoveryTitle(),
+                    modifier = Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.safeDrawing),
+                    onClick = { showWriterRecovery = true })
+                if (showWriterRecovery) {
+                    val original = retiredRepositories.first()
+                    key(original) {
+                        cg.creamgod.boarderless.feature.canvas.WriterReleaseRecoveryDialog(original,
+                            onDrained = { retiredRepositories = retiredRepositories.filterNot { it === original } },
+                            onDismiss = { showWriterRecovery = false })
+                    }
+                }
             }
             QaWorkbenchHost(qaRuntime)
         }

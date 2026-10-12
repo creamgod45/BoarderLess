@@ -20,6 +20,7 @@ internal object ServerRepositoryWriterCoordinator {
             val drained: Boolean = false, val onDrained: (() -> Unit)? = null)
         private val state = MutableStateFlow(State())
         private val settlement = MutableStateFlow(Settlement.Pending)
+        val releaseFailed: Boolean get() = state.value.closed && settlement.value == Settlement.Failed
         /** Wait only for an owner already explicitly closed. A live owner is never
          * cancelled or retired here. Timeout retains ownership and all original records. */
         suspend fun claimAfterDrain() {

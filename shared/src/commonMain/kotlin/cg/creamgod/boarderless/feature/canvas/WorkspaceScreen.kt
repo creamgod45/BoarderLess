@@ -1087,6 +1087,8 @@ fun WorkspaceScreen(
     canvasExportRuntime: CanvasExportRuntime = CanvasExportRuntime.Unavailable,
     awaitedQuickSchemeRepository: cg.creamgod.boarderless.data.persistence.AwaitedQuickSchemeRepository? = null,
     quickSchemeRepository: cg.creamgod.boarderless.data.persistence.QuickSchemeRepository? = null,
+    onRepositoryRetired: ((cg.creamgod.boarderless.data.CanvasWorkspaceRepository, Boolean) -> Unit)? = null,
+    hostStorageRecoveryBlocked: Boolean = false,
 ) {
     val colors = BoarderLessTheme.colors
     val density = LocalDensity.current.density
@@ -1140,7 +1142,14 @@ fun WorkspaceScreen(
     val mediaRecoveryWriteMutex = remember { kotlinx.coroutines.sync.Mutex() }
     var mediaRecoveryRevision by remember { mutableStateOf(0) }
     DisposableEffect(repository) {
-        onDispose { repository.close() }
+        onDispose {
+            var failed = false
+            try { repository.close() }
+            catch (failure: Exception) {
+                failed = true
+                if (onRepositoryRetired == null) throw failure
+            } finally { onRepositoryRetired?.invoke(repository, failed) }
+        }
     }
     var history by remember {
         mutableStateOf(
@@ -1364,7 +1373,7 @@ fun WorkspaceScreen(
     var commandPaletteQuery by remember { mutableStateOf("") }
     var selectedSchemeId by remember { mutableStateOf<Int?>(schemes.lastOrNull()?.id) }
     var schemeNameDraft by remember { mutableStateOf(schemes.lastOrNull()?.name.orEmpty()) }
-    val draftReviewVisible = showOriginalSubmissionReview ||
+    val draftReviewVisible = hostStorageRecoveryBlocked || showOriginalSubmissionReview ||
         preparedMediaController != null || schemeTransferBusy || incomingScheme != null || showStoppedRecovery || showAiUnderstanding || showAiDiagram || showCloudSchemes || showLegacySchemeImport || showMigrationPreview ||
             relationInsertion != null || pendingClipboardPaste != null ||
             showSequenceCreation || showCanvasGridStyle || showSchemeBundleImport || exportSchemeBundle != null ||

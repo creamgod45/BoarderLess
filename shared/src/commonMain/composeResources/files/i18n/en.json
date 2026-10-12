@@ -1564,6 +1564,13 @@
       "contextPreview": "Preview includes the endpoints, new node and nearby objects. Adjust position and dimensions as needed."
   },
   "workspaceStorage": {
+    "writerRecoveryTitle": "Review original storage release",
+    "writerRecoveryHint": "The original retired repository is retained until its accounted storage operations finish and release is confirmed. Canvas editing and mode changes are paused. Closing this window does not release the owner, delete data, resend transactions or create a replacement writer.",
+    "writerDrainUnavailable": "This repository cannot prove its storage drain here. The original handle is retained; do not assume storage is released or reset it.",
+    "writerDraining": "Waiting for the original accounted storage operations…",
+    "writerStillHeld": "Original release is not confirmed. No replacement writer was created by this recovery action.",
+    "writerReadDrain": "Check original drain (no writes)",
+    "writerRetryRelease": "Retry original failed release only",
       "title": "Choose canvas storage",
       "explanation": "Local canvases and imported originals work offline and can be exchanged using scheme bundles. Server mode connects to the configured service. The modes save separately; data is not moved automatically. Change mode from Spaces.",
       "local": "Local canvas (offline)",

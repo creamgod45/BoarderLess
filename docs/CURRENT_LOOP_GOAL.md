@@ -1,5 +1,11 @@
 # 當前 loop 剩餘目標
 
+## 2026-10-13：原 writer 釋放恢復 App 入口（源碼已接、未驗證）
+
+- WorkspaceScreen dispose 將原 repository 交給 App 保留；close 拋錯不再在有宿主時直接丟失原 handle。具 owned-drain capability 的原 repository 即使 close 當下未拋錯也保留，涵蓋背景 operation 稍後才失敗的釋放。候選 media 構造失敗時的 cleanup 同樣保留原候選。
+- App 僅自動等待原 owner 已記錄的操作退出，無寫入／HTTP／release retry；成功才移除原 handle。失敗／取消不宣稱已釋放。畫布編輯／Presence 與模式切換在保留期間受限，可關閉／重開中央恢復視窗；明確「查原排空」或「僅重試原失敗釋放」，後者只依原 owner Failed 狀態開啟，仍須 await 成功。
+- 無 capability 的 close failure 保留且提示無法證明，不空成功。此保留只屬目前 App 生命週期，不是跨重啟 durable handle、全 writer 排他、網路排空或 migration cutover。正式 capture／publication／activation／scope 註冊仍待接，未 compile／test／launch；六主線 active，最後集中驗收、效能最後。
+
 ## 2026-10-13：原 repository writer drain 與釋放恢復介面（源碼已接平台、未接遷移宿主）
 
 - BackendWorkspaceRepository 提供 awaitOwnedWriterDrain／retryOwnedWriterRelease，必須先 close 原 repository，且 factory 必須提供原 owner callback；沒有空成功 fallback，不建立新 owner、不重試 HTTP／mutation。closeRequested 阻止關閉後的 prepareWriter，含 await 後再核對。

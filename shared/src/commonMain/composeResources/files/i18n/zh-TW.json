@@ -1574,6 +1574,13 @@
       "contextPreview": "預覽包含兩端、新節點與附近物件，可調整位置與尺寸。"
   },
   "workspaceStorage": {
+    "writerRecoveryTitle": "審閱原儲存釋放狀態",
+    "writerRecoveryHint": "保留原已關閉 repository，直到它記錄的儲存操作退出且釋放確認。暫停畫布編輯與模式切換；關閉此視窗不釋放 owner、不刪資料、不重送交易，也不建立替代 writer。",
+    "writerDrainUnavailable": "此 repository 無法在這裡證明儲存已排空。原 handle 仍保留，請勿假設已釋放或重置儲存。",
+    "writerDraining": "正在等待原已記錄的儲存操作退出…",
+    "writerStillHeld": "原釋放尚未確認；此恢復操作沒有建立替代 writer。",
+    "writerReadDrain": "查原排空狀態（不寫入）",
+    "writerRetryRelease": "僅重試原失敗的釋放",
       "title": "選擇畫布儲存方式",
       "explanation": "本機畫布與匯入原檔可離線使用，透過素材包與其他裝置交換。伺服器模式連線到已設定的服務；兩種模式各自保存，不會自動搬移資料。可從「空間」切換模式。",
       "local": "本機畫布（可離線）",

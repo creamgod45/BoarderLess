@@ -101,9 +101,11 @@ class BackendWorkspaceRepository(
     /** Drain of this factory's accounted storage operations only; no empty fallback. */
     private val awaitServerWriterDrain: (suspend () -> Unit)? = null,
     private val retryServerWriterRelease: (() -> Unit)? = null,
+    private val serverWriterReleaseFailed: (() -> Boolean)? = null,
 ) : cg.creamgod.boarderless.data.CanvasWorkspaceRepository {
     private val closeRequested = kotlinx.coroutines.flow.MutableStateFlow(false)
     internal val supportsOwnedWriterDrain: Boolean get() = awaitServerWriterDrain != null
+    internal val ownedWriterReleaseFailed: Boolean get() = closeRequested.value && serverWriterReleaseFailed?.invoke() == true
 
     /** Host calls close first, then waits on the ORIGINAL writer. Cancellation does not
      * prove drain and never creates another owner. Not all-writer exclusion, network-task

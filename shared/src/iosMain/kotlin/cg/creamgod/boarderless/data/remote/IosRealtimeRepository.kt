@@ -17,6 +17,7 @@ internal fun iosRealtimeBackendRepository(submission: AwaitedSubmissionRuntime? 
         releaseServerWriter = { owner.close() },
         awaitServerWriterDrain = { owner.awaitClosedAndDrained() },
         retryServerWriterRelease = { owner.retryFailedRelease() },
+        serverWriterReleaseFailed = { owner.releaseFailed },
         serverWriterOperations = operations,
         mediaReferenceProofRuntime = MediaReferenceProofRuntime {
             lease.requireActive(); owner.requireActive()

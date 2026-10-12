@@ -1,5 +1,11 @@
 # BoarderLess 產品 QA 品質檢驗 SOP
 
+## App 原 writer 恢復視窗（最後集中驗收）
+
+切換儲存模式／離開畫布、候選 media 構造失敗時驗原 repository 被保留；正常 owner drain 只能等待，不得自動重試釋放或送網路請求。close 當下成功、背景 operation 稍後 release 失敗也須保留 handle 並提供恢復入口。待確認時限制畫布編輯、Presence 分享及再次模式切換，不能反覆構造新 writer。
+
+中央視窗可關閉後重開；關閉只取消等待，不刪資料或丟失原 owner。查原排空不寫入；僅 Failed 原 owner 允許明確 retry 原 release callback，await 成功才移除記錄。多個原 handle 必須分別確認，不能一次全部清除。無 capability 的關閉失敗不得空成功。這只是目前 App 生命週期的恢復，不是跨重啟持久化 handle 或全 writer 排他證據。手機安全區、文字可讀性與遮擋由使用者判定。尚未執行驗收。
+
 ## Repository 原 writer 排空與釋放恢復（最後集中驗收）
 
 Android／iOS／Web 的原 repository 必須先 close，再 awaitOwnedWriterDrain；未關閉或沒有原 factory capability 應拒絕。關閉後新 prepareWriter 不可開始，await 中關閉也不可繼續採用 owner。已有背景操作完成前不得宣告 drain 或建立替代 owner。
