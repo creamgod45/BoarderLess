@@ -1,5 +1,11 @@
 # BoarderLess 產品 QA 品質檢驗 SOP
 
+## 四平台舊方案簿宿主恢復（最後集中驗收）
+
+Android／iOS／Web／Desktop Local 與 Server 分別驗「恢復裝置舊方案簿」入口；APP 啟動／開窗不自動讀舊 Settings。先確認平台原 Settings default factory 指向實際舊索引 namespace，再手動讀取、逐筆審原 JSON／副本／結構預覽，明確同意 identified save。目的地沿目前 private library，不能混合 Local／Server namespace 或猜素材 workspace。
+
+取消、stage／save 不明沿原 requestId 恢復；舊 Settings 不變。空索引不代表舊資料不存在；未知版本／缺 provenance／partial metadata 必須拒絕，不默默跳過或修復。四端 view／upload／download 同步仍另行驗收，此入口不替代 cross-workspace materialization。Web 有界讀取仍跑其平台 dispatcher，效能最後測；手機遮擋與可讀性由使用者判定，尚未執行。
+
 ## 雲端方案本機匯入回饋（最後集中驗收）
 
 選取雲端原 resource，審完整定義／來源／availability 後按本機匯入。stage 起凍結原 requestId；取消、CAS 未確認、save 後回應遺失不得重新選另一份或產生新匯入 ID。固定區保留 ID 與指引，關窗後以「待完成的本機匯入」審原 intent。可翻完整原 payload，不下載素材、不做 materialization、不自動插畫布。

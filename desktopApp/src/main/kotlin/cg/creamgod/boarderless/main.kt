@@ -154,6 +154,7 @@ private fun runDesktopApplication(
                 )
             }
             App(
+                legacyQuickSchemeReader = remember { cg.creamgod.boarderless.data.persistence.legacyQuickSchemeCatalogReader() },
                 workspaceStorageRuntime = storageRuntime,
                 qaRuntime = qaRuntime,
                 draftBackupRuntime = draftBackupRuntime,

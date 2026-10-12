@@ -1022,7 +1022,7 @@
     "workspaceAccessWasRevokedOr": "工作區存取權已被撤銷，或此工作區已不存在"
   },
   "schemes": {
-    "legacyTitle": "恢復 Desktop 舊方案簿",
+    "legacyTitle": "恢復裝置舊方案簿",
     "legacyWarning": "讀取舊共用 Settings 目錄，逐筆審閱後保存定義副本至目前方案簿。這不搬移素材、不授權存取、不上傳雲端、不插入畫布，也不刪除舊資料。索引空白不代表沒有其他舊資料。",
     "legacyLoad": "讀取舊目錄（僅本機）",
     "legacyEmpty": "舊索引目錄沒有記錄。",

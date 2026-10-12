@@ -1,5 +1,11 @@
 # 當前 loop 剩餘目標
 
+## 2026-10-13：四平台舊方案簿明確恢復宿主（源碼已接、未驗證）
+
+- 核對 Android／iOS／Web 已傳 private persistent／awaited library，並非退 Settings；原缺口是舊索引定義無明確恢復入口。新增 lazy legacyQuickSchemeCatalogReader capability，由四平台 App 宿主提供，Workspace 優先 host reader、再 repo reader；Desktop Local 也可審閱，不限 Server。
+- factory／開窗不讀取、不寫入、不 HTTP；手動讀取仍沿既有有界 indexed catalog、逐筆原 JSON／副本／預覽審閱、來源重讀與 identified save。缺 provenance／未知 schema 拒絕，不猜目的 workspace，不自動合併 mode namespace／搬移素材／刪舊 Settings。UI 標題改裝置而非 Desktop 限定。
+- 這是 source 接線，不代表四端恢復或跨裝置同步已驗收；Settings 預設來源仍須各平台實測，不證明完整無索引 key catalog／all-writer 排他。未 compile／test／launch，六主線 active，業務完成後集中验收、效能最後。
+
 ## 2026-10-13：雲端方案匯入本機結果與即時清單回饋（源碼已接、未驗證）
 
 - CloudSchemeDialog 在 stageIdentifiedSave 前凍結原 QuickSchemeSaveIntent／requestId；保存不明時固定區顯示原 ID 與 pending import 恢復指引，禁止切換 resource／新匯入／雲端 mutation。關窗不撤銷／刪除原 intent。純原 payload 與 availability 審閱分頁仍可用。

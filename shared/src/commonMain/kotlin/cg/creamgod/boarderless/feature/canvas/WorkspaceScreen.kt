@@ -1089,6 +1089,7 @@ fun WorkspaceScreen(
     quickSchemeRepository: cg.creamgod.boarderless.data.persistence.QuickSchemeRepository? = null,
     onRepositoryRetired: ((cg.creamgod.boarderless.data.CanvasWorkspaceRepository, Boolean) -> Unit)? = null,
     hostStorageRecoveryBlocked: Boolean = false,
+    legacyQuickSchemeReader: (suspend () -> List<QuickScheme>)? = null,
 ) {
     val colors = BoarderLessTheme.colors
     val density = LocalDensity.current.density
@@ -1123,6 +1124,7 @@ fun WorkspaceScreen(
     var pendingPreparedAsset by remember(repository) { mutableStateOf<WorkspaceAsset?>(null) }
     val canvasPreferences = remember { CanvasPreferences() }
     val quickSchemeStore = remember(repository, quickSchemeRepository, awaitedQuickSchemeRepository) { awaitedQuickSchemeRepository ?: (quickSchemeRepository ?: repository.quickSchemeRepository ?: QuickSchemeStore()).awaited() }
+    val legacySchemeReader = legacyQuickSchemeReader ?: repository.legacyQuickSchemeReader
     val libraryPreferences =
         remember {
             cg.creamgod.boarderless.data.persistence
@@ -7263,7 +7265,7 @@ fun WorkspaceScreen(
                     if (quickSchemeStore.cloudSyncRuntime != null && repository.cloudQuickSchemeServer != null)
                         ShellButton(Strings.cloudSchemes.title(), enabled = !inputBlocked && session != null,
                             onClick = { showCloudSchemes = true })
-                    if (repository.legacyQuickSchemeReader != null && quickSchemeStore.supportsIdentifiedSave)
+                    if (legacySchemeReader != null && quickSchemeStore.supportsIdentifiedSave)
                         ShellButton(Strings.schemes.legacyTitle(),
                             enabled = !inputBlocked && !schemesBusy && session != null,
                             onClick = { showLegacySchemeImport = true })
@@ -8762,10 +8764,10 @@ fun WorkspaceScreen(
                     session?.workspace?.id == owner.workspace.id && !connectionFailed && !workspaceSwitchInProgress && !syncInProgress },
                 onDismiss = { showMigrationPreview = false })
         }
-        if (showLegacySchemeImport && session != null && repository.legacyQuickSchemeReader != null) {
+        if (showLegacySchemeImport && session != null && legacySchemeReader != null) {
             val owner = checkNotNull(session)
             val ownerScope = draftReviewScopeId
-            LegacyQuickSchemeImportDialog(checkNotNull(repository.legacyQuickSchemeReader), quickSchemeStore,
+            LegacyQuickSchemeImportDialog(legacySchemeReader, quickSchemeStore,
                 canContinue = { session?.userId == owner.userId && session?.clientId == owner.clientId &&
                     session?.workspace?.id == owner.workspace.id && !connectionFailed && !workspaceSwitchInProgress && !syncInProgress },
                 onSaved = { saved ->

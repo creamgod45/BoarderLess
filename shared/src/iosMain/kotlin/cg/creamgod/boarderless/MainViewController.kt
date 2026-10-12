@@ -48,6 +48,7 @@ fun MainViewController(): UIViewController {
             }
             App(
                 workspaceStorageRuntime = workspaceStorageRuntime,
+                legacyQuickSchemeReader = remember { cg.creamgod.boarderless.data.persistence.legacyQuickSchemeCatalogReader() },
                 quickSchemeRepository = quickSchemeRepository,
                 canvasExportRuntime = exportPicker.runtime,
                 schemeBundleRuntime = schemeBundleRuntime,

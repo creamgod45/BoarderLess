@@ -47,6 +47,7 @@ fun App(
     canvasExportRuntime: cg.creamgod.boarderless.feature.canvas.CanvasExportRuntime = cg.creamgod.boarderless.feature.canvas.CanvasExportRuntime.Unavailable,
     awaitedQuickSchemeRepository: cg.creamgod.boarderless.data.persistence.AwaitedQuickSchemeRepository? = null,
     quickSchemeRepository: cg.creamgod.boarderless.data.persistence.QuickSchemeRepository? = null,
+    legacyQuickSchemeReader: (suspend () -> List<cg.creamgod.boarderless.data.persistence.QuickScheme>)? = null,
 ) {
     val uiPreferences = remember { UiPreferences() }
     var reduceTransparency by remember { mutableStateOf(uiPreferences.reduceTransparency) }
@@ -177,6 +178,7 @@ fun App(
                     schemeBundleRuntime = schemeBundleRuntime,
                     canvasExportRuntime = canvasExportRuntime,
                     quickSchemeRepository = quickSchemeRepository,
+                    legacyQuickSchemeReader = legacyQuickSchemeReader,
                     awaitedQuickSchemeRepository = awaitedQuickSchemeRepository,
                     menuBridge = menuBridge,
                     recentWorkspacesPublisher = recentWorkspacesPublisher,

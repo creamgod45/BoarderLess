@@ -1006,7 +1006,7 @@
     "workspaceAccessWasRevokedOr": "Workspace access was revoked or is no longer available"
   },
   "schemes": {
-    "legacyTitle": "Recover legacy Desktop schemes",
+    "legacyTitle": "Recover legacy device schemes",
     "legacyWarning": "Read the old shared Settings catalog, review one definition, then save a metadata copy to this library. This does not migrate assets, grant access, upload to the cloud, insert on the canvas, or delete old records. An empty indexed catalog is not proof that no other legacy data exists.",
     "legacyLoad": "Read legacy catalog (local only)",
     "legacyEmpty": "No records in the legacy indexed catalog.",

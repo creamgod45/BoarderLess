@@ -335,6 +335,7 @@ class MainActivity : ComponentActivity() {
             }
             App(
                 quickSchemeRepository = quickSchemeRepository,
+                legacyQuickSchemeReader = remember { cg.creamgod.boarderless.data.persistence.legacyQuickSchemeCatalogReader() },
                 schemeBundleRuntime = schemeBundleRuntime,
                 canvasExportRuntime = canvasExportRuntime,
                 workspaceStorageRuntime = workspaceStorageRuntime,

@@ -4,6 +4,13 @@ import cg.creamgod.boarderless.i18n.Strings
 import com.russhwolf.settings.Settings
 import kotlinx.serialization.Serializable
 
+/** Explicit host capability. Construction performs no reads or migration. */
+fun legacyQuickSchemeCatalogReader(): suspend () -> List<QuickScheme> = {
+    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+        QuickSchemeStore().listForRecovery()
+    }
+}
+
 interface QuickSchemeRepository {
     val cloudSyncRuntime: CloudSchemeRuntime? get() = null
     fun pendingIdentifiedSaves(): List<QuickSchemeSaveIntent> = emptyList()

@@ -26,6 +26,7 @@ fun main() {
             val schemeRepository = remember { browserQuickSchemeRepository() }
             App(
                 workspaceStorageRuntime = workspaceStorageRuntime,
+                legacyQuickSchemeReader = remember { cg.creamgod.boarderless.data.persistence.legacyQuickSchemeCatalogReader() },
                 awaitedQuickSchemeRepository = schemeRepository,
                 schemeBundleRuntime = schemeBundleRuntime,
                 canvasExportRuntime = canvasExportRuntime,
