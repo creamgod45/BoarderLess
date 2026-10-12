@@ -42,6 +42,33 @@ def validate_target(path, allowed_root):
         raise RuntimeError(f"路徑不是目前使用者擁有的資料夾：{path}")
 
 
+def is_boarderless_karma_output(path):
+    """Recognize only flat webpack-generated test files with this project's compiled module."""
+    commons = path / "commons.js"
+    if not commons.is_file() or commons.is_symlink() or commons.stat().st_uid != os.getuid():
+        return False
+    for child in path.iterdir():
+        if child.is_symlink() or not child.is_file() or child.stat().st_uid != os.getuid() or not re.fullmatch(
+            r"[A-Za-z0-9_.-]+\.(?:js(?:\.map|\.LICENSE\.txt)?|wasm)", child.name
+        ):
+            return False
+    markers = (b"./kotlin/BoarderLess-shared-test.", b"cg.creamgod.boarderless")
+    found = set()
+    tail = b""
+    with commons.open("rb") as source:
+        # Stream matching, never import/execute cached code or print its contents.
+        for _ in range(256):
+            chunk = source.read(1024 * 1024)
+            if not chunk:
+                break
+            data = tail + chunk
+            found.update(marker for marker in markers if marker in data)
+            if len(found) == len(markers):
+                return True
+            tail = data[-128:]
+    return False
+
+
 def discover(repo, temporary_roots, derived_data_root=None):
     targets = []
     for module in project_modules(repo):
@@ -71,6 +98,12 @@ def discover(repo, temporary_roots, derived_data_root=None):
     # These exact roots were created by this project's isolated verification builds. Do not
     # blanket-delete boarderless-*; other temp folders contain QA documents and original media.
     for base in dict.fromkeys(p.resolve() for p in temporary_roots):
+        for path in base.glob("_karma_webpack_*"):
+            if not re.fullmatch(r"_karma_webpack_[0-9]+", path.name) or path.is_symlink() or not path.is_dir():
+                continue
+            validate_target(path, base)
+            if is_boarderless_karma_output(path):
+                targets.append(path)
         for name in ISOLATED_BUILDS:
             path = base / name
             if path.exists() or path.is_symlink():
@@ -123,7 +156,7 @@ def processes():
 
 
 def check_busy(targets):
-    build_tokens = ("GradleWrapperMain", "org.gradle.launcher.GradleMain", "xcodebuild ")
+    build_tokens = ("GradleWrapperMain", "gradle-wrapper.jar", "org.gradle.launcher.GradleMain", "xcodebuild ", "/karma/bin/karma", "karma.conf.js")
     for pid, command in processes():
         if any(token in command for token in build_tokens):
             raise RuntimeError(f"偵測到建置程序 PID {pid}，請等建置結束再清理")

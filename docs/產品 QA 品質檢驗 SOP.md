@@ -1,5 +1,517 @@
 # BoarderLess 產品 QA 品質檢驗 SOP
 
+## Desktop 儲存模式與雲端方案簿宿主（最後集中驗收）
+
+普通Desktop啟動Local，即使上次Server；--server明確啟動仍Server，external launch mode優先。模式UI切換準備repo／media後才交接，失敗保留原畫布，不遷移内容；同模式no-op不重建client／storage。Local素材缺gateway不得HTTP fallback；Server素材用已選repo endpoint，不回預設其他服務。
+
+server-v1/schemes私有持久方案庫应提供cloud功能入口与identified save，Local仍local/schemes，不能混讀／自動合併。舊Settings library不刪／不自動搬移；需另外驗明確匯出／匯入與namespace說明，空新庫不證明舊資料沒有。activated工廠存在不等正式WS啟用；ownership／scope／cutover另驗。全部功能完成後集中Desktop與跨端驗收，效能最後。
+
+## AI UTF-8 增量緩衝原狀保持（最後集中驗收）
+
+測多delta ASCII／中文／emoji與pending high配對；下一delta low只消耗原4bytes預留，不再次加4。fragment含非法low／high後非low或超上限時，原完整文字、pending high与reservedBytes保持不變，不發布部分fragment。空delta不清pending，finish仍拒未配對；clear重置所有狀態。
+
+tool progress只包含新完成字元，UI拼接不得重複前文；arguments仍按原raw JSON UTF-8 bytes並保持strict parser限制。這不是效能通過證據，最後集中correctness／跨協定驗收，benchmark安排在全部功能完成之後最後執行。
+
+## 背景／網格保存不明的原交易審閱（最後集中驗收）
+
+背景首次Apply後readOnly且非busy、網格attempted且非busy，應有固定區原交易審閱按钮；只關對應picker/dialog及preview，再核captured actor/client/workspace進中央原記錄流程。不存在重新Apply、換operationId／beforeStyle或清原durable記錄；Close不等於rollback。
+
+其他color picker不提供onReviewPending時維持原UI與操作；busy不能觸發審阅交接。原style CAS、遠端另改grid/background與Undo／Redo仍須驗，不將preview或receipt查詢當正式還原。全部業務完成後集中驗收，視覺由使用者、效能最後。
+
+## 鋼筆／時序圖保存不明的原交易入口（最後集中驗收）
+
+首次commit後false／exception／取消，鋼筆與時序固定區須能轉入中央原交易審閱，關掉的僅當前editor；captured owner與當前actor/client/workspace不同不能顯示新scope資料。local reload仍原pending／draft流程，不發替代請求或resend。AI同一scopeguard也驗。
+
+時序commitAttempted後Close不稱「丟棄」或rollback，不刪任何已retain紀錄；commit前未保存內容仍有原discard確認。原紀錄未能保存時應維持未確認／無證據，不用空清單聲稱原交易不存在。最後集中跨端fault驗收，視覺由使用者、效能最後。
+
+## 原交易中央審阅與AI未確認交接（最後集中驗收）
+
+AI Apply Unconfirmed後可從固定區進入原交易視窗，也能從pending狀態按鈕開啟；只關原AI視窗，不清durable journal／wire／receipt。原actor/client/workspace不匹配不可導向新scope紀錄。busy／queue未完成不能操作，fixed讀取狀態與Close可見，背景畫布輸入／status遮擋停用。
+
+「讀本機原紀錄」只用既有pendingChange／pendingDraft；「查原收據」只receipt讀取、不Fence或resend；draft review走既有正式審核。所有操作使用原ID，不把無紀錄UI空值或receipt查到當完整ACK／授權替代請求。Close不刪紀錄／rollback。最後集中跨端／fault驗收，視覺由使用者、效能最後。
+
+## 原 writer 釋放失敗恢復（最後集中驗收）
+
+對原owner idempotent onDrained注入釋放失敗，awaitClosedAndDrained仍拒絕；另candidate不可claim。只有原owner已closed、實體accounted operations=0、settlement Failed且仍佔active，明確retryFailedRelease才重試原callback；不得重開writer／歸零操作數／換identity／自動retry，成功後再await確認。兩個並行retry只允許原狀態CAS勝者，其餘拒絕；取消或再失敗保持原owner供明確處置。
+
+Web事實：目前同tab lease tokens共用一把底層WebLock，跨tab ifAvailable失敗而非等待／steal，不把「同tab必然同名鎖死鎖」當現有bug。仍須驗證oldtoken/新token切換、pagehide invalidation及完整Settings/physical排除，不以shared lock當同process writer排除。最後集中故障與跨端驗收，效能最後。
+
+## Activated installation 生命週期與實體排他權（最後集中驗收）
+
+真宿主接妥後，media runtime準備失敗須closecandidate並保留原activation/exclusion待處置，不切UI或fallback。adopt只一次，錯scope／closed／重複handoff拒絕。close先停止runtime新calls与repo，等logicalcalls後仍須all-store實體IDB/native I/O終止，再release排他權；取消／exception不當Released，保留原物件與階段明確續處。
+
+所有physical drain／release callbacks須真實且release冪等，不能傳empty function。特別核WebLock／nativelease的migration→repository ownership交接：不得持原exclusive lock又等待同名新acquire造成deadlock，亦不得為避deadlock提早釋放而讓舊writer復活。現有工廠／lifecycle尚無完整宿主，不拿源碼存在當此項通過。最後集中故障／跨端驗收，效能最後。
+
+## 已啟用 runtime 的平台 repository 交接（最後集中驗收）
+
+宿主真正接線後，使用原活躍activation lease＋registered scope，確認platform factory交接同一runtime與原API base／user／client／workspace。任何錯配、closed lease／未registered scope或factory缺失要停止／關candidate，不fallback legacy、不自動重配actor或新workspace、不初始化新ledger。建構不代表取得writer，正常prepareServerWriter與真平台ownership需另外成立。
+
+切換前排除舊Settings／repo writers並等logical與平台physical I/O drain；宿主持有activation至新repo關閉且drain完成後才release。Android／iOS／Web factory入口与Desktop參數皆需驗，普通啟動仍不autoactivate。當前入口沒有App宿主caller，不得將factory存在當正式多人協作已完成。全部業務完成後集中測試，效能最後。
+
+## 跨端 MIME 格式與 typed 匯入錯誤（最後集中驗收）
+
+Android／iOS Photos／iOS Files／Desktop／Web 分別匯入 PNG/JPEG/WebP/GIF/MP4/WebM，wire MIME 必須canonical且與來源checksum／sniff一致。HEIC／MOV無支援representation時提示格式／需轉表示，不能重命名副檔名當轉碼或將QuickTime提交為MP4。Photos compatible representation是否實際可提供支援格式須實機驗，不以configuration存在當通過。
+
+素材過200MiB、空檔、錯checksum／尺寸／duration／truncated source要typed大小或檔案錯誤，不統一當source mismatch；原已預留／write可能進行仍保留request及lookup規則，不自动重送。舊非支援metadata不可自行修改digest或刪除receipt冒充修復。完整业务完成後集中跨端驗收，視覺由使用者，效能最後。
+
+## 時序 Mermaid 格式變更與原 IDs（最後集中驗收）
+
+原時序圖包含自訊息／nested alt／loop／par，guided→export→source只改合法縮排、空白／註解或等價supported箭頭語法，validate及回guided後participants／messages／blocks原semantic IDs與canvas binding應不變；未改draft套用仍no-op。
+
+更改訊息文字／方向／角色／順序／branch或參與者別名，不得以相同位置猜原身分；按現有parser新draft規則完整審閱。Unsupported source仍顯示正式diagnostic，不因original匹配跳過parse。確認外部連線dependency與鎖保護仍阻擋不安全移除，無部分transaction。最後集中source／guided／Undo／Redo跨端驗收，視覺由使用者、效能最後。
+
+## 連線 geometry 與祖先鎖（最後集中驗收）
+
+分別鎖source／target／直接或間接Group祖先，route waypoint、線條新增waypoint、label拖曳、loop extent及geometry屬性面板不應修改，應停用或提示；自循環建立與插入中間節點用同規則。missing parent／non-Group parent／cycle不得當unlocked，unlock有效祖先後才允許。
+
+手勢途中遠端更新锁／祖先／geometry應full baseline不匹配而取消，不送partial mutation；停止手勢不留preview。此規則不改relation文字／方向編輯語意或用UI鎖取代backend ACL。最後集中pointer／跨端與Undo／Redo驗收，視覺由使用者、效能最後。
+
+## AI proposal 提交前拒絕與交易未確認（最後集中驗收）
+
+提交前 scope／permission／version／snapshot／pure proposal review 被拒絕時 Rejected，無正式操作，可以改包含項再審、必須重新授權Apply。executeAwaited 開始後 false／exception／取消，不得當未寫入；UI Unconfirmed保存原proposal選取及ID，禁再Apply／discard／設定重置，固定header提示核原pending／draft。
+
+Close 只清UI，不刪已retain的journal／wire／receipt；草稿恢復與receipt/fence仍用原identity。Queued僅表示隊列交接，不當server committed；server確認另驗。此節尚未執行，完整功能完成後集中雙協定／跨端驗收，視覺由使用者、效能最後。
+
+## AI 所有輪次實際請求授權（最後集中驗收）
+
+含至少兩輪工具回覆的 OpenAI Chat／Claude Messages 任務，每輪顯示自己的 exact body／endpoint／model，皆須明確 Approve 才送該 HTTP。不得出現後續自動同意捷徑；首次批准不批准第二輪含新工具結果的body。不同任务或輪次相同的歷史卡片、不同 body／target 或已回覆 review，都不能批准當前請求。
+
+在等待同意時拒絕／取消／關閉／切scope，應釋放 gate、無後續 HTTP、無可 Apply 草稿；同意後仍核當前scope與身份。log只含typed摘要，不記body或金鑰；Apply是另外一個本機／畫布交易審核，不等於送出 AI 授權。全部业务完成後集中雙協定故障驗收，效能最後。
+
+## 雲端方案結構預覽與本機素材來源（最後集中驗收）
+
+文字／群組／geometry／vectorPath／sequence／media／GIPHY 混合方案，選取後顯示結構預覽及完整 JSON，media只placeholder、不進行下載或播放。超8筆 assetAvailability分頁不可遺漏，按asset＋kind＋sourceWorkspace顯示 available／access_denied／unavailable；任何狀態都不自動授予插入或搬移權限。
+
+純圖形或單一素材來源可明確保存metadata copy，identified intent與save採相同payload／schemaVersion／sourceWorkspace。多來源／不支援payload禁匯入並說明，不保留部分來源冒充完整copy；未支援materialization不可自行搬素材。已保存本機仍非已插畫布，實際使用另核 destinationReady／權限。功能完成後集中跨端驗收，視覺由使用者、效能最後。
+
+## v2 新原檔一般上傳流程（最後集中驗收）
+
+新選檔並 durable reserve 後，明確按「授權並上傳」應依序 prepare／ticket／PUT／complete，期間各 intent 在 write 前保存、identity／lease在使用前保存。原 record 有任何 prepare／ticket／PUT／complete attempt 或 known identity 即不能用一般流程，須原 request lookup／分步恢復；即使 UI snapshot 空也不得放行。
+
+逐步於 write 前／中／後注入取消、網路及 durable 失敗：後續步驟停止，原 request／ticket IDs 保留，不換 ID／自動重送。completionAccepted顯示處理中，不當 Ready；使用者 lookup 得 Ready 後另明確插入。成功完成後釋放原 native handle、cleanup fail保留待清理且提示，不假稱全部成功清理；沒有 polling、abandon或自动node。一般流程与分步來源 checksum／metadata／scope／lease驗證相同。全部功能完成後集中跨端驗收，視覺由使用者、效能最後。
+
+## 鋼筆保存不明與原交易凍結（最後集中驗收）
+
+新建／編輯 vectorPath、文字及 textPlacement，於首次 commit 前確認 scope／lock；Stale／Invalid 不提交，修正或重審後可重新操作。首次 commit 開始後模擬 retain／HTTP／ACK 失敗、取消與 exception，應凍結第一次 path／text／placement／operationId，不再 Apply 或編輯替代內容；固定區提示未確認及 Close。
+
+Close 不能宣稱 rollback／discard server transaction，不刪原 durable journal／pending／receipt；重新進 workspace 先核原交易狀態而非建立新 node 再送。連點不能重複 callback；no-op 編輯仍不增 transaction。此節尚未驗收，全部功能完成後集中跨端執行，視覺／遮擋由使用者，效能最後。
+
+## 雲端方案簿取消後原任務快照（最後集中驗收）
+
+初開面板須明確讀本機已保存 tasks 後才進其他操作，空未載入清單不代表沒有待確認交易。Send／Recover 開始前舊 remote page／resource ETag／review／conflict 失效；於 Sending marker、HTTP、回應後或 outbox readback 取消／故障，不能繼續用舊 Prepared 按鈕或 ETag 寫入。
+
+需要重讀時固定提示與本機 task 按鈕可見，Close／Stop 不受影響；明確重讀只有 local outbox read、不發 HTTP／重送／新建 idempotency key。成功讀取且 scope 當前有效才解除；讀取失敗保持阻擋，已提交／Unknown 不說 rollback。原 task recovery 仍核固定 retention deadline，不延長有效期。最後集中跨端／fault 驗收，視覺由使用者、效能最後。
+
+## 密集線路的自動標籤避讓（最後集中驗收）
+
+建立重合／平行／交叉多條線、不同長度中文標籤及自循環。在候選位置可避免 label 重疊時，不能因另一位置穿過較多線就選擇疊 label；其次避 node、再避線。同分與同一 stable IDs 下，map insertion order 改變不能改变布局。手動拖曳 label 保持原 geometry，auto labels 應避開它並保留間距，不替使用者重定位手動標籤。
+
+檢查 pan／zoom／旋轉／drag preview／Undo 與 PNG／PDF 使用相同 label measure 原則，僅自動布局不應新增 transaction／dirty history。密集無可用位置允許 best effort，遮擋／可读性交由使用者簽核，不宣稱零碰撞保證。全部功能完成後集中驗收，效能最後。
+
+## 遷移完整 scope 資料本機分頁（最後集中驗收）
+
+唯讀來源 preview 讀取成功後可顯示完整 frozen scope packet，不只數量；多 scope 翻頁須保持相同 source／plan digest，切 scope 回第一頁，涵蓋完整 pending 原 wire／草稿／已停止交易／fence／刪除證據／sequence floor。相鄰資料頁不得切斷 emoji、跳字或遺漏末頁，沒有傳送／儲存／自動 recapture 或寫入日誌。重新讀來源須建立新 review 並重置分頁。
+
+非法 Unicode 原資料不得透過 replacement 產生 migration digest、不得修補或移除來源。正式 publication／activation 須另有真實平台宿主與 all-writer 排除、雙確認及 receipt 核對；現有可看 preview 不代表正式 migration 已接通。功能完成後集中驗收，視覺／遮擋由使用者簽核、效能最後。
+
+## 已儲存素材插入交易未確認（最後集中驗收）
+
+fresh asset GET 失敗或 Ready metadata 無效時提示讀取／插入失敗，不能產生 node。正式 executeAwaited 開始後注入 retainDraft／HTTP／ACK 故障或取消，必須提示原交易可能已保存／提交，先核 pending／draft review；不能聲稱 rollback、刪素材、自動新 node ID 再送。恢復確認使用原交易 identity，v2 reservation 仍可發現。
+
+等待 GET／publication 時切 account／client／workspace，舊 callback 不改新 selection 或覆蓋新 status。舊 job finally 不清新 import busy；同步本機 GET 完成也不能留下 busy。此節未執行驗收，業務功能全部完成後集中跨端測試，視覺由使用者簽核，效能最後。
+
+## AI 工具字節累積與失敗草稿隔離（最後集中驗收）
+
+以受控串流確認中文／emoji 文字 128 KiB、單 call arguments 64 KiB、跨 call 1 MiB 邊界；計數按 UTF-8，而非 UTF-16 長度或替代字元。累積器對尚未配對字元暫存不發布，finish 不完整拒絕；但 SSE envelope 原 strict JSON 驗證不放寬，非法 frame 可在入口即 Format。
+
+回覆未完整前不能執行本輪工具；超量、非法參數、取消或 scope 改變後不得保留可 Apply proposal、不得修改 workspace。清除 decoder 後不留文字／參數緩衝；先前輪次的工具 trace 不代表正式寫入。任務 composer 超 64 KiB／非法 Unicode 應提示拒絕並保持原任務；send 不得使用被拒的新內容。仍逐輪 exact body 授權，無自動錯誤重試。
+
+本節是待驗收規範，全部業務功能完成後集中執行；視覺由使用者判斷、效能最後。
+
+## AI 理解文字 Unicode 與字節上限（最後集中驗收）
+
+- 使用受控 Router 回應測中文／emoji：合法 surrogate pair 同 delta 或拆兩個 delta，畫面不能先顯示替代字元；拆分最後配對後顯示完整字元。
+- 未配對 low surrogate、high 後接非 low、正常終止時 high 尚未配對：固定狀態 Failed／ResponseFormat，不可 Completed／可核對。正常終止只有空白回 EmptyResponse，非正常終止仍 Incomplete。
+- 分別測 128 KiB 邊界、多字節跨界、巨型單 delta：合法邊界接受、超量 OutputLimit、不自動重試；貼非法或超量外部回覆顯示拒絕提示並保留原回覆。安全日誌不得包含回覆原文。
+- 每次重新送出仍須明確授權；取消保留 Cancelled 而不是成功。歷史 HTTP 200 log 不代表本版驗收。全部功能完成後集中執行，視覺由使用者簽核，效能最後。
+
+## GIPHY 新查詢失敗／取消保留原結果（最後集中驗收）
+
+1. 取得搜尋 A 並載入下一頁、選擇預覽；記錄來源、筆數、下一頁 offset。輸入 B 並搜尋或改熱門，載入中仍顯示 A 原結果與來源，不能把 A 稱為 B。
+2. 分別於新查詢／下一頁中取消、模擬 401／429／網路失敗。清單及原 offset 不變，取消訊息持續可見，錯誤明確，不自動重試。明確恢復 A 輸入後可繼續原分頁；冷卻中仍禁止請求。
+3. 成功取得 B 才取代清單與來源、重置預覽並移到首筆。下一頁成功才附加且維持提供者原順序；空頁不跳動，晚到被取消回應不得替換新結果。
+4. 舊預覽 refresh 與新搜尋交錯時，舊 refresh 不得覆蓋新查詢狀態；未知 refresh 錯誤顯示 unavailable，不造成無處理 exception。更換 Key／語言時清 session，不續用舊 offset。
+
+以上是待驗收流程，非測試通過紀錄。待全部業務功能完成後集中跨端執行；視覺／遮擋由使用者簽核，效能最後。
+
+## 背景選色器原操作凍結／面板內狀態（最後集中驗收）
+
+首次Apply後selector須read-only、原operationId不变、不能再改preview或重送；busy與未確認訊息在面板內可見，不只全局status。retain failure或結果不明時非busy可close，原draft／pending照恢復規則保留，不拿close當rollback。stale CAS錯誤在面板顯示，重開清舊problem；背景／grid相關Undo／Redo仍正式transaction。其他選色器未給readOnly/statusText時行為不變。正式跨端／取消／鍵盤／focus／mobile遮擋待功能全部完成後集中驗收，視覺由使用者，效能最後。
+
+## 時序鎖定、no-op與保存不明（最後集中驗收）
+
+container／祖先鎖定不得編輯；變更participant文字／角色、block子樹、message文字／端點／順序與移除物件時核相關鎖，不能靠metadata clear繞過。未變locked項目不應擋不相關變更。空白title保持空白，完全未變draft不生成transaction／增加versions。首次commit後保存不明／取消保留原prepared並禁再Apply，改走明確draft恢復；不另造transactionId或聲稱已回復。scope precheck拒絕不送出。最後集中編譯／跨端故障驗收，效能最後。
+
+## Migration 取消與真正 writer 排除（最後集中驗收）
+
+實際宿主接妥後，在publication／activation CAS及confirm／readback途中stop／close，status不可留「正在保存」或稱rollback；原receipt與source保留、再嘗試仍核exact review／original receipt，不自動重新發布。固定status／stop／close不得被大量scope review捲走。普通repository claimAfterDrain不能代替排除direct Settings／舊build／平台physical未終止writer；無真guard不可啟用。宿主目前未接，不拿dialog存在當驗收通過；業務完成後集中跨端故障驗收，效能最後。
+
+## WS 寫入實際平台缺項（最後集中驗收）
+
+缺checkpoint、sequence ledger、atomic recovery任意組合，成員面板必須精確顯示各缺項且仍REST寫入，不靠reconnect自動初始化或繞過migration。三者齊備仍需Live／actor／role／pending／fence及physical writer guard，不以missing空集合當server ACK或部署驗收。實際migration dialog宿主與publication／activation／runtime swap需另驗，目前尚未接；不能拿preview代替。最後集中平台／故障測試，效能最後。
+
+## v2 原檔 handle 交接與清理失敗（最後集中驗收）
+
+在restore record／新預留／重新選檔的舊source.release前、中、後注入取消、exception、timeout：UI先移除舊handle，不得再次read／PUT它；新picked在metadata核對失敗或交接取消時也釋放。cleanup失敗清單需可明確重試，清理未完不再選檔／切handle或PUT，不清原request／lease／server資產。source valid交接完成前核當前scope／controller／coroutine，closed modal不能接新handle。
+
+dispose等待正在readChunk／picker／HTTP／release的job結束，再釋放當前与detached pending handle。每次cleanup有界，不以coroutine取消當成native完成；最終release失敗仍是未確認资源，不可稱「已完全清理」。正式native temporary-file／security scope／browser handle故障驗收待全部業務功能完成後集中進行，效能最後。
+
+## v2 恢復紀錄歸檔與重新顯示（最後集中驗收）
+
+Active／archived清單、分頁、同record反覆archive／unarchive驗原request／digest／lease／意圖不變。歸檔前server查詢必須fresh，ready／rejected／missing／abandoned可歸檔，prepared／completionAccepted／404／unknown／401／撤權不得藏起未解決結果；unarchive只local visibility，不prepare／PUT／復活。全部檔案／素材仍存在，不拿archive當delete或serverreceipt。
+
+在index CAS／confirm／readback取消、兩controller同時新增request或改歸檔時，不覆寫其他紀錄、不盲目retry；outcome不明要求重讀兩份list。舊index未含archived欄位可讀，非法／重複／跨scope archived ID拒絕；舊APP不懂新欄位時不可repair或覆寫。索引1024／512KiB限制仍保留，歸檔不釋放容量，不能宣告長期容量已完成。未編譯／測試；業務功能完成後集中跨端故障驗收，視覺／遮擋由使用者，效能最後。
+
+## 共用原子操作 count guard（最後集中驗收）
+
+從貼上、快速方案、AI proposal、一般節點交易、Undo／Redo各入口驗199／200／201實際展開操作。不得用top-level Transaction child數替代正式展開數；超限前後history／queue／draft／pending／sequence allocation都不變，訊息顯示actual count／limit，不部分發布或清undo stack。直接repository retainDraft／retainDraftAwaited／retainHistoryDraft入口也拒絕超限，不只UI擋。local-only不採遠端上限。
+
+過大的舊draft仍應保留供明確恢復／處置，不透過换requestId／丟項／拆transaction自動修好。200以內也仍可能因byte、ACL、CAS、restore陣列或schema被拒，count guard不是完整server驗證。最大時序容量另按正式需求規格交付，不以小圖取代；最後集中編譯／跨端故障驗收，效能最後。
+
+## 時序圖實際展開操作數與原子上限（最後集中驗收）
+
+驗新建／編輯在199／200／201 wire operations的界線，count必須與正式flattenAndExpand相同（transform多物件1筆，create及部分attributes各項展開）。超限在draft／pending／sequence reserve／HTTP前停止，不凍結prepared、不偷刪項目，可回source修正；不可拆成部分可見交易。local-only不套remote上限。合併transform後每物件版本只增加一次，再取該版本做text／group更新。
+
+核兩次metadata CAS與transaction末binding validation，以及完整Undo／Redo；最大512訊息／128區塊案例不得用小圖結果代替。目前後端200 operation限制仍是不完整交付的契約缺口，後續bulk或更大capacity要有正式schema／capability／fixtures，不可前端自行放寬。未編譯／測試；全部業務功能完成後集中驗收，效能最後。
+
+## 既有時序圖編輯（最後集中驗收）
+
+從container inspector／palette修改／新增／刪除／重排participant、message與alt／loop／par；preview不write，確認後graph＋metadata同交易。guided matching IDs要保留，改訊息端點以replacement relation處理；外部children／relations依賴被移除物件時整筆拒絕，不cascade。未改Mermaid的guided/source往返保留snapshot；真改source明示可能重配ID。scope／baseline／lock／上限／invalid semantics不得繞過。
+
+正式驗temporary metadata clear、graph operations、final binding兩次CAS的原子性，backend flatten後batch上限、最大圖形案例、response-lost receipt／fence、delete/restore Undo／Redo與雙端收斂。container旋轉、layout、手機／遮擋由使用者簽核；目前未編譯或測試，所有業務功能完成後集中驗收，效能最後。
+
+## 雲端方案完整更新／冲突替換／完整分頁審閱（最後集中驗收）
+
+修改本機方案後，選既有雲端resource→review完整替換→durable stage→明確send，應更新同resourceID而非另建重複；name、schema、所有圖形／連線／素材bindings完整保存。準備review時若本機已变，拒絕原捕捉內容；remote另一端更新後原ETag應被拒，不覆盖新版本。Rejected後可以名稱only保留新內容、完整替換新版本（新key＋fresh ETag、非merge）、另存新方案；三者語意不可混淆。Sending／Unknown不得提供full replacement來逃避原請求結果不明。
+
+大於4096字元的payload／正式mutation須可翻完全部JSON，含target、ETag、idempotencyKey與assetBindings；emoji跨頁不切surrogate pair，翻頁不得HTTP／write，新的review重置頁數，resource切換清舊conflict。full replacement即使內容相同也不是原request成功證明；仍按原收據／TTL恢復規範。多workspace素材仍不materialize／自動下載，原缺口保留。正式編譯、兩裝置收斂、CAS／取消／本機durable失敗最後集中驗收，視覺／遮擋由使用者簽核，效能最後。
+
+## 共用背景／網格的 stale draft 與未確認保存（最後集中驗收）
+
+兩端同時編背景／網格：Apply前或凍結operation後另一端改styleVersion／before，原編輯器須拒絕，不覆寫新背景或網格。Undo／Redo沿完整樣式before/CAS規則，若別人已改其他樣式也不能強制rollback；不得變成本機display preference或清history逃避冲突。个人網格顯示／snap／viewport不被共用樣式更新改掉。
+
+派送在session缺失、斷線、switch、draft publication busy、sync busy、pending queue時，要得到failure回報，不能silent return。awaited retain失敗／可能已commit時，網格視窗保留原operation並顯示保存未確認，不能連點另造ID或稱已回復；关閉只撤preview，草稿／pending照原恢復流程。一般成功本機保存不等同server ACK。驗手機內部捲動、固定狀態／actions、取消preview回復最新文件色；視覺與遮擋由使用者簽核。正式跨端同步／Undo／Redo／斷電／CAS測試待全部業務功能完成後集中執行，效能最後。
+
+## AI 回覆摘要與空回覆區分（最後集中驗收）
+
+理解與工具視窗各驗正常非空文字、只有工具呼叫、文字＋工具、正常terminal但空／空白且無工具、沒有terminal即EOF。空回覆須顯示 EmptyResponse 與明確引導，無terminal為 Incomplete，不互相冒充；均不得接受／套用草稿或自動retry。replyTextBytes／replyToolCalls／replyArgumentBytes 應精確符合當輪嚴格 UTF-8，安全 log與固定狀態區都能看到，但不能包含 node文字、arguments或raw response。多輪不可把上一輪summary套到下一輪；當輪工具執行或scope驗證失敗要保存當輪summary，清isolated draft。
+
+HTTP200／Completed／reply counts只證明該次回覆階段，不能標記formal canvas apply成功。需要最後實際驗OpenAI兼容Chat與Claude兼容Messages、每輪exact-body授權、取消／UTF-8／空回覆／串流故障、proposal選取與原子套用／Undo／Redo。2026-10-09舊Desktop安全紀錄不可代替新版本測試；目前未新增付費呼叫或執行驗收。所有業務功能完成後集中測試，視覺／遮擋由使用者，效能最後。
+
+## v2 write-ahead 意圖與 unknown-result 閘門（最後集中驗收）
+
+在 prepare／PUT／complete 意圖 CAS、confirm、讀回、實際 HTTP dispatch 前後、ACK 遺失各處中斷。紀錄永遠保留原 requestId／metadata digest／lease，意圖不是成功或已派送證明；意圖未確認不可 HTTP，成功回應保存須使用意圖後的 generation。舊未含新增欄位的紀錄可讀，新增 marker 不可倒退或任意引用未知 lease，不裁剪／清除歷史。
+
+重啟後或寫入結果不明，UI 必須清舊 phase／signed ticket、禁直接 PUT／complete／Ready 插入，要求明確 lookup；成功lookup後才恢復相應操作。404不自動 allocate，也不自動 retry；只有無已知 identity 的原請求能以清楚「相同ID」授權重送 prepare。模擬收到 response 卻 local settlement 失敗、取消發生在marker保存但HTTP尚未送出、PUT部分 bytes後檔案不符，都不能顯示舊成功或自動 complete。選錯原檔而未寫網路時保留前 source，不把它當成已送出。所有故障／平台測試最後集中執行，視覺／遮擋由使用者簽核，效能最後。
+
+## v2 恢復分頁、原票券與錯誤引導（最後集中驗收）
+
+清單0／1／8／9筆與上限場景：新紀錄優先、每頁8筆、前後邊界禁用，翻頁不可網路請求／配置身分。重啟後 latestTicketRequestId 需沿用，一般取票不能換 ID；唯有明確 replacement 授權可取代舊 lease。已知 identity 的紀錄恢復後只先提供查詢，不再次 prepare；index-only 沿原 request 初始化本機記錄，不被當成 server absence。
+
+重新選錯檔在交接 handle 時就拒絕，仍可用舊檔；原 metadata 相同但 bytes 變更在 PUT hash驗證拒絕，不自動 complete。401／403／404／expired／superseded／mismatch／generic unknown outcome 訊息持續可見且不含 key／URL／error body；失敗清 ephemeral ticket，不能沿舊 phase 錯插 ready。completionAccepted 只提示手動查詢，不輪詢／重傳；terminal 只核對、不復活。dispose在readChunk／picker／HTTP途中取消，必須等待operation coroutine退出才release持有source；關閉client失敗也不能跳過release。正式編譯與跨端故障測試待業務功能完成後集中執行，視覺／遮擋由使用者，效能最後。
+
+## 普通 Server v2 匯入操作視窗（源碼已接，最後集中驗收）
+
+由原匯入按鈕進 v2 視窗：新選檔先durable reservation，再逐按 prepare→ticket→PUT→complete→查詢 Ready→插入。必須能讀回 index-only／HTTP response-lost 原身分，重新選原檔續傳；沒有自動網路写入／輪詢／替換 ID。正常票券重取沿原 ticketRequestId；換新按鈕明確說明 supersede。close／cancel保留紀錄、釋放 picker／client；新預留只清 UI，不刪原 reservation。未配置 durable runtime 顯示專用不可用訊息、不得 fallback v1。本機匯入不切遠端。
+
+驗換 workspace／actor／client／角色、斷線、撤權、取消／dispose各 await 邊界；Ready click不可把舊scope素材加到新scope，需重新GET verified descriptor且沿正式畫布交易。背景快捷鍵／手勢在視窗存在時被擋；關閉後解除 barrier才插入，錯誤／HTTP code／phase 持續可見，不洩露 key／signed URL／response body。手機 safe area、按鈕尺寸／步驟直覺、遮擋與視覺由使用者簽核。此視窗源碼未經編譯或執行；全部業務功能完成後集中跨端驗收，效能最後。
+
+## 一般匯入 v2 discovery 與分步 coordinator（最後集中驗收，尚未接 UI）
+
+在 index CAS、durability confirmation、request CAS 各階段中斷，重啟須發現原 request；index-only 不得被當成已送出／未送出的 server 證明，不換 ID。記錄存在但索引缺失、錯 actor/client/server/workspace、索引 identity 不一致、數量或大小超限要停止而不清理歷史。跨 instance CAS 競爭不得盲目 retry。平台 factory 有源碼不等於 UI 已啟用，須檢查實際宿主 wiring。
+
+每一步明確授權；prepare 的 capabilities await 中切換 scope 不可寫。ticket identity 保存、lease confirmation 失敗不能 PUT；HTTP 回應遺失只能核對原身分。PUT 重新選錯原檔、假 checksum、短讀、超長、非順序、讀取中變檔或切 scope 必須停止，不自動 complete／abandon／重傳。驗完成後仍未自動插節點，只有 Ready 與正式畫布交易流程才允許插入；lookup 404 不能另造上傳。現階段 ordinary picker 仍 v1，coordinator／UI 端到端未交付；全部業務功能完成後集中測試，效能最後，視覺與遮擋由使用者簽核。
+
+## 素材取消／abandon 不明與提醒（最後集中驗收，尚未執行）
+
+validated ticket上傳途中取消：abandon成功才可顯示純取消；abandon丟exception／timeout／連線中斷須RecoveryRequired且原asset ID保存在原actor/workspace提醒清單，重啟後可明確查metadata，不能另造上傳或把清理不明當不存在。completion／beforeComplete checkpoint已開始不得abandon；提醒保存失敗不遮原error，不force binary retention、不重試server mutation。scope切換只存原scope不污染新scope，source handle終止仍釋放。提醒只是Settings書籤，不證明v2身分、Ready或斷電durability。普通picker仍v1，後續需正式v2 prepare response-lost／lookup／lease／reselect驗收，不能以LocalAssetUploadCoordinator的v2測試代替。全部業務功能完成後集中驗收。
+
+## Awaited WebSocket 提交原身分檢查（最後集中驗收，尚未執行）
+
+正式activated runtime下，stage成功且generation確認後才能WS提交；派送guard要從awaited pending／fence讀而不是legacy Settings。於每次guard await中改actor/client/workspace、owner、Live、角色、fence或pending，最後send不得發原frame。socket writable／authenticated於await返回後再核，取消留原pending。未配置atomic stopped evidence或sequence ledger的legacy mobile不得因新code放行，沒有初始化／migration fallback。WS可能已派送卻ACK不明時保留原identity，不切REST或新請求；valid ACK才沿durable/history交接清pending。驗慢store guard與heartbeat／presence writes、撤權／重連epoch；平台host未接仍不列正式協作完成。全部功能完成後集中驗收，效能最後。
+
+## Activation close 與 logical-call drain（最後集中驗收，尚未執行）
+
+在draft append／CAS、sequence reserve、safety記錄await途中close：新call拒、issued身分保留直到已開始call finally退出，下一confirm不能取得lease。closeAndAwaitCalls須非阻塞等待，取消等待不重置count／issued；guard失敗與exception也離開計數、重複舊close不釋放新lease。寫入在close前可能已commit，不能把返回錯誤當rollback。另驗Web coroutine取消但IDB transaction尚未terminal時logical gate可以已退出，host必須仍等physical owner ticket，不能拿logical counts代替全writer exclusion。正式host／新scope註冊尚未接；全部功能完成後集中跨端／故障驗收。
+
+## Awaited activation 租約競爭（最後集中驗收，尚未執行）
+
+在完成真平台writer排除的host下，activate→close→reopen後對舊handle重複／延遲close，新runtime必須仍有效；兩個confirm不能同時取得issued身分。Runtime每筆操作核當前lease身分、closed與物理guard，舊lease不可寫；claim後身份／平台guard失敗不得回傳lease，僅清自身slot，不清其他owner或舊receipt。取消不推論未發布，不自動重試。此manager修正不證明所有legacy writers已退出，host／新scope registration未接時不允許認定已啟用或正式多人完成；跨端競爭與故障驗收最後集中執行。
+
+## 逐點路徑編輯與未套用草稿（最後集中驗收，尚未執行）
+
+手動折線逐點選取、輸入X／Y、stage到preview、刪第一／中間／最後點，確認其他點順序與geometry屬性不變；刪最後一點預覽Auto，只有Apply才提交、可整筆Undo／Redo。無效／NaN／Infinity／超界座標不能stage；未stage輸入不能直接套用舊預覽或換點丟字，可單點cancel。route草稿dirty時label立即操作disabled，discard只捨棄UI、不write。batch／X／Y轉焦與移除欄位後快捷鍵狀態正確，Delete／Paste僅編輯文字、不刪連線。其他端改version時原草稿不得偷偷套新state；以現有scope／CAS規則拒絕。鍵盤、VoiceOver名稱與手機操作／遮擋由使用者驗收，正式編譯與跨端測試最後集中執行。
+
+## 選定線身背景拖曳與手勢權限（最後集中驗收，尚未執行）
+
+先選非self-loop連線，再於背景任意命中segment拖曳，驗projection位置新增一點，manual其餘點保留；Auto原折線内点保留後轉Manual，32點上限拒新增。線與節點／group／label重疊時，卡片或label維持自己的手勢，不能被全屏overlay偷走；未選line或未命中仍原tap／pan。touchSlop內抖動、取消、第二根手指、viewport／scope／relation version改動不commit；右鍵pan、Shift、多選、框選、brush、文字編輯與sequence內部物件不進line edit。成功是一筆既有geometry transaction，驗Undo／Redo、双端CAS；self-loop仍使用extent／label，不轉Manual。實際旋轉端點、iPhone觸控與遮擋由使用者簽核；源碼未驗，集中編譯／測試留最後。
+
+## 手動線段插入轉折點（最後集中驗收，尚未執行）
+
+在manual relation首段、中段、末段拖曳加號控制點，驗只插入一個waypoint，保留其餘點順序、direction／label／intent／color／labelPlacement；在縮放與旋轉endpoint時world位移仍與手指／滑鼠一致。預覽新增點與既有vertex不能因索引移位跳動，pointer key不重建gesture。輕點／touchSlop内抖動／取消不寫入，scope／relation version／viewport改動取消；完成為一筆update可Undo／Redo，與後端CAS及雙端一致。32點上限無新增handle；短段不疊加touch target，實際遮擋由使用者判斷。這只涵蓋可見segment控制點，不以此宣告任意line-body拖曳完成；全部功能完成後集中編譯與驗收。
+
+## 插線中間節點形狀（最後集中驗收，尚未執行）
+
+對Forward／Backward／Both／None與自循環原連線插入中間節點，選rectangle／diamond／其他現有shape，核preview、新TextNode與正式transaction內容相同，方向、端點順序、label／intent不被shape改寫。改形狀必須撤銷confirm，attempted／saving後不得換shape或另造ID；保存結果不明的retry維持原payload。整筆Undo恢復完整原連線，Redo依既有restore／CAS規則，跨端shape一致。選項只按需展開、選定後收合，手機可操作與遮擋由使用者簽核。現有形狀不表示execution語意，不能把後端endpointRewire能力未提供誤當已完成。源碼未驗，最後集中執行。
+
+## 時序圖指定插入位置與建立視窗（最後集中驗收，尚未執行）
+
+引導編輯於root與alt／par／loop巢狀branch，明確選尾端、訊息之前與block之前插入，驗step順序與其他branch完整保留；切branch／編輯已有message不能沿用舊插入目標。目標被移走／刪掉後保存須拒，不能默默append或跨branch。draft preview／Mermaid export／正式transaction保持一致，取消不送後端；prepared身分、Undo／Redo與双端收斂最後驗。iPhone含動態島／橫直向／鍵盤開啟，固定標題、錯誤、保存狀態與close／discard可用，編輯區能scroll；實際遮擋與美感由使用者簽核。源碼接線未執行正式測試，全部業務功能完成後集中驗收。
+
+## GIPHY 限流與分頁續接（最後集中驗收，尚未執行）
+
+讓下一頁遇429／本機rolling-hour額度滿，驗原items／offset保留且下一頁按鈕可見但等待期間disabled；倒數只讀本機clock／budget，不送任何HTTP，解除後也不auto fetch。明確下一頁仍用原offset／query／language；共享key其他端限流不以本機倒數結束保證成功。同key後續較短Retry-After不能縮短既有block，切key不得借舊配額重設或洩漏key。query草稿改動時不拿舊搜尋cursor套新query，locale改動清原session；取消／late response不得蓋新結果。unexpected page處理失敗須有安全提示，不靜默。維持provider排序、不去重／cache查詢結果，不自動download或rehosting；新版跨端功能完成後集中驗收。
+
+## 雲端方案簿刷新與可觀察狀態（最後集中驗收，尚未執行）
+
+雙裝置更新同resource：已提交／已拒絕結果須分開顯示且durable task保留，清掉舊清單／選取／ETag，明確重讀再審閱，不能把idempotent recovery歷史receipt當最新resource。第一頁／下一頁／上一頁皆由明確操作讀取；cursor過期、collection變更、撤權保留當前狀態與錯誤，不自動換cursor或retry。新選取需fresh GET。固定頂部status與取消／關閉在長列表／手機可見，由使用者簽核遮擋；取消完成前不能開始下一job，舊finally不得清新job。操作完成但tasks reload失敗不得顯示rollback或引導重建請求。跨workspace素材materialization仍需正式後端能力，不繞過。源碼未驗，全部功能完成後集中跨裝置測試。
+
+## AI 工具終態與套用回饋（最後集中驗收，尚未執行）
+
+工具loop意外throw或取消時，固定status、request卡、安全log應有typed Failed／Cancelled與該輪HTTP／elapsedMs；已有首個Failed不能被取消蓋掉。範圍檢查、每輪授權、UTF-8／空回應與operation審核不能因exceptionhandler而略過。使用者Apply成功僅Queued，modal應保留待server確認訊息，不立刻消失或改成完成；scope變更也保留queued提示。成功後不能同modal用舊context再send，明確關閉／重開才重新建立scope和授權。與保存不明／衝突／拒絕案例區分，不宣告servercommit。現有log停在10月9日，不能當新版驗收證據；需使用新版並按每次授權流程驗收，全部功能完成後集中執行。
+
+## AI 上一輪狀態與終態診斷（最後集中驗收，尚未執行）
+
+以新版APP測理解驗證與工具round：Preparing／workspace檢查／Connecting／HTTP／Receiving／Completed或Failed／Cancelled各事件可見，終態保留同attempt的HTTP摘要與elapsedMs。修改設定／scope後要保留原診斷且標「上一輪」，撤銷原授權；新attempt／tool round不能繼承上一轮HTTP或provider outcome。同原事件去重，最長24事件；工具request卡、固定status與安全log須一致。驗401／403、HTML／非JSON、UTF-8错误、空回應、tool-only SSE與取消，不因狀態標完成就跳過format／scope／Apply審核。log不得記憑證、endpoint、prompt或raw body。實際網路驗證需每次使用者明確授權，不為診斷自動付費重試；目前源碼未編譯／測試，集中驗收最後。
+
+## ACK history handover 與 Desktop native adapter（最後集中驗收，尚未執行）
+
+連續多筆交易包含換素材、一般編輯與Undo／Redo，第一筆ACK後journal下一筆baseHistory必須保留已確認素材original provenance與完整stack。handover讀到其他transaction、錯digest或不同checkpoint不能誤用；history.workspace需等於原head套用後結果，不能拿最新server snapshot直接塞入舊tail的baseline。驗submit、prepared send、receipt、明確retry及internal retry全部清pending前走同交接；chunk讀取／confirm／CAS失敗時pending留存。Desktop native與其wrapper必須實際轉接appendWithIntent及acknowledgeWithHistory，與Settings／awaited四端一致，不能走預設拒絕或丟棄metadata。正式跨端／故障測試尚未執行，功能全部完成後集中驗收，效能最後。
+
+## Confirmed history 開啟／復原載入（最後集中驗收，尚未執行）
+
+提交多筆Edit／Undo／Redo確認後重啟APP、重新開啟及切換workspace，驗完整undo／redo堆疊、scope與確認checkpoint保持。server其他端已新增／移動／鎖定／刪除物件時，畫布必須仍是server最新資料，history載入不replay、不發操作；Undo／Redo須依法檢查當前state與CAS拒絕衝突。stored checkpoint比server state新、壞manifest／缺chunk／scope變更／取消不得悄悄換空history或套入另一workspace。receipt／retry復原應採用完整confirmed snapshot，不以單筆inverse覆蓋多筆stack；遠端catch-up不得只因有人更新就清空所有本機history。legacy缺baseline仍不補造。此為新接源碼，尚未執行，六主線全部功能完成後集中驗收，視覺由使用者簽核、效能最後。
+
+## Journal baseline 與 ACK 前 history 保存（最後集中驗收，尚未執行）
+
+建立多筆排隊Edit與Undo／Redo，核journal保存最初完整beforeHistory，逐笔applyRecorded須與原操作exact一致；metadata換意圖／原stack改掉必須拒，而非選別的動作。ACK推進baseHistory只含當前head，confirmed snapshot不得含未確認tail；混合交易素材origin與既有堆疊都保留。REST、WS與receipt在history chunk／manifest／confirm各邊界失敗，pending尚存；同transaction與request digest再確認冪等，其他identity不得占同checkpoint，較新snapshot不倒退。restore draft應保留Undo／Redo方向，不把每筆當新Edit。尚未接confirmed snapshot開啟載入與復原畫面完整採用，不列跨重啟完成；集中驗收最後。
+
+## 完整 history durable snapshot（最後集中驗收，尚未執行）
+
+待 repository／UI 接線後，驗 workspace、完整 undo／redo stack 與確認 checkpoint 跨重啟保持；未確認 optimistic queue tail 不得混入已確認 snapshot。對512KiB中文／emoji邊界、缺塊、錯 hash／長度／scope、未知欄位、數字字串、世代競爭、quota與各CAS／confirm前後取消／崩潰逐項驗證。manifest-last之前失敗不能顯示成功，保存結果不明須讀回原世代，不自動第二次寫入。完整64MiB以上拒保存且不截斷 history，不删除舊chunks；reader完整重讀manifest并确认每塊durability，不能只驗counts。原證據／當前server ACL／CAS仍另外必須成立，snapshot非 restore 授權。當前保存層尚未接提交與開啟流程，不列完成；全部功能完成後集中驗收。
+
+## 一般編輯 intent 與 pending 凍結（最後集中驗收，尚未執行）
+
+分別用同步普通編輯與 awaited 編輯建立 draft，確認明確 Edit；Undo／Redo 記其實際意圖。prepare 後 pending 保存相同 intent；stage 遇 head 或 intent 不符不得寫入／dispatch。修改 journal intent 再確認 receipt／明確 retry，不得產生錯方向 history；未知 enum、懸空 intent key、重複 operationId 拒讀。legacy pending 缺意圖仍能確認原交易，但不能靠新 journal 補授方向。確認 HTTP body 未新增 intent、原 transaction／operation ID 與 clientSeq 不變，scope 切換不滲漏其他使用者歷史。尚未涵蓋 ACK 後再次重啟完整 history，功能完成後集中驗收。
+
+## 復原交易的 Undo／Redo 意圖（最後集中驗收，尚未執行）
+
+分別對 Edit、Undo、Redo 製造已 commit 但回應遺失且 APP 重啟的情境：原 journal head 必須明確保存 intent，receipt／明確 retry 成功後 Undo 提供 Redo，Edit／Redo 提供 Undo，不重播原交易。核混合交易完整性、素材 provenance、latest state 前置條件與 CAS。未知 enum／無對應 operationId 的 intent 應拒讀；舊 record 缺 intent 可以確認提交，但不得以 inverse ID／suffix 猜方向或建立 history。ACK 後不留已移除 operation 的 intent，其他排隊操作 intent 不丟失。此尚不涵蓋 ACK 後再次重啟的完整歷史保存，不能宣告 history persistence 驗收通過；功能完成後集中測試。
+
+## 明確 retry 與 history 交接（最後集中驗收，尚未執行）
+
+在已保存 pending／journal 的完整混合交易上，使用者明確重試；核所有原 transaction／operation ID、clientSeq、payload 原樣發送，不因重建 history 而換 ID。最新 ACL 不可寫或 fence 已有結果時不得送出。Conflict 保留 pending；ACK 成功後讀回最新畫布失敗也保留 pending，下一次必須由使用者查 receipt 或明確決定，不自動重送。讀回版本／serverSeq 必須涵蓋 ACK，再清 pending、交接完整 inverse 與素材原證據；不重播原操作，不提供局部混合交易 Undo。驗 scope 切換／取消／並行復原不污染新畫布；仍未保存確認後跨重啟完整 history 與原 Undo／Redo stack 意圖，不能列為完成。全部功能完成後集中測試，效能最後。
+
+## Receipt 確認與完整交易 Undo（最後集中驗收，尚未執行）
+
+製作含換素材與其他節點／連線修改的單一 transaction，模擬提交成功但回應遺失，包含 APP 重啟後 pending／journal 仍存在情境。明確確認 receipt 後不得重送或重播原操作；應載入最新畫布、建立完整交易的 Undo，素材歷史使用原 commit provenance。核對 journal head／wire 任一 kind、payload、expected version 或 operation 順序被改時，不可清 pending；缺 journal 或 legacy 缺素材快照時不得提供局部交易 Undo。其他端已變更／鎖定／刪除相關物件時，Undo 必須依現有前置條件拒絕，不強制覆寫。確認後再次重啟的 history 持久化、retry 交接及原 Undo／Redo stack 意圖尚未接入，不列通過。功能完成後集中執行編譯、fixtures 與雙端驗收；視覺與遮擋由使用者判斷，效能最後。
+
+## Awaited 遷移發布 receipt（最後集中驗收，尚未執行）
+
+啟用coordinator前須真正排除所有legacy與new writers（含其他版本／process／tab），guard不得以UI disabled或兩次來源read取代。fresh recapture須對上已審閱source＋完整plan；首次無receipt但任一native artifact已存在時拒絕。每次Preparing CAS／confirm、draft／safety publication、ledger initialize／confirm、typed readback、Published CAS／confirm前後crash／cancel／quota失敗，不能切runtime或重設counter。Preparing復原只接受原review與exact artifacts，不改ID／clientSeq、不overwrite已前進native狀態；不同digest／generation須另行協調。驗同origin/user/client跨workspace ledger去重且floor一致，完整draft／safety／ledger readback不是counts-only成功，所有generation／hash一致才Published。Published只能證本機初始保存；runtime cutover另驗activation、server receipt／fence另驗，不授權resend。legacy原資料保持，無自動GC／重試。平台guard／UI尚未接，coordinator未實際執行，集中編譯／fixtures／跨端故障驗收最後，效能最後。
+
+## Legacy submission 遷移審閱（最後集中驗收，尚未執行）
+
+wizard／coordinator接線後，完整legacy inventory與真正writer exclusion成立才形成review。驗跨平台planner與既有Desktop sourceDigest vector一致（common SHA256、4-byte big-endian length framing），且丟失wire／unbound fence／floor變更／existing native state不能略過。review凍結caller集合，摘要顯示各scope操作／pending／停止wire／fence／deletion數量、floor與quarantine；不能以摘要或hash相同代替完整來源重讀。确认前修改原source或normalized plan任意內容，requireUnchanged須拒並要求重審。adoptReviewedBundle只在Preparing receipt與真writer排除下發布，exact已有初始bundle可confirm但已前進draft不可rewind；verified absence保存tombstone，不能拿missing當空資料。採用失敗不刪legacy、不換原wire identity、不auto retry。review本身不啟用、不授權network resend；目前只有源碼model，writer exclusion／activation／UI尚未接，不代簽遷移完成。最後集中驗收、效能最後。
+
+## Repository awaited safety 接線（最後集中驗收，尚未執行）
+
+三端runtime啟用後驗Unconfirmed marker CAS／confirm失敗時不POST fence；durable成功後若原pending變更／取消仍不dispatch。receipt settle依序await fence terminal觀察、完整delete／cascade provenance、sequence確認、draft ACK，任一步失敗不能清原pending或改ID重送。新store缺失／quota／錯證據不fallback Settings，舊storenamespace保留。native／awaited共用ACK-derived proof：錯actor／client／payload／cascade／saved snapshot／tombstone版本不可產生restore證據；legacy缺cascade proof不升級authority。restore_objects／relations需exact tombstone＋snapshot；restore_media_reference須走F獨立provenance，不能被generic relation guard誤攔或豁免。Desktop最終WS guard仍讀已啟用native safety，三端未完成activation不得假開WS。來源只有源碼檢查，集中fixtures、實際restart／CAS／跨端驗收最後執行，效能最後。
+
+## Awaited fence／刪除還原證據（最後集中驗收，尚未執行）
+
+repository接新safety／三端啟用後，beginFence的Unconfirmed須在HTTP前CAS＋耐久確認。timeout／取消／unknown receipt不得清marker或新建替代wire；精確requestDigest、scope、transaction都相同才可讀原marker。Fenced／Committed互相衝突拒絕、同終態再確認durability；普通receipt查詢不創造fence marker。deletion batch原子保存且entity唯一，同tombstone改digest／原transaction／serverSeq拒絕，新證據須版本與seq都前進；保存失敗不清pending。測並行CAS、missing／壞資料不reset、非法UTF-8／duplicate keys／字串數值、超限quota。legacy adoption需完整catalog審閱＋排除舊writer，保留原檔，同fingerprint只confirm既有已前進紀錄，不rewind。共用codec與原JVM v1 fixture／legacy fingerprint需一致；數值驗證加嚴的不合規舊資料應顯式reconcile，不覆寫。三端未啟用、repo safety仍待awaited接線，不能宣告receipt/fence全跨端完成；最後集中測試與效能最後。
+
+## Repository awaited 草稿邊界（最後集中驗收，尚未執行）
+
+三端runtime實際啟用後核prepare／stage／pending／ACK／receipt settle／stopped evidence所有await完成才推進UI與network，失敗不得fallback Settings或換request ID。同步retainDraft在awaited配置須明確拒絕；UI採retainDraftAwaited且mutex取得後再驗session／baseline／capability。Desktop native也經awaited UI publication，native I/O離開UI thread；取消／scope換手或重複publication不回寫新scope。awaited ledger路徑不得修改legacy Settings counter，舊配置namespace不搬移；pending／fence／deletion-evidence未完成整套activation時不得放寬WS gating。驗相同原請求receipt恢复、保存ACK未知、sequence reservation不重用、Default背景与UI操作竞争、長交易當前queue保護。現三端未啟用，legacy migration／identity floor與recovery-safety還待完成；最後集中編譯／fixtures／跨端測試，效能最後。
+
+## Awaited 草稿 pending／client 序號（最後集中驗收，尚未執行）
+
+Backend改接awaited與平台注入後再驗：append／stage／ACK／restore／stop／移除／stopped evidence只有CAS＋confirm成功才UI或network進下一步。Web transaction enqueue／request success不能代簽durable；scope／cancel每個await後核。兩writer同generation競爭只一個接受，不自動rebase／retry；同bundle確認未知localACK只confirm，不生成新operation。移除保留scope tombstone及generation，archive不能因移除draft消失；wire-only legacy不可補造journal。ledger跨同origin/user/client所有workspace共用，初始化須verified floor＋legacy writer exclusion，缺失／corrupt不能reset0；範圍先durable再分配、unknown範圍不重用、advance同值仍confirm。測非法Unicode／duplicate fields／字串數值／過大bundle／quota／取消／scope drift，不截斷草稿、不開fake WS寫入。此adapter尚未接線或啟用；三端遷移審閱與大bundle分塊仍待完成，正式集中測試、效能最後。
+
+## WebSocket 原請求寫入／ACK 與 receipt（最後集中驗收，尚未執行）
+
+Desktop native配置下Live走WS；其餘平台在durable pending／sequence adapter未完成時明示REST，不可假裝四端WS寫入完成。先保存原pending再送，frame內transaction／operation IDs／baseVersion／clientSeq／payload與原請求一致。丟ACK／30秒timeout／取消／断線／late ACK／撤權／fence競爭：原pending保持，不自動改REST再送或生成新key；原receipt／fence才settle未知結果。偽造錯actor／client／ordered IDs／seq／version／kind／schema、同UUID異payload、缺／多operations、partial boundary、字串數值／未知frame欄位，都不能保存成功或清draft。accepted／duplicate才由既有deletion evidence與sequence／draft durable流程處理；ACK自身不當fan-out checkpoint。conflict fresh state可能比ACK新，須保留fresh真version，不把較新畫布標成舊head。rejected idempotency_mismatch／transaction_fenced等固定碼可見，原body／ticket／details不顯示。核fan-out先／後ACK、重複廣播、server rebasing、restore／Undo資料保留。mobile／Web正式durable adapter與實際跨端fixtures最後集中驗收，效能最後。
+
+## 協作安全除錯與 Presence 限流（最後集中驗收，尚未執行）
+
+成員面板須持續顯示最近safe stage／code／HTTP／宣告retryAfter，不因client.close或取消把Failed／Revoked／Resync誤改Disconnected，不把歷史等待量當實時倒數。以401／403／ticket_expired／非法frame／local CAS錯誤驗證，無API Key、ticket、URL、scope IDs、rawframe或exception message進UI。pre-auth scope雙null的合法固定protocol_error只能停止、不能被當authenticated liveness。Live presence rate_limited按retryAfter（正數、最大60s、非字串）停止下一publication直到monotonic期限；新error延長窗口要再等待，不重播已拒舊cursor，不改durable submissions。測cooldown期間stop sharing／clear／撤權／背景／scope變更：清除被阻且不再consent時斷連線，不留被heartbeat延租的旧cursor。未知欄位／code／超大retryAfter／NaN／亂序不能被當成功或自動重試。safe diagnostic copy／本機log另待接，正式集中跨端與視覺使用者簽核，效能最後。
+
+## 正式 outgoing Presence 分享與隱私（最後集中驗收，尚未執行）
+
+真Live後publisher與notifications必須共用同socket；初次runner強制發布目前意圖，預設未分享只能是null cursor＋空selection。手動share才送非空內容，stop分享送clear；文字／viewport／asset URLs不進frame。驗兩次handle重建、sharing切換、背景前景、角色／scope／room／connectionEpoch變化，server presenceSeq始終單調，舊token／publisher被替換後不能寫。cursor／selection分別尊重capability速率，慢transport只背壓當前publish不堆pointer queue；等待時取消分享、撤權、切scope，最後實際write前必須阻止敏感frame，失敗須close owner，不auto retry舊位置。selection僅authoritative UUID且不超server上限，非法座標／surrogate／NaN等拒絕。activity epoch變化斷舊socket與heartbeat，不替背景舊游標續租；重連手動consent不沿用。測sleep／delay中的stop／clear競爭，不能漏清而留下被heartbeat永久延租的cursor。現未編譯／真服務驗收，429／protocol_error recovery仍待完善；雙端視覺由使用者、效能最後。
+
+## 畫布即時協作入口與 owner 生命週期（最後集中驗收，尚未執行）
+
+配置runtime的server模式，在成員面板按「連線即時協作」才啟動；本機／無runtime不顯示假的能力入口。核準備／驗證／追趕／Live／失敗／撤權／resync／中斷狀態持續可見，不因close把錯誤覆寫掉；Live文案須明示目前REST寫入／游標分享未接完。多次點擊、啟動途中按中斷、關成員面板、切工作區／帳號／角色、離開畫布、服務中斷，核只有一個owner與socket，scope失效清Presence並cancel準備job。關面板不應擅自關協作；離開畫布必須關閉。真交易事件只wake權威refresh；有文字輸入／拖曳／queue／draft時不得覆蓋history／清pending。觀察Presence與notifications不得增加socket。非Live、撤權或finally後舊Presence不能再次發布；failed／resync要求人明確中斷再重連，不偷偷重試。未接publisher時不能啟用假的游標分享。四端視覺／safe-area／遮擋由使用者判斷，跨端功能集中驗收，效能最後。
+
+## 四端 checkpoint runtime／repository 啟動（最後集中驗收，尚未執行）
+
+核Desktop私有atomic root、Android noBackup checkpoint leaf、iOS私有leaf、Web awaited IDB Documents中saltedkeys皆隔離原資料用途；工廠建構不讀／改資料、不取得ticket或開socket。本機模式不可藉runtime變成server-mode。native read／CAS／confirm不阻塞主執行緒，Web等待transaction durability而非enqueue ACK。Repository createowner途中換actor／workspace／client／subscription或取消不得繼續fresh read／初始化／開socket；metadataRevision缺失／字串／非法值拒絕，不猜0。驗capabilities／metadata 64KiB與state64MiB、15秒timeout、JSON MIME／UTF-8／重複欄位；HTTP錯誤不輸出rawbody。default無runtime repository須明確無協作入口，不用Settings fallback。尚未接畫布，不把工廠成功當正式協作已連線或Android／iOS全draft durable驗收完成；最後再集中跨端／restart／process competition。
+
+## 大型協作 checkpoint atomic manifest（最後集中驗收，尚未執行）
+
+完成平台接線後驗4 MiB以上完整畫布，不可截斷節點／連線／metadata；新上限64 MiB、單chunk512 KiB、最多129refs。測Emoji／繁中跨切分點、每塊UTF-8有效且整份hash一致。於每次chunk CAS／confirm、manifest CAS／confirm前後取消或crash，重新開啟只能看完整舊紀錄或完整新紀錄；失敗不得回catch_up_applied。兩writer發布相同chunk可重用，異內容同key／generation非1須拒；manifest CAS競爭不能自動rebase。缺chunk／錯長度／順序／digest／scope派生key／壞UTF-8／超界總長度／組合domain失敗，保留原資料不reset。reader途中manifest被其他writer更動須停止，不混checkpoint。legacy單record仍可讀；相同next ACK遺失可confirm，不冒充後端receipt。孤兒／舊chunk目前保留，quota失敗必須明確停止；GC需另外驗reader-safe／pending-writer-safe政策後才啟用，不得刪除仍被使用的區塊。此條覆蓋前節歷史4 MiB單record限制，源碼尚未驗收。
+
+## 協作耐久 checkpoint 保存（最後集中驗收，尚未執行）
+
+平台注入後核 key 同部署／user／client／workspace一致才共用；不同scope無法讀或覆寫。state與metadata同一筆保存，不含ticket、Presence或optimistic nodes。fresh REST initialize只在紀錄不存在時進行；已有checkpoint不得用新讀內容直接覆蓋。兩handle／process讀同generation後競爭保存，只一個CAS接受，另一個停止不rebase。模擬CAS已寫但confirm回應遺失，只有exact next＋同／下一generation可確認；其他內容不能settle。取消、磁碟／IDB錯誤、校驗失敗、無效UTF-8／重複欄位／scope／domain、同版不同state或metadata、版本倒退，必須保留原紀錄，不重置空畫布或ACK未保存checkpoint。現單record 4 MiB上限需顯式拒絕，不截斷；大型畫布分塊／atomic manifest仍待實作，完成後另驗crash各階段／orphan／manifest CAS再集中驗收。UI與平台未接線不能代簽已耐久協作。
+
+## 單一協作 owner 與狀態清理（最後集中驗收，尚未執行）
+
+平台耐久儲存／repository 接線完成後，核畫布 notifications／Presence／狀態 UI 共用一個 owner，多個 flow observer 不增加 ticket 或 socket。run 第二次須拒，重連建立新 owner／epoch／ticket。驗 Preparing、Joining、CatchingUp、Live、Disconnected、Revoked、ResyncRequired、Failed 不互相冒充；只有 live_ready exact checkpoint 才 Live。交易 persist CAS／durable confirm 未成功不得更新 confirmedProjection；metadata 同版本不同 title／role 拒絕，較新 metadata需完整授權read／persist。測 owner／editor／commenter／viewer 加入，commenter不能寫內容但可讀。每個 async await途中換scope／角色／取消，舊owner不得再發布Presence／ACK。撤權、resync、timeout、異常或主動close後Presence立即清空、client關閉、publisher停用；未接原提交的operation_ack不可清pending或當receipt。現平台checkpoint／repo／UI待接線，這些不是已驗收證據；視覺由使用者判斷、效能最後。
+
+## Heartbeat／房間 Presence 事件（最後集中驗收，尚未執行）
+
+接線後核 join consume 未驗證成功前不得發 heartbeat 或顯示 Presence；30 秒未確認須退出。heartbeat 單調序號、兩筆未 ACK 停止；亂序／重複／超前 ACK、錯 epoch／workspace、字串序號、未知欄位須失敗，不更新租期。所有實體寫入序列化，失敗後不得再寫舊連線。Presence snapshot 僅一次建立 room，delta 缺段須清除並重新授權連線，舊 delta 不延長租期。檢查 100 字 Unicode 名稱、非法 control／UTF-8、假 cursor 字串數值、非有限／超界座標、超量／重複選取、connection 對應 user/client 被換。heartbeat 只能延長已驗證 Live room，不以 socket 開啟或任意訊息作證。撤權／角色切換／取消／離線後統一 owner 須清 UI 與 publisher，不能留舊游標。現 owner／publisher／畫布尚未接，不宣告正式協作通過；視覺由使用者，效能最後。
+
+## 即時協作 ticket 準備（最後集中驗收，尚未執行）
+
+產品接線後核 GET capabilities→POST ticket 是明確單次流程，途中換帳號／工作區或取消不得發下一請求。非法 capability limits／型別、未知 protocol／schema、不同 socket origin／path／query、超過 16 KiB 或非 JSON／無效 UTF-8，須停止。ticket 需 201、no-store、精確 URL／protocol、合法 token／expiresAt；不得保存到 durable、匯出或 log，不可把 token 放 URL。驗第一次 takeJoin 後第二次必須拒絕、ticket HTTP 慢／握手延遲超期、server Date 與 expiration 不符、socket握手前後 scope 改變；失敗不得重用 ticket、偷偷取得新票或自動重送 operation。Desktop／Android 核沒有 engine-level隱式重试；Web／iOS 核 handshake subprotocol header。這是源碼待驗項，不是已部署／正式認證通過的證據；正式 auth 尚由後端交付，現 x-user-id 僅開發模式。
+
+## 正式協作 durable barrier／Live（最後集中驗收，尚未執行）
+
+接線完成後核 ticket 不出現在 URL／headers／log，socket URL 同部署 origin、固定 path、无 query／credentials，subprotocol 未協商必須失敗。各平台核實 WebSockets engine 能力、handshake header 與 frame 配置上限；現新增 transport 未接到產品，不能代簽已即時連線。輸入錯 workspace／epoch、無效 UTF-8、超界 frame、缺段／亂序／部分重疊交易，必須斷線並停止 Presence，不改 durable checkpoint。模擬 persist callback 失敗、CAS 競爭、取消及 ACK 遺失：只有耐久確認成功才回 catch_up_applied。join barrier 不是已套用；只有 live_ready 的 content checkpoint／version／metadataRevision／connectionId 全一致才顯示 Live。較新 metadata 先 fresh read＋耐久保存，不以 join 缺少 title 的數字當完整狀態。snapshot_required 的 reason／barrier 核准後才裝入完整 snapshot；可比 barrier 新，不能拆交易或自行降低至 barrier。後續 ticket、heartbeat、reconnect、撤權、Presence、原提交 ACK／receipt／fence 必須一併集中驗收。視覺與遮擋由使用者判斷，效能最後。
+
+## 雲端方案簿結果不明恢復（最後集中驗收，尚未執行）
+
+首次送出之前核 durable journal 已保存固定請求與 server Date／TTL。模擬回應遺失、關閉 APP 再開：須由人點「確認重送完全不變的原請求」，key／ID／body／ETag 不變，後端回原結果才保存 Committed；GET 相同內容不是提交證據。測試原窗口內／60 秒安全邊界／已過期、TTL 降低、伺服器時間倒退、Date 缺失或多值／非標準、Age 快取、能力讀取超時與 dispatch 前延遲。任何時間不確定不得送 mutation 或另建同資源替代任務；舊 journal 無窗口只可讀。重送遭 401／403／409／412 或網路錯誤仍為 Unknown，不以重送被拒判原請求失敗。核 Web CORS 可讀 Date、可信 proxy 不改錯時間；超長在途請求與 server clock 異常仍屬部署／契約故障情境，不能以 client Date 防護當正式證明。取消、scope 切換、多 process CAS、ACK durable confirm 遺失須保留原身分及終態，不覆寫成功。視覺／遮擋由使用者判定，效能最後。
+
+## 文件網格樣式（最後集中驗收，尚未執行）
+
+在支持canvasStyle的本機文件開「文件網格樣式」，選lines／dots／none與自訂／auto color。預覽與色彩picker Apply僅改draft；cancel／close／換帳號／工作區／角色必須清preview，不寫文件。最後「確認保存」才建立versioned operation，background保持原值、styleVersion單調；Undo／Redo與reopen恢復exact pattern／color。個人showGrid=false、snap、viewport、theme都不得被正式style更新改掉。來源style被他人更動時拒舊capture，unknown保存重試保留同operation ID，不可重新配ID或改body。server無正式capability入口不能假稱已共享；雙端依BACKEND_CANVAS_STYLE_API_SPEC另驗。iPhone safe area／鍵盤／遮擋由使用者判斷，效能最後。
+
+## 協作傳輸與 Presence（最後集中驗收，尚未執行）
+
+目前Backend adapter應顯示REST polling而非即時協作已連線；member list／本機已保存／capability不能代替authenticated room liveness。未有socket服務不得開啟假的游標或Presence傳輸；未來WebSocket capability與實際TTL線上狀態分開核。輸入NaN cursor、無效UTF-8／surrogate、control identifiers／display name、超界selection IDs，必須拒绝且不更新room lease或peer顯示；正常Unicode名稱與既有epoch／lease／TTL更新仍需驗證。正式authenticated雙端／撤權／catch-up／reconnect依BACKEND_REALTIME_API_SPEC，不能以mock或REST結果代簽。視覺／遮擋由使用者判斷，效能最後。
+
+## 快速方案 identified save（最後集中驗收，尚未執行）
+
+補匯入任務重開：在stage已durable但正式save尚未commit時關閉APP，重開方案庫點「查詢待完成的本機匯入」；應讀到same requestId＋完整definition，不自動save／插入，重新審閱後再次勾選才能繼續。成功save的item／receipt及pending removal必須同generation。stage／save ACK遺失不能另配ID；已commit結果從正式library可見，不重造pending。v3缺pending欄位、重複request或超128 pending／4MiB滿額不得reset／silent GC。驗source素材reference仍需目前workspace bytes／權限驗證，不拿pending當grant；雲端自動同步另列待交付。
+
+在本機模式JSON／bundle匯入中，模擬保存已發布但ACK遺失：原視窗重新批准保存必須使用同request UUID、same definition digest及同scheme ID，confirm原generation，不另追加方案。同UUID不同name／payload／schema／source必須拒絕。保存後rename／delete，原request重試不得覆寫或復活方案；receipt留存且4096筆滿額不能默默GC。驗native與awaited Browser實際durable barrier；讀舊library v1、寫v2及重開，v2 missing receipts／corrupt／invalid Unicode不reset原件。legacy Settings未宣告identified能力，不能用其contentdedup結果代簽此路徑。本轮未交付跨process匯入任務重開UI或user-level雲端sync，另列驗收，不以文件搬移冒充跨裝置自動同步。素材仍需獨立範圍與bytes驗證，視覺／遮擋由使用者判斷，效能最後。
+
+## 時序圖引導式建立（最後集中驗收，尚未執行）
+
+開啟時序圖建立→引導式編輯，新增Actor／Participant並左右排序；新增call、return、async、signal，選same source／target測自訊息，async／signal可切虛線。訊息上下移動只改明確semantic順序，不從畫布位置猜測。移除被引用participant需拒絕且保留舊稿，改名保持ID與訊息端點不變。loop包最後一步、alt／parallel將最後兩步變分支，原巢狀內容不得丟失。選擇root或巢狀branch，改標籤／新增訊息／排序／刪除／再wrap只作用於該分支，另一分支不变、不flatten成單一路徑；最終至少保留一筆branch step，missing location／過深／非法Unicode或超byte限制不得覆寫舊稿。確認預覽不改canvas，最後另行確認插入；測Undo／Redo與reopen、權限／版本漂移和unknown保存仍用原transaction。無效source不能偷偷重設為新圖。close／discard未保存操作由使用者明確確認，視覺／遮擋由使用者判斷，效能最後。
+
+## AI 草稿修改前後差異（最後集中驗收，尚未執行）
+
+補收合記憶：差異區預設展開，使用者收合後關閉／重開AI視窗及APP應沿用，切換其他面板後不得覆寫此偏好；僅保存UI section token，不保存API Key、prompt或approval。長before／after可點「複製完整…（私人內容）」核原資料，空值按鈕停用；只明確點擊才改clipboard。顯示截斷不得切斷Emoji的surrogate pair，複製資料完整但revision normalize1的標示不變，不能當正式operation或import draft。此輪未執行驗收。
+
+AI產生草稿後，先看新增／修改／移除計數與預設展開的差異清單。逐ID展開核對before／after：文字、shape、transform、parent、locked、relation兩端／direction／label／geometry及媒體reference；這是structural資料，不應宣稱看懂媒體像素。僅顯示revision正規化為1，不影響原proposal version gates。排除一筆工具操作後，預覽與差異必須一起變化；有依賴衝突時不可套用。20筆分頁不得漏資料或重複，4096字元節錄需有明顯截斷提示，不改完整草稿或作匯入來源。最後另行批准Apply，確認既有保存佇列、Undo／Redo及重開流程；Claude真服務結果不可用OpenAI成功log代簽。視覺／遮擋由使用者判斷，效能最後。
+
+## 新原素材 preparation v2 驗收前置（2026-10-11，後端已交付、APP 待集中驗證）
+
+票券取消／恢復序列：已有ticket A→開renew確認→取消→普通「恢復原票券」，必須仍用A的ticketRequestId，不能使用未批准的replacement B。明確批准renew B後若stage或簽名ACK遺失，普通恢復改查durable最後身分B，不mint C；原ticket A不得當B繼續PUT／complete。開始lookup清舊phase，401／403／404／metadata差異後不得仍呈現舊Prepared／Ready actionable狀態，但原request與lease歷史不刪。以上待最後集中執行，不宣稱本輪已通過。
+
+metadata契約補確認：準備null尺寸／duration、或APP與backend解析duration不同的素材，核Ready envelope的declared／verified界線。後端正式釐清前，APP應提示metadata差異、保留request，不以重傳／新asset／略欄位方式假成功。此問題目前為code-inspection推論，不能當成真HTTP已重現。另驗成功envelope streaming限64KiB／JSON／strict Unicode與duplicate-key，非JSON／空／超界／timeout不能發布identity；不改原檔transfer大小上限。
+
+最後集中驗收錯誤分類：401應提示認證；403應提示權限不足而非不存在；upload_lease_expired只能明確renew；upload_lease_superseded先查原lease；upload_not_found不自動重傳／complete。404保留requestId，不將其解讀為晚到prepare不可能提交。HTML／巨型body／無效UTF-8／未知code不呈現原body或details，保留HTTP分類。私人同步記錄匯出應含assetUploadPreparations與public lease歷史、exact IDs；不得含signed URL／headers／keys／檔案路徑／素材bytes，也不可拿匯出檔直接重送或當授權。
+
+後端已依BACKEND_ASSET_PREPARATION_V2_SPEC交付fixtures／capability；APP 新增接線尚未集中測試。不得用Media v1反覆POST驗收unknown ACK恢復。最後集中驗證時核固定request ID與metadata digest golden vector；provider body不得含local ID／路徑／owner／review。Ready source必須屬本機owner／workspace及當前審閱，wrong kind／unsafe duration／snapshot drift拒絕。receipt的request ID／digest／owner／workspace／尺寸／hash及固定remote ID均exact；同ID改body拒絕，Pending或Ready回覆只保存identity，不當bytes或授權證明。
+
+全部功能完成後，集中驗收durable-before-HTTP、prepare回覆遺失查原receipt、不產生新asset／request UUID、expired lease的獨立批准、complete unknown先查phase、舊PUT不能改ready、ID collision保留receipt但停止graph投影。APP 同步視窗已加入上傳區：檢查素材→確認保存→確認prepare→查原狀態→確認原ticket（重開沿用原ticketRequestId）→確認PUT→另外確認complete→手動查phase。換票必須走明確renew確認，取消保留身分，不自動重試／刪除。原檔分批讀取，PUT核size／hash／EOF；Ready不能提前當Node發布完成。後續映射／canonical review尚未接完，產品UI與真兩端不得由既有模型tests代簽；視覺／遮擋由使用者簽核，效能最後。
+
+## 映射素材 receipt／fence／rebase 產品路徑（2026-10-11，未人工簽核）
+
+新增本機上傳素材的最後集中驗收流程：上傳與complete後手動查到ready，再另行確認「保存已上傳素材映射」。此步必須重新驗原檔size／SHA-256／EOF、server metadata／receipt及fresh head／permission；不得以先前ready文字當永久證明。映射保存後，本機Node的primary／thumbnail UUID保持不變，原合併方案與receipt不得被改寫；UI提示重新比對，舊方案不能直接套用／prepare。重新審閱的canonical目標應使用server UUID，明確套用後Node／Undo仍使用local UUID，之後prepare與send採server UUID。新server素材尚未被任何server Node引用時也應可準備交易，但Pending／Missing／撤權／wrong kind／metadata漂移不得送出。
+
+模擬映射保存回覆遺失：相同publication只confirm已保存generation；若根本未保存，必須fresh驗證，不重用舊授權proof。ID碰撞／錯document／後續local edits不得覆寫。取消映射驗證不插入Node、不advance baseline、不刪除原檔。此段為待執行SOP，不代表本輪已完成測試；視覺與遮擋仍由使用者判斷，效能最後。
+
+只使用已在server存在且授權的original與Image thumbnail，先下載／驗證並套用本機，再審閱其他本機變更。prepare交易的workspace引用必須是source ID，不得把local UUID送server；confirm送出前仍需獨立批准。收據確認後本機Node／Undo保持local ID，baseline保持source ID；沒有假pending。metadata改變／撤權／head漂移應停止，不能reset成新交易。
+
+測試fence與commit競爭：fenced結果保留原request及local操作／mapping，commit勝出則核original receipt，不當取消。再製造commit前／後peer變更及later local改動，保存四input rebase；預覽／確認使用local ID、核真original commit、fresh授權與private bytes，驗verifying與cancel。unknown ACK重開後同操作重試只confirm原generation；Undo／Redo與canonical continuation保持兩種引用的exact對照。新本機素材仍缺server materialization時不得送出。
+
+此路徑已有工程fixtures與產品接線，尚無live雙端／actual visual／VoiceOver簽核；不得由受控mock判正式多人或完整跨端素材已完成。效能最後。
+
+## Canonical rebase 與現存 server 素材前置檢查（工程回歸）
+
+fixtures保持原submit、later local、真正commit、latest remote四份輸入：本機Node使用local UUID，server兩份使用source ID。只有identity差異不應要求object conflict選擇；later local altText應保留，peer前／後新增均不得消失。雙方altText都改時必須顯式選擇，不以identity normalize抹掉真衝突。原映射／commit不可寫成latest head。mapped rebase publication仍未接，不能用計畫測試簽完整跨端流程。
+
+server已存在的image/png primary與獨立Image thumbnail應允許準備其他合法審阅變更，prepare不代表送出；thumbnail Pending／wrong MIME／wrong workspace／wrong ID必須在local outgoing與server draft前拒絕且原snapshot不變。local→server新素材upload仍待實作，不靠這個case解除gap。
+
+## 素材審閱→確認本機套用（2026-10-11，未人工簽核）
+
+在隔離QA同步空間保存含foreign MediaNode的審閱，先逐一確認原圖／影片及thumbnail的mapping與下載；縮圖必須為Image，不能由原圖取代。按「審閱本機套用」檢查預覽，再「確認並保存到本機」：固定驗證文字與取消按鈕應可見；查遠端授權並重讀private原檔，不自動download缺失檔案、不POST canvas。缺失／corrupt／撤權／改head應保留原畫布與操作ID，未成功不得顯示已套用。
+
+成功後Node能使用local ID、Undo為單一操作、原remote review保持source ID；read-only settle後無假pending。人工驗確認後取消、重開Undo／Redo、image／GIF／video原檔與thumbnail显示，以及存檔未知ACK重試只確認原generation。更新UI時不改審阅選項或另mint操作ID，history已進展後舊retry必須拒絕。mapped upload／rebase目前仍gate，不可簽為完整雙向跨端同步；這次工程回歸不代簽GUI／遮擋／VoiceOver，效能最後。
+
+## Materialized 套用交易工程回歸（2026-10-11，非產品 GUI 簽核）
+
+固定scope、保存foreign素材mapping、下載原檔後，以fresh驗證結果及固定operation呼叫applyMaterializedSyncProposal。檢查local workspace引用local ID，但proposal.target與baseline保留canonical ID；比較應Unchanged，read-only settle後無假pending。注入publish後confirm失敗，重開以同驗證／operation重試，generation不得增加。重開恢復Undo→保存→Redo→保存，Node使用原local素材ID，mapping不得刪改；歷史進展後舊套用重試拒絕且不覆寫。再保存新審閱，superseded保留canonical review＋local operation＋captured mapping。錯target／scope／snapshot必須零publication。
+
+此底層尚未接產品確認入口，不能當實際手機／Desktop操作已通過；含mapping的upload/rebase仍有gate，需後續正式整合與雙端驗收。既有原檔metadata／SHA-256與每次批准規則維持。
+
+## AI 認證拒絕提示（2026-10-11，未人工簽核）
+
+在隔離QA Router使用無效測試key，不使用或分享正式key。理解驗證與工具視窗分別確認：HTTP401終態主狀態顯示認證拒絕並保留HTTP碼；None模式提示準備時無標頭，Basic challenge提示檢查代理且不索取帳密，其他401提示檢查服務網址／金鑰／認證方式與Router上游。HTTP403顯示存取拒絕且不聲稱key有效。不得自動重送、清空錯誤或套用畫布變更；只有重新明確授權才可再次請求。安全log不得含key／原始error body。舊HTTP200紀錄不證明本次401已排除；視覺／遮擋與VoiceOver由使用者簽核，效能測試排最後。
+
+## 遠端原素材下載產品入口（2026-10-11，未人工簽核）
+
+使用本機模式，在「空間→伺服器同步設定與比對」連線隔離QA空間，保存採用遠端MediaNode的審閱方案。此入口只準備／保存素材，Node引用套用尚未交付；原素材下載成功不能簽為完整素材同步。
+
+1. 「遠端原素材」列表每頁20筆、依asset ID去重；前後頁均可抵達所有候選，既有本機Node引用不重列。未連線／僅歷史remote／過期方案不得檢查。外部GIPHY節點不走此原檔拷貝流程。
+2. 點「檢查ID」只refresh服務／查metadata，不prepare本機catalog、不下載、不保存映射。顯示MIME／byteSize／目的local ID；沒有實際Ready原metadata、範圍／head或任何primary資料改變都拒絕，狀態固定可讀。
+3. 審阅提醒後按「確認保存身分（不下載）」。保存前重查metadata／head／local snapshot；完成僅新增mapping，canvas／checkpoint／outgoing與asset catalog不變。取消不保存；unknown保存ACK重試用同prepared UUID，不另配ID，重開可檢查讀回舊mapping。
+4. 另按「審閱下載／重新驗證原檔→確認下載／驗證」。需明示私有本機儲存與網路／空間成本、正確快取可能保留、不套用／上傳Node。取消確認不download。每次操作（包含Ready快取驗證）都要重新批准，不自動retry或因metadata檢查完成就下載。
+5. 下載顯示Authorizing／Recovering／bytes進度／Verifying及固定終態；「取消素材落地」能中止，保留mapping，正確已發布private cache可保留。錯誤／取消不留下誤導的Ready／活動進度，不吞掉提示。避免把200MiB檔案放進20秒一般服務動作timeout。關窗／空間切換取消job；parent其他寫入／連線／翻頁及複數下載在busy時禁止。
+6. 完成訊息必須明確「本機原檔已驗證；尚未套用Node引用」。重開後不由saved mapping宣稱Ready，須重新檢查／授權及hash；原ID恢復、cache reuse及prefix retry沿前述工程SOP。對非PNG的Image／GIF／Video用MIME分類驗證，不拿`image/png`與`image`字串直接比較。
+7. custom server base URL測metadata与download同一scope fingerprint，不能改走default backend。gateway scope不符在HTTP／local prepare前拒絕；遠端gateway每action完成／取消／失敗皆close，本機borrowed gateway不close。source creator可不同reader，fresh ACL仍須服務決定。
+
+實際OS／browser點擊、私密資訊可讀性、20筆分頁、手機safe area／keyboard／遮擋與VoiceOver由使用者簽核；程式回歸不代簽GUI或live服務。物件儲存／雙端／完整Node引用與上傳／背景／時序能力仍待驗，效能最後。
+
+## 素材固定本機身分：工程驗收（2026-10-11）
+
+這是同步materialization的gateway基礎，尚無使用者遠端素材落地按鈕／映射保存／引用替換入口，不將本節勾為完整素材同步交付。只在隔離fixture root／IndexedDB／QA模擬器測試，不手改使用者catalog或private originals。
+
+- 先保存同一Pending descriptor及自己產生的local UUID；preparePinned→關閉重開→相同descriptor重試，ID、metadata與catalog數量不變。模擬已發布metadata但durable ACK遺失，重試只確認原generation，不另生asset。
+- 同UUID改checksum、byteSize、尺寸、mediaType、owner、workspace或createdAt均拒絕；Viewer、非canonical MIME、無效SHA-256、非UUID、超200MiB及遠端thumbnail metadata亦拒絕，拒絕不能覆寫舊asset／original。
+- 串流upload／confirm實際fixture原檔後，再以原Pending descriptor重試，必須返回原Ready而非降為Pending、不重傳bytes或新增asset。準備回傳Ready只反映原marker，不能代簽重新驗證原檔或fresh服務ACL。
+- 一般選檔import及既有original下載／checksum回歸須通過。Browser測真正IndexedDB＋original store重開，不將測試fixture視為實際browser權限／磁碟／GUI通過。Android新Device case只編譯不得標實機passed；native fixtures／模擬器與真人OS picker／雙端服务分開記錄。
+- 真正source→destination mapping須在preparePinned前durable保存，尚未接線前原同步素材缺口gate保留；不得把remote UUID當local UUID、只換Node assetId或用thumbnail取代原檔。視覺／播放／遮擋由使用者簽核，效能最後。
+
+映射工程追加：saved proposal／rebase含remote MediaNode時才可reservation；核source owner可以是另一位creator，binding reader與目的local owner／client仍須exact。模擬mapping文件已發布但ACK遺失→重開→讀原mapping→同record重試，destination UUID不變、封存不重複、原workspace／checkpoint／review／outgoing不動。換source metadata／destination／scope、非target原檔或過期review均拒絕，metadata有非法Unicode也拒絕。後續local edits後已有mapping確認要保留編輯，不能藉此獲得fresh下載或套用授權。保存mapping後catalog尚空；按原mapping preparePinned才有Pending，原檔upload／confirm才可Ready，這三步不可混為同一驗收。查private evidence JSON含完整`materializations`，不含signed URL／headers／檔案bytes。尚無產品download／Node替換入口，此工程case不代簽完整服務交付。
+
+下載協調工程追加：用保存mapping、fake服務授權／bytes及真native原檔／IndexedDB，驗每attempt先refresh head／role及source authorization，metadata任一primary欄位變更應在local prepare前拒絕。長度不足、多餘byte、錯SHA-256、取消／scope失效不可confirm或返回Ready，不換ID／刪mapping。完成後local原檔須再讀hash，source授權及remote／local snapshot再查；Ready快取重用也須fresh authorization，不再download遠端，但原檔損毀要拒絕。確認ACK遺失後重開以原ID恢復，不產生第二份asset。
+
+Browser需真的讓第一個1MiB前綴transaction完成後中斷，重開驗cursor保留，再以不同HTTP callback大小重播相同bytes，逐段核前綴後追加。改前綴要拒絕且舊bytes仍不變；abandon tombstone／sealed不能resume。傳輸至多1MiB input batch／consumer buffer及單一queued64KiB piece，不能全影片ByteArray；此為結構限制測試，不把它簽為最後階段效能驗收。末端撤權／head改變不發布Ready，正確private cache可保留供後續重新審閱，不聲稱服務revocation可自動擦除已保存本機資料。產品下載確認、Node套用、real service／雙人／OS picker／UI尚待驗，視覺／遮擋／VoiceOver由使用者簽核。
+
+## 本機同步上傳入口驗收（2026-10-10）
+
+這是新版 APP 驗收流程，尚未人工簽核。使用隔離 QA 帳號／空間，記錄平台、build、帳號／空間對應及原 transaction ID；勿記 token、signed URL 或未授權私人圖文。現階段不能以基本文字交易通過代簽完整素材、時序／背景或正式多人能力。
+
+1. 本機模式進「空間→伺服器同步設定與比對」，明確連線選 QA 空間，審阅兩端與三方差異後保存 binding。一般啟動／畫布編輯不得因此自動送出 canvas 請求。
+2. 兩端同標題，用基本文字節點建立差異；選擇合併方案、二次確認保存，再審阅並確認本機套用。驗 Undo／Redo 及關閉重開，確認在實際上傳前伺服器內容仍未改變。
+3. 按「準備並保存伺服器請求（不送出）」；此步可能 refresh／讀素材 metadata，但 canvas operations POST 必須為零。準備完成顯示原請求已保存；重開後 transaction／wire IDs／clientSeq 不變。未支援 shape/path/sequence/style/media 要顯示缺口，不可丟欄位後上傳。
+4. 按「審閱伺服器上傳」，看完整 target 預覽及不含後續本機編輯的說明；取消不得送出。只有按「確認送出保存的原請求」才進收據檢查與可能的 canvas POST。
+5. 原 receipt Unknown 且遠端仍為原審閱基準才送原請求；Committed 應核完整 log 並結算，零重送；Fenced 禁止重送，保留本機。此三條要以服務記錄比對，不能單凭文字狀態簽核。
+6. 用測試代理模擬送出後丟失回應，重開後先查原收據；不得生成另一 transaction 或自動 retry。另模擬 wire prepare 成功但 local identity 綁定中斷，續作本機編輯後恢復原 identity，新增編輯不得丟失。
+7. 原 commit 結算後關閉重開：checkpoint／已核對 commit／原 outgoing 身分應恢復，local outgoing 不再 pending，原合併 Undo 可用。若其間新增本機編輯，仍 pending；若原 commit 後 remote head 已變，不得簽為完整同步，保留資料並標記新三方審閱待辦。
+8. 測切換空間、關閉視窗、取消、撤權、不同 server fingerprint／account／client、stale version、不同 pending transaction；不得錯送／清另一個草稿。無支援能力與 Unknown／Fenced 要有可讀的固定訊息，不瞬間消失。
+9. 用隔離原交易測「審閱停止原請求→確認 fence」：取消不得 fence；Unknown才可對該 exact pending fence，Fenced後保留原畫布／基準及停止方案封存，可重新審阅。另測 commit贏得競爭：應核對結算，不得顯示取消或復原server。不得清其他adapter草稿。
+10. 模擬停止adapter pending後、清active draft前中斷，以及本機archive提交後丟失ACK；重開能回到原交易恢復，不生成第二fence／transaction，原準備身分及本機新增編輯保留。確認停止封存數量與Undo（僅內容仍符合原套用digest時），新審閱不能刪除舊封存。32筆上限只可拒絕追加，不可靜默清掉舊證據；正式archive匯出仍未交付，勿在使用者真實資料上測滿額／kill。
+11. 原交易已Committed而peer又有新編輯：查原收據後應開兩階段審阅。第一階段「原本機套用結果→本機後續意圖／actual commit」須保留此前未見的peer additions；第二階段「actual commit→已審阅意圖／最新remote」須保留peer後續變更，真正衝突必須明確選擇。各步取消不得替換畫布／發canvas POST。
+12. 確認「保存rebase方案」本身不套用：重開後原workspace／checkpoint／original outgoing不變，保存的兩份choices與target可讀回。本機續編輯應標過期、重新審阅；遠端head／role在保存前變更須拒絕。unknown ACK重試須保留同一confirmation ID，不可把方案保存簽為完整同步恢復。
+13. 保存後另按審閱本機套用，再明確確認：重查原receipt／actual歷史commit／最新head／role及本機內容，任何漂移須拒絕。成功後畫布為審閱target，checkpoint必須是原actual commit而不是最新head，原提交身分與兩階段choices在rebase封存保留；此步canvas POST為零。重開驗Undo回到套用前本機內容、Redo回到target；本機保存已發布但ACK遺失時重試只確認同generation，不新增operation或重複history。後續編輯後不得再次套用舊確認。包含未materialize遠端素材的target須拒絕，不產生失效引用。後續同步仍須獨立準備／審阅／批准上傳；正式服務、雙端、撤權競爭與GUI未驗收前不得簽為完整同步。
+
+14. 已本機套用但尚未準備outgoing時，另一端再編輯／本機續編輯：重新載入最新遠端並開三方審閱，可保存新方案，舊proposal／applied／checkpoint封存保留，畫布與checkpoint此時不變；取消不封存。保存確認時head／role漂移、不同binding、server pending／draft或local outgoing均拒絕，不跳過原receipt。關閉重開後新方案、舊封存及原rebase提交證據保留；若本機內容仍等於舊套用digest，舊Undo仍可用；有後續編輯不套用過期inverse。32筆封存上限拒絕追加，不靜默刪除；新target還需獨立批准套用及上傳。測保存已發布但ACK丟失重試，封存只增加一次。
+
+15. 「審閱同步記錄匯出→確認匯出私人同步記錄 JSON」須顯示私密畫布／帳號工作區身分與原請求記錄提醒；取消確認或儲存選擇器不產檔。Desktop／Android／iOS選新檔或資料夾，Web只可顯示下載已請求，不宣稱磁碟保存完成。選擇器不得受20秒服務逾時限制。選完後重新讀本機snapshot，若自審閱以來內容／封存已變或scope切換則拒絕寫入，目的地應被釋放。驗UTF-8繁中／emoji／換行完整，檔案schema為boarderless.local-sync-evidence.v1；核原outgoing／stopped／rebases／superseded、checkpoint、兩份choices／target與原operation身分均不截斷。匯出前後generation／畫布／封存／pending不變，零HTTP或fence。不含金鑰／transport endpoint／素材原檔，也不是raw server receipt/log完整備份；禁止直接匯入或重送此檔，歷史記錄不當新授權。16MiB上限及非法Unicode拒絕而非產出部分檔。封存清理尚未提供，匯出不解除32筆上限或自動刪舊記錄；安全位置、分享及保存由驗收者管理。
+
+使用者簽核視覺預覽、狀態可讀性、手機鍵盤／safe area／bottom sheet／遮擋及 VoiceOver；效能驗收排最後。保存結果、必要截圖與安全請求身分，不提供 API Key。工程 Mock／IndexedDB 測試不代簽真人雙端、正式認證／reconnect、OS picker 與全素材能力。
+
 ## Desktop單一寫入程序驗收（2026-10-05）
 
 使用新build；先自行退出其他舊build／CLI writer，勿把取得新鎖當作已排除舊程式。此項尚未人工簽核，不啟用migration。
@@ -969,3 +1481,148 @@ APP已新增分類提示，人工UI尚待驗；請在驗收form記錄素材格�
 3. complete可能已接受或處理階段中斷，原asset復原提示優先；先在Workspace media查同asset狀態，不能自動重上傳／新增Node／刪除ready asset。
 4. localhost signed origin在Android可能不可達；正式修正由backend重新簽發可達S3_PUBLIC_ENDPOINT，不在APP改寫票券。配置更新後重新選檔，驗upload→worker ready→Node→重開預覽，原失敗截圖保留。
 5. 使用者判定訊息可讀性／截斷／遮擋與VoiceOver；本輪自動分類／stage tests不當GUI、網路或人工簽核。效能最後。
+# 2026-10-11 補充：declared／verified 素材驗收（待最後集中執行）
+
+新增映射審閱案例：Ready後畫面並列本機宣告與伺服器驗證尺寸／時長，null顯示—；使用者確認後注入server實際值變更，應停住要求重新lookup／審閱，不能儲存不同於已顯示值的新mapping。切換來源、lookup失敗／撤權不得沿用舊Ready量測啟用映射；重開必須重新取得Ready回覆。人工確認文字可讀與手機不遮擋，後端預檢不代替此簽核。
+
+本節為待執行案例，不代表新版APP已測試／建置或後端預檢可代替雙端驗收。
+
+1. prepare宣告尺寸／duration為null；驗證後Ready回實際值。APP保存同requestId／digest／reservation，不誤報身份改變，映射使用remote實際值且不改本機原descriptor。
+2. 寬高按EXIF／影片rotation的顯示方向比較；非null尺寸不符應rejected，顯示declared_metadata_mismatch中文原因，原request保留，不自動再上傳。
+3. duration在max(100ms, verified×1%)邊界內／邊界上通過，超界拒絕；null不比較但仍需解碼與格式安全檢查。
+4. 缺declared／verified欄位、Ready的verified=null、公開asset與verified不同、byteSize／checksum／scope／digest不同：停住、不授予映射或建立Node。非prepared帶PUT亦拒絕。
+5. Ready映射保存後重開，local原檔metadata不被改寫；重新canonical審閱、完整remote核對、canvas交易與Undo／Redo。驗證未知ACK保留固定身份、失敗不自動覆寫既存mapping。
+6. 產品負責人簽核拒絕原因文字、觸控／視覺／遮擋／VoiceOver；效能仍最後執行。
+
+# 2026-10-11 補充：AI 每輪狀態（待最後集中驗收）
+
+任務隔離案例：連續兩次任務均有第1輪，第二次在Preparing／preflight或取消時停止。第一次卡片的Completed／Failed、HTTP與response request ID不可被第二次改寫；未建立第二次card的事件只留在目前狀態區與本次安全log。不得沿用前任務consent／結果。
+
+批准只顯示「已批准」，不能未發HTTP就顯示已送出。注入授權後preflight失敗、401／403、200空body、錯UTF-8、半截SSE與cancel，核每輪卡片保留實際typed結果；後續輪開始不抹掉上一輪。工具輪完成只代表隔離草稿步驟，不代表正式canvas套用。複製診斷只含安全摘要，不含endpoint／body／API Key；local log需有每輪terminal事件。真人Claude及Apply／重開Undo另驗，自動mock不代簽；此次源碼接線未執行驗收。
+
+# 2026-10-12：共用背景正式寫入（待最後集中驗收）
+
+核capability schema／operation／minWritableProtocolVersion後才啟用背景控制。Apply送完整default欄位及expectedCanvasStyleVersion；cancel零request。双端CAS只允許合法版本、duplicate不二次加版；回播權威style版本必須等於expected+1，缺欄位／錯primitive／版本跳號不得發布。驗mixed transaction rollback、Undo／Redo版本單調、unknownACK保留原交易→receipt／完整log恢復、重開本機journal。showGrid／snap／theme／viewport不得同步。本節源碼未編譯／測試，預檢不代替真人簽核，效能最後。
+
+# 2026-10-12：圖形正式寫入（待最後集中驗收）
+
+用D批次正式fixtures核普通／平行／自循環create→update→delete→restore與插線完整交易UndoRedo。自循環缺geometry在HTTP前拒絕；geometry清回自動必送完整auto，不送null。manual→auto／舊absence的Undo不誤判before狀態，manual數值與其他屬性仍exact。vectorPath／textPlacement建立與更新帶完整default欄位，清除null往返保留；unknownACK原wire digest核對、映射／journal重開不可丟欄位。旋轉後拖曳、曲線、孔洞與標籤遮擋由使用者簽核，本節未執行測試或跨端驗收。
+
+# 2026-10-12：正式時序 metadata（待最後集中验收）
+
+核E fixtures及Kotlin實際serializer：map wire為完整array，containerId唯一、graph UUID與semantic ID分離，default/null欄位完整。新增graph＋metadata同transaction成功，漏metadata的participant文字／relation修改必須全部rollback；before/CAS不符與版本跳號不得套用。巢狀loop／alt／par與self-message在replay末端驗所有bindings；整圖刪除UndoRedo包含metadata與restore_*且version單調。unknownACK用原交易receipt／完整log恢復、重開不丟sequence，不能只解析Mermaid成功就簽核。觸控／視覺／遮擋由使用者判斷，效能最後；本節新增接線尚未測試／建置。
+
+# 2026-10-12：素材引用歷史還原（待最後集中驗收）
+
+F回播核目前MediaNode、lock／version、原transaction／operation UUID、before／after側及完整restoredReference；不因還原missing引用給Ready或下載grant。證據只能由原fixed wire＋完整ACK＋baseline引用推導，不用inverse suffix猜ID。未知ACK與durable保存／重開及產品批准入口尚未接完，不能認列完成。
+
+cross-kind案例：Image→Video後原圖missing，Undo必須同交易恢復assetId、mediaKind與thumbnailAssetId；目前後端F缺kind provenance，APP不得硬送或只改本機宣告成功。待後端擴充schema／fixtures後驗跨kind UndoRedo、thumbnail null與並行kind修改的拒絕；該案例不是same-kind預檢可替代，效能最後。
+
+# 2026-10-12：雲端方案簿 HTTP 接線（待最後集中驗收）
+
+以B fixtures核resourceVersion2、selection1..9實際Kotlin輸出、payload完整與原檔／縮圖bindings exact coverage；不得降版丟欄位。create If-None-Match:*、update/delete strong ETag與固定冪等鍵，409／412／428／410皆不自動換ID、ETag或restart分頁。驗未知ACK查原資源與durable任務重開（尚待UI/outbox接線）、同帳號兩端競爭與跨帳號owner拒絕；素材availability不作grant、materialization=false阻擋跨workspace插入。4MiB頁面／1MiB request、strictUnicode／duplicate keys／版本不支援需明確失敗，未改本機庫／畫布。本節目前僅adapter，未測試或產品驗收，效能最後。
+
+# 2026-10-12：雲端方案簿 outbox（待最後集中验收）
+
+驗首次HTTP前已await保存固定actor／deployment／client、mutation ID／key／body／ETag及Sending；durable失敗零HTTP。kill／cancel／丟回覆後同任務保持Sending／Unknown，重開不自動重送或换key。成功ACK後保存失敗須exact同generation確認，不用Unknown覆寫已Committed；同key不同內容／同resource未決並行操作與CAS race拒絕。terminal identity不silent GC，128筆／4MiB滿時明確停止。TTL-aware恢復、平台factory與UI尚未接，本節不當完整雲端同步已驗收；效能最後。
+
+# 2026-10-12：方案簿雲端平台入口（待最後集中驗收）
+
+四端核同一套outbox API的真正落盤：Desktop／Android／iOS atomic file CAS與confirm、Web await IndexedDB。不同server／user／client隔離；key必須64小寫hex且不與library Key碰撞，雲端stage不可改本機方案items／nextId／pending import。取得runtime／切換mode不發HTTP，不用default endpoint；legacy Settings沒有durable runtime時明確不可用。跨process或兩tab競爭須CAS拒絕，取消await不把enqueue當成功。UI及TTL恢復尚未接，源碼未測試／建置，本節不是已通過。
+
+# 2026-10-12：雲端方案簿視窗（待最後集中驗收）
+
+伺服器模式方案簿開雲端視窗：開窗零HTTP，點連線才讀capabilities／列表，點方案fresh GET、下一頁不自動restart過期cursor。改名／永久delete／上傳選定本機方案需審閱→保存固定任務→另行送出；stage零HTTP寫入、Prepared才可send，Sending／Unknown不可自動重送。16筆待辦分頁與exact UUID／ETag／body保留。scope失效／取消、capabilities等待時換user不可PUT。
+
+雲端方案存本機identified-save只新增library項目、不插畫布／給素材grant；多source bindings本機格式不能保留時不得折疊，取消／ACK不明須用既有pending import恢復。核手機safeDrawing／IME、卡片與狀態可讀、modal時畫布鍵盤／Presence不搶輸入；使用者簽核視覺遮擋。本節尚未執行，TTL恢復與conflict UI仍未接，效能最後。
+
+# 2026-10-12：雲端衝突讀回與新動作（待最後集中驗收）
+
+Sending／Unknown／Rejected讀遠端現況：GET相同內容不能標Committed；404不能當刪除／fence，原任務不清除。Rejected才可明確另行審閱：原名稱套用最新遠端內容、刪最新revision、不同UUID另存；每次stage／send二次確認。競爭ETag在GET後改變時需412且不覆蓋；新名稱動作保留全部最新payload／bindings，不把舊payload配新ETag。scope撤權／其他writer改原task需停住，不確定task不得另造同resource請求。JSON4096字摘要與非receipt警示由使用者簽核可讀性；TTL原key恢復仍待接，本節未測試或正式驗收。
+
+## Awaited 初次啟用與 lease（最後集中驗收，尚未執行）
+
+平台真正排除所有舊／新 writer 後才啟用。驗 Preparing／missing receipt 被拒且沒有發布副作用；Published receipt 與 frozen review、draft／safety／ledger 全內容及 generation 必須精確匹配。啟用紀錄須 CAS＋durability＋完整讀回，quota／取消／identity drift 不返回 runtime，不改原 namespace／client ID。storage await 前後、submit／fence HTTP 前失效須停止，不清 pending；已 dispatch 的結果未知須以原 receipt／fence 收斂，不能以 lease 關閉作未提交證明。重複 close 舊 handle 不影響後來的 lease。未知 scope／外來 client 不自行註冊；資料前進後須正式 startup reconciliation，不能重跑初始 publication 倒回 ledger。平台 writer 排除與 wizard 尚未接通，本段是待執行案例，不是通過證據；集中測試在全業務完成後，效能最後。
+
+## Awaited draft 分塊（最後集中驗收，尚未執行）
+
+平台啟用後驗單筆上限以上且 domain limit 內的完整草稿、跨 chunk 的中文／emoji、pending／stopped archives 全內容保留。每 chunk confirm 前不得發布 manifest；manifest CAS 失敗／quota／取消保留舊可讀 draft，未知 ACK 以原 bundle／generation 核對，不換 ID。缺 chunk、錯 scope／key／digest／generation、字串數值、非法 UTF-8、duplicate JSON keys 皆拒；讀取中 manifest 換代須拒混讀。舊 v1 read 不寫入，同 bundle confirm 不增 generation；complete readback 必须一致。domain 6 MiB 與 manifest 上限超限明確回錯，不截內容；舊／orphan chunks 不自動清除。這些是待集中驗收案例，不是已通過證據；效能最後。
+
+## 草稿遷移審閱介面（入口接通後集中驗收，尚未執行）
+
+確認開啟視窗沒有 storage／network 副作用；source／plan digest 與各 scope 摘要對應 frozen review。發布與啟用必須分開確認，發布成功只能顯示發布完成，不能宣告已切換。忙碌時不可重複操作；關閉／背景／身分或 scope 變更取消，來源變更需重審，不自動覆寫或重送。失敗訊息持續可見且不包含原文／URL／Key／exception。activation 回傳後宿主未接管／接管失敗須 close lease；宿主成功接管必須原子替換 repository 並保留 lease，舊 UI dispose 不可關掉新 owner。驗小螢幕安全區、長列表捲動與確認按鈕可達性，視覺／遮擋由使用者判定。平台入口尚未接通，本段不是已完成驗收證據。
+
+## 已前進資料 reopen（平台接通後集中驗收，尚未執行）
+
+成功啟用後讓草稿／pending／fence／刪除證據及 ledger 正常前進，再重啟：須保留目前內容、不重新發布原初始狀態、不降 floor。缺 activation／publication receipt 或任一註冊 store、來源 review 改變、artifact generation 倒退、同 generation 換內容、ledger 低於保留 wire clientSeq 皆拒絕。原 fence wire digest 不可換、原 Fenced／Committed 不可回退；原 deletion evidence 不可刪或同版本換內容，更新須 tombstoneVersion／throughServerSeq 都前進。readDurable 要 confirm 後完整讀回；並行 writer 必須由平台真鎖排除，不以檢查次數代替。UI reopen 只確認恢復，不走初次發布；來源／scope 失效取消。尚未接平台入口，本節是待執行流程而非通過紀錄，效能最後。
+
+## 遷移 review 保存與 restart 原方案（最後集中驗收，尚未執行）
+
+首次發布必須原完整 review packet 耐久完成＋來源重核，才 Preparing／artifacts。中斷在 chunk／manifest／Preparing 各階段，重啟只接受原 target／planDigest／sourceDigest 綁定的 bytes，不猜最新、不卡住後換 identity。Published receipt 存在但 packet 缺失／損壞須拒啟用，不重建原方案。驗 64 MiB 上限、中文／emoji 跨 chunk、JSON duplicate keys／字串數值／UTF-8 損壞、scope或chunk hash／generation錯誤、quota與取消。不同 plan 不覆寫，同 packet 只 confirm；restart read 本身不 initialize ledger、不授權 resend／writer切換。packet 含完整私人草稿，必須平台私有 durable store，不写 log／clipboard／外部下載；舊／orphan資料不 GC。本節未執行，平台入口與真 writer lock仍待接通。
+
+## Legacy scope catalog 完整來源（最後集中驗收，尚未執行）
+
+legacy prepare／retain 先保存 scope 清單，再寫草稿；清單保存失敗不得開始新草稿寫入。登記但未寫 draft 可存在，不補造空 journal。驗多 workspace／不同 user或endpoint、pending／只草稿／stopped／fence／deletion 全清單；漏任一旧 wdj1／wsp1 published key 或無 locator 的舊 archive 必須拒遷移，不能只看當前畫布。未知／壞 catalog、重複scope、超限及來源改變拒，原 keys 不刪；native／new awaited runtime不回寫legacy catalog。Settings readback／兩次 source read 不是耐久或排除非配合writer的證據，必須另有平台鎖。舊 hashed identity 只能由正確原 scope 資料補回，不嘗試猜測／重設 client。未執行驗收，效能最後。
+
+## Android server lifetime writer lease（最後集中驗收，尚未執行）
+
+server factory 建立前取得私有 lifetime lease，兩配合process只能一個持有；同 process多factory共用handle，不重複 FileLock。鎖失敗不改 client／namespace、不刪lock／重試fallback；process終止由OS釋放，lockfile保留。owner／mode／symlink／inode更換或失效須拒絕後續 submission／realtime gate；確認 checkpoint逐筆CAS lock仍生效。這個鎖沒有排除同process多repository、未改版writer或外部Settings寫入，遷移仍須完整 cutover barrier。測顯式server模式建立失敗時UI可返回，不遺失本機畫布。尚未執行，不宣告跨端 writer exclusion完成；效能最後。
+
+## iOS lifetime lease／factory 失敗 UI（最後集中驗收，尚未執行）
+
+iOS兩個配合process acquire只有一個成功，nonblocking失敗不掛住UI、不改namespace／client、不刪lock；同processfactory共享descriptor。檔案owner／mode／hardlink／symlink／inode置換與fd失效拒submission／realtime，逐筆record CAS lock保留。App由本機切server時factory失敗須留原repo／畫布，返回模式切換失敗提示；startup explicitserver失敗進chooser，可明確選本機，但不能暗自消費原工作區請求或聲稱server成功。偏好保存失敗candidate關閉、原screen不dispose，安全訊息不含原例外。lifetime鎖仍不涵蓋sameprocess多repo／未配合舊writer，遷移需要額外barrier。未執行驗收，效能最後。
+
+## 儲存與素材 runtime 交接（最後集中驗收，尚未執行）
+
+repository factory成功而mediaRuntimeFor失敗時，不切 storageMode／active session，原畫布與原素材gateway保留，未接管candidate關閉；偏好保存失敗同規則。成功時 repository與素材runtime一對發布，不出現server畫布＋local originals gateway／錯endpoint decoder。startup media factory失敗回chooser並安全提示，不在composition拋出例外；明確重選才重建。factory回傳既有active instance時，失敗不能關閉它。不要把這個session交接當成同process寫入排除或遷移驗收。本段未執行，效能最後。
+
+## Web server writer lease（最後集中驗收，尚未執行）
+
+兩配合分頁／worker相同origin固定lockname只有一個寫入owner；ifAvailable未取得或缺secure context／Web Locks時明確拒連線，不初始化identity／counter、不fallback TTL／steal。same-tab多repo token獨立，一個close不釋放其他owner；取消pending或取得grant前後取消不能漏token。5秒timeout停止；pagehide釋放並使BFCache舊handle失效，不能自動重取或重送pending。開啟／refresh／prepare及workspace／member mutations須await grant，scope／identity保存前再次核。原HTTP已dispatch仍需receipt/fence收斂，失鎖不能當未提交證明。測bridge缺失、promise rejection、重複close／取消、最後owner釋放與同分頁candidate失敗；same-tab cutover／未配合舊writer另驗，不宣告全部排除完成。未執行，效能最後。
+
+## Same-process repository writer owner（最後集中驗收，尚未執行）
+
+同process／分頁兩個新版server factory candidate可建立，但只有一個repo可prepare成writer；第二個拒絕時不清原owner資料、不steal／TTL接管。原repo顯式close後新repo才可claim，舊handle重複close不釋放新owner。同repo並行prepare只保留同一owner；close與claim競爭不能留下closed owner。切模式保留candidate準備失敗的原screen，成功切screen時核dispose舊repo與new prepare順序；若順序未收斂，顯示錯誤而非搶占。HTTP response晚到／401／404不得讓已關閉repo重設新owner的identity／workspace，clientId讀取初始化也要guard。已送出pending不因失owner當作未提交；receipt/fence另驗。此owner不是原始Settings或舊版writer的排除證明，migration前仍須完整quiescence；本段未執行，效能最後。
+
+## Legacy storage drain barrier（最後集中驗收，尚未執行）
+
+讓Default中的draft／pending／ACK／stop、fence／deletion、sequence寫入停在storage操作內，關閉repo：新操作立即拒，owner／Web跨分頁lease不可在原操作finally退出前釋放，新repoclaim拒而非接管。原操作成功或拋錯都扣一次count，取消不得漏count；close／enter競爭不得留下closed owner或提早drain。nullable read只執行一次，不因null跑無guard fallback。同步Settings identity／scope catalog／counter寫入同規則；舊close重複不釋放新owner，onDrained最多一次。drain不等同server未提交／全部checkpoint或awaited store完成，已dispatch仍需receipt/fence，migration須另外完整quiescence。尚未執行，效能最後。
+
+## Checkpoint I/O／Web交易取消 drain（最後集中驗收，尚未執行）
+
+checkpoint native I/O開始後cancel／close，owner需等實體操作退出，期間新repoclaim不得成功。Web IDB transaction開始後取消，先abort而ticket保持到onabort／oncomplete；request／tx error不是terminal。commit已開始而abort失敗時仍等complete，Kotlin已取消不更新UI或授予ACK，但可exact讀回未知保存結果。沒有transaction的取消立即結束且晚到open不寫入。驗bridge callback取消後仍只settle一次、complete／abort／error重複事件、最後ticket釋放才Web lock release；quota／scope換手／owner close也不能提前釋放。其他Receipts／Library／AssetCatalog續用continuation保護，不因callback變更產生cancelled成功；bridge缺失要安全失敗。此處只驗storage，網路quiescence另驗；未執行，效能最後。
+
+## Closed owner drain 後接管（最後集中驗收，尚未執行）
+
+舊repo明確close後仍有storage I/O，新repo prepare須可取消等待而非立刻衝突或搶占；舊repo still-live則立即拒，不能自動關它。count歸零及onDrained完成才claim，callback失敗不可成功；30秒timeout保留原owner／pending／原資料，不reset或fallback。取消新waiter不影響舊操作完成，兩candidate等同owner後只有CAS贏家claim，不自動重試輸家；重複舊close不釋放新owner。驗App切screen dispose／新LaunchedEffect順序及可見連線狀態，不以此替代所有舊writer／network quiescence驗收。未執行，效能最後。
+
+## 實際 legacy 草稿來源審閱入口（最後集中驗收，尚未執行）
+
+legacy Settings server模式連線後打開「成員」→「審閱本機草稿儲存」。核對全scopes的操作／pending／stopped／fence／deletion counts與sequence floor、source／plan digest。opening只讀來源、不HTTP／寫草稿／初始化counter／重送／切模式；畫面須明示發布／啟用尚未接通。缺counter／client／scope catalog／舊archive locator／損壞或漂移顯示持續錯誤，不漏資料、不自動重試；「重新讀取來源」才再讀。開啟審閱阻止背景canvas鍵盤／拖曳修改，Presence按現有審閱gate處理，關閉不關閉成員面板；actor/client/workspace換手或取消不可顯示舊packet。native或已awaited配置不出現錯誤legacy入口。視覺／小螢幕安全區／遮擋由使用者判定，尚未執行本節驗收。
+
+## 舊定位清單補充（最後集中驗收，尚未執行）
+
+成員→草稿儲存審閱→補充原範圍／停止交易定位資料，貼原scope與transactionId JSON後按重新讀取。JSON範例只示schema，不代表自動可推算原值；不得貼API Key。合法原值須匹配現存manifest hash與原完整內容；錯／漏scope、錯archive、duplicate keys／entries、未知欄位、非string IDs、字串version、過深／過大／非法Unicode拒，原資料保持不變。修改輸入清舊review，忙碌禁止改，未重新讀取不能宣告新輸入已驗。raw輸入不保存／log／複製／送HTTP；scope換手關閉不保留到另一個actor。補充catalog不能補造counter／journal，也不授權resend／migration。成功仍須正式publisher recapture／writer exclusion另驗；本段未執行，效能最後。
+
+## AI tool-only SSE 狀態與現有 log 判讀（最後集中驗收，尚未執行）
+
+每個AI request獨立授權後，無文字而只有工具呼叫的回覆也應於第一個bounded UTF-8 SSE frame顯示Receiving，沿本次HTTP／response type／request ID摘要，不沿前回合。每transport只一筆初始Receiving；沒有frame不能偽造接收中。Receiving不代表JSON／tool合法或完整成功，空／未終止／provider error／UTF-8錯誤仍Failed並禁止Apply；只有完整回合及工具處理成功才Completed。diagnostic observer取消／關閉應停止後續emit，不把observer錯誤當Network或繼續讀。log只保存型別安全摘要，不保存raw SSE／prompt／Key。現存最新2026-10-09 Completed只证明原嘗試；新OpenAI／Claude與draft Apply／Undo仍需最後集中验收，不能以舊HTTP200代簽。未執行新驗收，不發未授權付費請求，效能最後。
+
+## 素材替換原交易快照（最後集中驗收，尚未執行）
+
+prepare需保存exact wireOperationId與完整before／after（assetId／mediaKind／thumbnailAssetId）、expectedVersion，與原pending一起耐久後才HTTP；transaction前面若改同node版本，capture依當時序列baseline核，不從現在素材猜history。錯object／version／before／wire properties／operation identity拒，seq gaps不重用。無引用改變不產生restore authority；舊pending／archive無快照不升級。ACK要exact原actor／client／operation範圍／payload才建立same-kindproof，unknown ACK／反向localOperationId suffix／相同assetID不足。跨kind before／after可保存但後端未含kind provenance時不送restore；縮圖null要完整保留。驗回應遺失／restart／stopped保留元資料、empty legacy序列化不變、1MiB pending上限錯誤不truncate。history／durableproof及最終restore ACK另驗；未執行，效能最後。
+
+## 素材引用 commit 證據與 ACK settlement（最後集中驗收，尚未執行）
+
+四端正常替換後，原scope／transaction／wire operation綁定完整before／after與原requestDigest、ACK範圍與version，在pending清除之前耐久保存並讀回。驗REST／WS accepted／duplicate與receipt-confirm恢復，證據寫入或confirm／readback失敗不能清pending；重試相同原交易確認相同generation1，不覆寫別的證據。同key不同內容、scope／client／actor錯、wire／ACK不符、unknown outcome、字串版本／非法UTF-8／duplicate JSON／超512KiB皆拒，不truncate／GC。legacy無snapshot不補造；cross-kind snapshot可保存但目前F不還原kind。generic未配置proof runtime的引用變更在reserve／dispatch前拒，不能落Settings。native／browser I/O納入owner drain，Web取消等terminal。history／Undo／Redo與server provenance另驗，本節未執行，效能最後。
+
+## 素材同kind Undo／Redo 原交易還原（最後集中驗收，尚未執行）
+
+一般引用替換成功後，history需附exact原transaction／wire operation與完整兩側和原object版本；Undo／Redo等待原commit，inverse與rebase保持identity。不因重複assetID／local inverse suffix授權；transaction children與同node多次引用需版本／順序精確綁定。將舊素材改missing後Undo與Redo走restore_media_references而非普通Ready update，expectedObjectVersion採現在CAS；actor／workspace／origin私有證據不符、node locked／reference被別人改、capability／protocol不可寫則拒且不fallback。ACK的restoredReference與新objectVersion必須exact預期，false200不能清pending；REST／WS／receipt都驗，thumbnail null保持。cross-kind backend未含kind provenance的路徑不得冒充支持；普通Ready跨kind與missing還原分開驗。restart／receipt recovery後history重建另待實作／驗收；本節只描述live-history源碼，未執行測試，效能最後。
+
+## 一般選檔 preparation v2 契約共用與 durable reservation（待最後集中驗收）
+
+普通 picker 與本機文件同步應輸出相同 canonical metadata／digest、精確 actor/workspace/requestId；檢查 prepare、lookup、ticket、complete 的錯誤 scope／digest／declared／phase／verified 被拒，不能回退 v1 或換 requestId。普通選檔重新選擇錯誤檔案、修改 bytes/checksum/尺寸/時長須停下；失去 HTTP 回應仍保存原身分。票券 ID 與 lease 保存後才准下一步，舊 lease 不可重新啟用，generation 與 ticket 順序不可倒退。
+
+儲存核心驗 CAS race、confirmDurable 失敗、取消／切換 actor、損壞 UTF-8、重複／未知 JSON key、numeric string、缺少 explicit null、超過大小上限；不能偷偷覆寫、刪掉或裁剪原 request。只有確實讀回自己的 generation 與完整記錄才判定保存成功。此核心尚未接平台 runtime、discovery index、匯入 coordinator／恢復 UI；目前普通 server picker 仍 v1，不能以核心存在標記端到端驗收通過。視覺與遮擋仍由使用者簽核，全部功能完成後集中測試、效能最後。
+

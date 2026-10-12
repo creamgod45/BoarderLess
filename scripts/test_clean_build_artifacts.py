@@ -47,6 +47,28 @@ class CleanupTest(unittest.TestCase):
         self.assertTrue((self.repo / "gradle/wrapper/gradle-wrapper.jar").exists())
         self.assertTrue((self.repo / "user/document").exists())
 
+    def test_only_identified_legacy_karma_outputs_are_selected(self):
+        ours = self.base / "_karma_webpack_123"
+        other = self.base / "_karma_webpack_456"
+        suspicious = self.base / "_karma_webpack_789"
+        for folder in (ours, other, suspicious):
+            folder.mkdir()
+        marker = '/***/ "./kotlin/BoarderLess-shared-test.js"; cg.creamgod.boarderless'
+        (ours / "commons.js").write_text(marker)
+        (ours / "runtime.js").write_text("generated")
+        (ours / "123.wasm").write_bytes(b"generated")
+        (other / "commons.js").write_text('"./kotlin/Other-shared-test.js"')
+        (suspicious / "commons.js").write_text(marker)
+        (suspicious / "private.p12").write_bytes(b"keep")
+        paths = clean.discover(self.repo, [self.base])
+        self.assertIn(ours, paths)
+        self.assertNotIn(other, paths)
+        self.assertNotIn(suspicious, paths)
+        for command in ("java -jar /repo/gradle-wrapper.jar", "node /build/karma.conf.js"):
+            with patch.object(clean, "processes", return_value=[(42, command)]):
+                with self.assertRaises(RuntimeError):
+                    clean.check_busy([ours])
+
     def test_external_output_symlink_rejected(self):
         (self.repo / "build").symlink_to(self.outside)
         with self.assertRaises(RuntimeError):

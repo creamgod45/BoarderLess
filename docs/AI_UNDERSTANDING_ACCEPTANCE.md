@@ -1,5 +1,17 @@
 # AI 畫布理解驗證（唯讀）
 
+## 2026-10-11：認證提示新版 Desktop 驗收包
+
+本次使用者401報告沒有新preparedAuth／challenge欄位，拒絕層仍未知；10/9的成功log不是本次成功證明。新版401／403主狀態及安全指引已接入理解驗證與工具視窗，詳QA SOP。隔離建置AI診斷15項、Desktop52項皆零failure／error／skip，createDistributable成功22s，log：`/tmp/boarderless-pinned-assets.OHtTZ8/ai-auth-desktop-package.log`。
+
+暫時驗收包：`/tmp/boarderless-pinned-assets.OHtTZ8/build/desktopApp/compose/binaries/main/app/BoarderLess.app`。未恢復根專案build/verified成品，未啟動APP或替使用者結束舊APP。請自行退出舊版後開啟此包；正在執行的視窗不會因打包自動更新。人工GUI、Router根因、Claude及完整工具審核／Apply仍待驗收，不把mock成功當live連線成功。包是本機暫存而非正式發布，後续清理可移除。
+
+## 2026-10-10：本地安全 log 的最新服務證據
+
+直接核對 ~/.boarderless/logs/ai-probe.log：2026-10-09T02:29Z（台灣10:29）多輪 OpenAiChat／Bearer／ChatCompletions／Gpt56Luna 工具請求收到 HTTP200、contentType=Sse，最後一輪 Receiving→Completed。Connecting 欄位 tools=9、stream=true、reasoning=None、temperature=Absent。這更新下方10月8日「尚未取得修正後新請求」的歷史狀態，但只證明這些請求的服務／串流完成；不證明每個工具結果的語意、真人草稿審核→Apply→Undo／Redo／重開或 Claude 路徑已通過。
+
+使用者貼出的無時間戳401仍屬認證拒絕證據，不推定與最新成功請求為同一路由／同一認證設定。僅 contentType=Other 不能得知錯誤本文；不以成功紀錄聲稱所有401皆已排除。此核對未讀 API Key、未代發真實 AI 請求，安全 log 仍不含原始 request／response body。
+
 ## 2026-10-08：實際 OpenAI 圖形工具 400 已定位並修正請求
 
 - 新版本機 log，台灣時間 11:15 的兩次實際 OpenAiChat 請求：requestEndpoint=ChatCompletions、requestModel=Gpt56Luna、tools=8、stream=true、reasoning=Default；HTTP 400 Json，errorBody=Parsed、providerType=InvalidRequest、providerParam=ReasoningEffort、rejection=ReasoningToolsInChat。實際拒絕的是 Chat 工具搭配額外推理，不是 endpoint 拼錯或沒有送 Bearer。沒有保存或讀取原始錯誤訊息／API Key。

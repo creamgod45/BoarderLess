@@ -1,5 +1,11 @@
 # Desktop AI 安全除錯記錄
 
+2026-10-13 授權規則更新（源碼已接、未驗收）：所有工具輪次都須審閱並明確同意該次 exact request，不再提供後續 autoApprove。舊紀錄若提及此選項僅代表歷史行為；沒有為這次改動送出 AI 請求或取得新實測證據。
+
+2026-10-13 源碼補充（尚未編譯／驗收）：理解 probe 以嚴格 UTF-8 code point 累積，上限 128 KiB；跨 delta 的 UTF-16 配對可暫存，未配對／非法配對分類 ResponseFormat，超量 OutputLimit。手動貼回覆同樣嚴格限制，拒絕時原文不變且有提示。安全 log 不記錄這些字元或回覆內容。
+
+本日唯讀檢查現存 log，最新事件仍是 2026-10-09T02:29:52.408199Z OpenAiChat Completed（該 attempt HTTP 200）；沒有新的失敗可歸因。此紀錄不證明最新 APP、Claude 或工具草稿 Apply／Undo 已完成驗收，未為診斷另發 AI 請求。
+
 Desktop 自動寫入 `~/.boarderless/logs/ai-probe.log`，不需要複製視窗內容。檔案為 UTF-8、僅使用者可讀寫；目前檔案上限 256 KiB，輪替保留一份 `.1`。寫入失敗不影響 AI 任務。
 
 送出摘要包含 endpoint 類別、已知模型類別、請求位元組數、messages/tools 數量、stream、reasoning_effort、max_completion_tokens/max_tokens、temperature 與參數名稱類別。未送出的選填數值顯示 Absent；自訂模型、參數名稱和 endpoint 不原樣保存。
@@ -12,4 +18,4 @@ Desktop 自動寫入 `~/.boarderless/logs/ai-probe.log`，不需要複製視窗�
 
 欄位定義依 [OpenAI 官方 Chat Completions API Reference](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)：max_tokens 為 deprecated 的舊欄位，不能把手動相容選項當成所有模型都支持。沒有藉此改選模型或呼叫供應商 API。
 
-2026-10-08 本機最新實際紀錄仍是 reasoning=Default 的工具請求，被 HTTP 400 / ReasoningToolsInChat 拒絕。程式已對支援的 GPT-5.6 Chat 工具請求設定 reasoning_effort=none；尚無修正後的真實請求成功紀錄。測試 fixture 的成功不能取代這項驗收。
+2026-10-11 唯讀核對本機紀錄：較新的 2026-10-09T02:29:52Z 已有 OpenAiChat／Bearer／ChatCompletions／tools=9／reasoning=None／temperature=Absent 的 HTTP 200、SSE、Completed。10/8 的 HTTP 400 是歷史失敗，不再當成最新狀態。這只證明該次請求完成，不能代簽 Claude、所有設定路由、工具草稿套用／Undo 或未附時間的 401；本輪未代送 AI 請求。

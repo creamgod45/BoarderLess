@@ -1,5 +1,283 @@
 # BoarderLess App Progress
 
+## 後端 A–F 接線第一階段（源碼實作、待集中驗證）
+
+已開始接入交付後端：固定部署capability讀取協商，state保存共用style／sequence metadata，projection讀geometry／vectorPath／textPlacement且驗完整sequence graph，不丟新版欄位。這只啟用read，不冒充已接好的writer／WebSocket／雲端方案簿。正式operation、ACK／replay／snapshot v3與F歷史還原後續接入；未跑測試／編譯／打包，六主線未完成。
+
+## 2026-10-11：映射前審閱量測值（源碼實作、待集中驗證）
+
+素材上傳UI並列declared／Ready verified尺寸與duration；確認綁定已審閱完整Ready descriptor，fresh receipt不同需重新審閱，不套用舊批准。失敗與重新lookup清舊量測；映射仍獨立於canvas發布，本機metadata／history保持。尚未測試、建置或跨端驗收。
+
+## 2026-10-11：declared／verified APP 對接（源碼完成、待集中驗證）
+
+核對後端最新schema後，APP用declared綁定固定prepare身份、用Ready verified核對remote素材與映射。local映射另保留原private descriptor，避免server補尺寸／duration誤改本機catalog與Undo。新增declared_metadata_mismatch安全提示，缺欄位／錯digest／Ready沒有verified均停住。未測試／編譯／打包／真HTTP；完整六主線及正式跨端驗收尚未完成，詳見CURRENT_LOOP_GOAL。
+
+## 2026-10-11：素材 v2 APP 業務接線（已實作，尚未集中驗證）
+
+依使用者要求，先完成全部業務整合後再集中測試／跨平台建置／打包，效能最後。以下只代表源碼接線，不引用先前測試為本次驗證證據。
+
+- 後端 v2 已交付，APP 新增 capabilities／prepare／lookup／upload-tickets／complete adapter，使用既定 endpoint binding，不退回 v1 或自動 retry。
+- 本機畫布文件同 generation 保存固定request、remote identity、ticket identity與public lease；重開查原請求，未知ACK保留身分，票券 URL 不寫入文件。
+- 同步視窗新增分步授權：檢查→保存身分→prepare→票券→傳送→complete→查phase；獨立換票需明確確認取代舊lease。原檔經private gateway＋有界佇列分批讀取，傳送核size／SHA-256／EOF，取消不自動刪除或重傳。
+- Ready後另行確認映射，fresh receipt／asset／原檔／head與ACL核對後保存 remote→existing local ID；不改寫Node／Undo或原proposal，需重新canonical審閱才可準備畫布交易。已映射且Ready的新server素材不必先有server Node引用。
+- 私人同步evidence匯出包含上傳身分與public lease歷史，不含ticket URL／headers／credentials／bytes，不能當可重送或授權備份。錯誤分辨401／403／404／expired／superseded／missing，未知body不吐UI。
+- 尚未執行新增接線的測試或真人驗收。正式多人／雙端、使用者層級方案簿、canvasStyle／geometry／sequence正式契約與Claude完整工具套用仍未交付；完整六主線不縮減。詳細增量見 CURRENT_LOOP_GOAL.md，驗收流程見產品 QA 品質檢驗 SOP.md。
+
+## 2026-10-10：衝突選擇、二次確認與 durable 合併方案
+
+- 上輪屬於 progress：同步目的地設定／三方預覽已接入產品並通過對應驗證。本輪在本機同步比對入口加入「選擇並審閱合併方案」，可選本機／伺服器、看三方與合併結果、再二次確認保存 exact frozen plan。初次配對差異與真正三方衝突必須選擇；單邊變更預先保留，仍可明確改選。
+- 新 LocalWorkspaceSyncMergePlan 涵蓋 title／canvasStyle／完整 sequence metadata、全部物件型別與連線属性；以 entity 作明確 atomic 選擇單位。比對只忽略各端 entity revision，保留 geometry、floating text／font、vectorPath、媒體 reference、群組／zIndex／lock／sequence semantics。結果檢查 parent cycles／missing group、懸空 relation／自環 geometry、鎖定與完整 sequence bindings；混合出無效畫布時不能準備確認，不丟掉不支援的資料。
+- 新 LocalWorkspaceSyncProposal 保存 binding、canonical SHA-256 local/checkpoint fences、remote snapshot/version/seq/role/client、explicit choices、target；它是草稿，不是已套用畫布／HTTP request／ACK。Board.syncProposal 與本機文件在同一 atomic record CAS／durable barrier 保存，Native 和 awaited Web 共用規則。
+- stageSyncProposal 核對 owner／binding／checkpoint／local digest／已存 proposal ID，再重新計算 choices→target。相同 unknown ACK 重試只 confirm 舊 generation；同 ID 改 payload、過期 local fence、偽造 target 均拒絕。普通 sync ACK 不能清掉已審閱 proposal。新離線編輯保留原方案，proposalIsCurrent=false，必須重新審閱，不會將舊 target 當現有畫布。
+- 重開 UI 可離線讀回保存選擇／合併預覽；歷史 remote snapshot 清楚標為歷史，不當最新 ACL／receipt。所有 choice 變更會取消上一次準備確認；保存僅進本機，尚無 local apply 或 network submit。使用者可關閉；取消／未知保存確認後重開仍從 durable record 恢復。
+- JVM 35／35 無 failure／error／skip、Desktop compileKotlin 通過，含 Native 真實檔案 stage／重開／server factory 不被呼叫、unknown ACK、stale/forged target/ID、單邊變更、dangling/group/lock、完整時序與不一致選擇拒絕。log /tmp/boarderless-sync-proposal-rebuilt.log。中途一次 warm JVM compile 成功但 JAR 缺 WorkspaceSession／CanvasObject／新 Proposal，造成大批 unresolved：不算通過；隔離 shared clean＋--no-daemon 重新建置後直接查 jar names 均存在，entries=2162。沒有停止主要 APP 或删除共享 SDK／其他專案 cache。
+- JS 14／14、Wasm 14／14 無 failure／error／skip，XML class count 各3；新增 actual IndexedDB 保存／重開／繼續離線編輯測試，仍使用明確 fixture persistence grant，不等於 production origin 真實授權或瀏覽器 GUI 操作。log /tmp/boarderless-sync-proposal-browser.log（BUILD SUCCESSFUL 1m55s）。
+- 尚未交付：已審閱方案的 atomic local apply＋Undo／Redo＋baseline settlement、fresh remote ACL／scope／receipt/fence revalidation、素材 ID materialization／後端完整能力、durable outgoing request／未知回應恢復、authenticated online/reconnect worker 與兩台裝置衝突套用後重開驗收。完整 offline-first sync 與原六主線 goal 保持 active；本節沒有把保存 proposal 當完成同步，未提交／push。 依腳本 discover／tracked／busy 規則清除隔離建置 791.0 MiB；主要使用中 Desktop APP 保留。
+
+## 2026-10-10：同步目的地比對入口與三方畫布預覽
+
+- 上一輪屬於 progress：本機啟動與 durable baseline 已改動權威程式並完成驗證。本輪接到產品入口：本機「空間」新增「伺服器同步設定與比對」，Desktop／Android／iOS／Web 使用各自現有 server factory，composition／一般啟動不呼叫 factory 或 HTTP；只有按連線才開啟服務、載入／選擇空間。Desktop 保留 native server journal factory，未啟動／修改 backend。
+- 可先看兩端帳號／空間 ID、三方預覽和完整屬性差異，再確認保存 binding；保存 binding 不會覆寫任一端。連線／讀取超時給出保留本機的錯誤；隨時可關閉並取消；scope／epoch 不符不發布畫面。綁定前 fresh refresh 必須仍與已審阅快照相同，且本機 durable snapshot／CAS fence 仍相同。遠端 pending draft／submission 必須先恢復，不能在未知提交上建立對應。
+- BackendWorkspaceRepository 提供配置 route 的 SHA-256 syncServerScope；只保存 fingerprint，不保存 URL／token。已綁文件遇不同 route／account／space 不會改連另一個空間。此比對 UI 使用既有 API，不能算正式 auth／production WS 已交付。
+- WorkspaceDraftReviewDialog 加入原基準／本機／遠端共用 viewport 的唯讀預覽；完整 leaf choice 完成後也能看 merged proposal。重用正式畫布 text／vector／relation／sequence 繪製元件；從出口量測抽出無 raster 限制的 measured paint，巨大畫布不配置巨大 bitmap。影片／原檔／GIPHY 只畫 metadata placeholder，不取得 URL、下載或播放；正式 export 仍強制需要全部 verified frames，沒有因此放寬匯出保證。
+- 差異列表補 DocumentChange（標題、canvasStyle、sequenceDiagrams），sync review 可包括只在 remote 出現的 entity；原草稿模式保留只列本機修改的預設，不把別人的新增混進匯入提交。初次兩端內容不同的 binding 保存 requiresInitialReview，不把 remote 人為當成共同 baseline 後靜默 UploadPending；普通 checkpoint ACK 不能清除初始審核。
+- JVM 89／89 無 failure／error／skip，Desktop compileKotlin 通過；含三方 viewport／巨大坐標、初始內容差異不能靜默 ack、完整差異、既有 merge／draft 與實際 PNG／PDF export renderer 回歸。log /tmp/boarderless-sync-preview-final.log。另 ImageComposeScene 真實渲染 1／1 通過（/tmp/boarderless-sync-preview-render.log），親眼檢查原檔輸出中的外側文字／物件位移／影片資訊占位；不是 OS GUI／真人雙端證據。JS 14／14、Wasm 14／14 無 failure／error／skip，實際 XML class count=3，驗證 diff／viewport／initial pairing model 且編譯新共用 UI；不是瀏覽器 UI 點擊／server 操作驗收。log /tmp/boarderless-sync-preview-browser.log（BUILD SUCCESSFUL 1m55s）。依清理腳本 discover／tracked／busy 規則移除本次隔離 build 與 preview raster 共 789.1 MiB，主要使用中 Desktop APP 未停掉／刪除。
+- 下一步仍是完整產品同步：明確初始配對／衝突選擇和重新確認、atomic local apply＋baseline acceptance、durable remote request／receipt／fence／未知 ACK 恢復、authenticated reconnect worker 與全素材／完整 canvas capabilities、下載 publication 和雙端離線→重連→衝突→套用→重開驗收。現有入口只是目的地設定及唯讀比對，沒有自動上傳／合併／下載，不宣稱完整 local-first sync 完成；六主線 goal 保持 active，未提交／push。
+
+## 2026-10-10：本機優先啟動與持久同步基準（接續實作中）
+
+- 新使用者需求列為交付門檻：一般啟動、編輯、保存不等待伺服器；網路恢復後才同步，衝突須詢問、顯示差異與畫布預覽，確認前保留兩端。原先「Local／Server 分開保存」不能當作此需求已完成。
+- App 的一般啟動固定選本機，不再因上次 Server 偏好强制連線；明確的外部 Server 空間請求／Desktop --server 仍是使用者選擇的遠端入口。偏好寫入失敗也不阻擋普通本機啟動。
+- 共用本機文件 record 新增可選 syncCheckpoint，與現有畫布共用原子 CAS／durable confirmation。保存 server scope fingerprint、帳號、遠端工作區對應、上次同步 baseline／version／seq，不保存 token；目前本機完整文件是持久待同步快照，不用記憶體 queue 冒充斷電後可恢復。
+- Native 與 awaited Web repository 提供 localSyncStore；不會因 binding 或 ACK 複製遠端內容覆蓋本機。binding 僅接受未變更的本機快照與對應帳號／工作區，不能自動將本機 UUID 當遠端 UUID。ACK 重試相同基準可確認，過期 expected checkpoint 不能改寫新基準；同步期間新本機編輯保留並仍標為 pending。
+- 純三方比對區分未對應／一致／單邊上傳／單邊下載／雙邊衝突，保留標題、樣式、圖形、連線 geometry、時序與外部素材內容，只忽略各端 revision counters。衝突回傳 frozen WorkspaceDraftReview，不產生網路請求或寫入任何一端。
+- JVM 13／13 無 failure／error／skip，含 Desktop 真實檔案保存／重開且 server factory 完全不呼叫；Desktop compileKotlin 通過。log /tmp/boarderless-local-first-native.log。Web JS 12／12、Wasm 12／12 無 failure／error／skip，包含實際 IndexedDB baseline 與離線編輯共同重開；log /tmp/boarderless-local-first-browser-verified.log。初次瀏覽器 test filter 未匹配實例，報告只有 skipped root；修正 trailing wildcard 後確認實際 XML 測試數，不用 BUILD SUCCESSFUL 代替實跑。依清理腳本 discover／tracked／busy 規則移除隔離建置 786.7 MiB，主要使用中 Desktop 成品仍保留。
+- 尚未交付：目的地配對 UI、正式 authenticated reconnect worker、remote receipt／fence ACK reconciliation 與 durable outgoing request、素材 identity／跨端上傳、後端缺少的完整圖形／canvasStyle／sequence 能力、下載 publication、衝突差異＋三方畫布預覽＋明確選擇／重新確認／套用，以及斷線編輯→雙端變更→重連→衝突選擇→重開的端到端驗收。不得把本節基礎模型或自動測試算成完整自動同步。
+- 已詢問第一次連線要建立獨立空間或選現有空間先比對；未答覆前不猜目的地、不連線建立／覆蓋空間。六主線 goal 保持 active。
+
+## 2026-10-10：完成意圖與素材包收據的未知 ACK 恢復
+
+- 修正 BrowserLocalAssetGateway.upload 過早 seal：現在僅 verifyPending，原檔保持私有；confirm 先 await durable requestSeal intent，再重驗 SHA-256、seal 並保存 Ready。manifest 的 requestedChecksum／completionRequested 與 sealed 一致性受檢查；write／abandon 不可跨已接受完成意圖。
+- 原檔 state 區分 Missing／Pending／CompletionRequested／Published。若 requestSeal 交易已提交、回應卻遺失，保持 Pending 原始 bytes，重開從 durable intent 重验／发布同 ID，再確認 catalog。普通完成確認前、沒有 durable checkpoint 的失敗仍清理 private originals 與 metadata；取消後的未發布內容不會被 authorize 當成 Ready。
+- 素材包 beforeComplete 收據 CAS 也可能成功後失去 ACK。AssetImportCoordinator 新增顯式 retainCheckpointOnFailure（預設false），只有 QuickSchemeBundle materialize 啟用；进入 identity hook 後不再 abandon，发 RecoveryRequired。PersistentSchemeBundleImportReceipts.recovered 先核對 stored ID、scope 及全部原始 metadata；僅 local editable repository 的 Pending 使用既有 local ticket confirm（不 prepare／upload），再檢查 Ready；遠端仍只能讀取確認，不 invent HTTP completion URL。
+- 新增真实 IDB 两类回归：upload 完成但 beforeComplete 尚未開始就失败，確認原檔及catalog清除且從未可下載；completion intent ACK 遺失後重開同 ID 恢復；素材包 receipt ACK 遺失後 private Pending 原檔保留、重開從同 receipt完成，asset count保持1。完成前清理測試以真實 browser dispatcher 驗 bounded cleanup timeout，避免 runTest 虛擬時間跳過實際 IO。
+- JS 45／45、Wasm 45／45、JVM 40／40，無 failure／error／skip；涵蓋 gateways／originals／Desktop真實bundle、AssetImportCoordinator／QuickSchemeBundle 及 Desktop file asset／bundle。logs /tmp/boarderless-browser-checkpoint-recovery.log（1m26s）與 /tmp/boarderless-native-checkpoint-regression.log（41s）；JS syntax／diff check 通過。
+- 沿清理腳本 discover／tracked／busy 規則移除隔離 build／Karma outputs，回收814.8 MiB；主要 Desktop 使用中輸出與文件保留。本次沒有真實 production grant、OS picker、跨裝置 GUI／付費 AI／正式多人驗收，六主線 goal active，未提交／push。
+
+## 2026-10-10：Desktop 原檔素材包到 Web 的保存／重開／再匯出
+
+- 新回歸採用既有 Desktop 實際匯出的 BLQS0001（與 iOS fixture 完全相同，SHA-256 bfd0087c7c3f916807e989dc2c7a925f8d02cdc9f38c8795d92e9ef07fea3016），經 browser File／私人 OPFS snapshot 的 production runtime review，再走本機 gateway、strict IndexedDB receipts／catalog／originals／方案簿與文件。
+- 在素材完成、方案未發布時中斷；關閉／重建 repo 及儲存入口後，durable receipt 恢復同一 destination asset ID，不再 prepare／upload。方案保存重試僅一份，sourceWorkspaceId 轉到目的本機空間。貼入後文件重讀、原檔 exact bytes、32×24 真實 Skia 解碼、Undo／Redo 與原素材 count=1 都驗過；再匯出後以原始 checksum／byteSize／bytes 驗證，沒有用 preview 代替原檔。
+- 選檔／下載 dispatch 與 persistence permission 仍為明確 fixture；實際 OPFS／IDB、codec、gateway、方案及文件流程是真正執行，但不等於真實 OS picker／production origin grant／實體裝置 GUI 交換完成。Web 與 native 的整體實作／驗收剩餘事項保持原六主線範圍。
+- 查到 karma-webpack 預設把成品留在專案外 _karma_webpack_數字。Karma config 改 output.path 為生成 test package 下 karma-webpack（JS／Wasm 各自獨立）；Browser test task 新增 karma.config.d inputs，避免改設定却被 UP-TO-DATE 跳過。最終實跑確認新兩端路徑都存在且測試成功。
+- 清理腳本新增舊 Karma 辨識：flat known generated filenames、目前使用者 ownership、無 symlink／非成品、commons.js 同時有 BoarderLess-shared-test 與 cg.creamgod.boarderless，stream 比對不執行或輸出原碼。Gradle wrapper jar／Karma live process 也阻止刪除。12 個 disposable fixture 清理測試通過。
+- JS 10／10、Wasm 10／10 無 failure／error／skip（Desktop bundle1、bundle adapter6、local gateway3）；最終 BUILD SUCCESSFUL（15s），log /tmp/boarderless-browser-desktop-bundle-verified.log，diff／JS syntax 通過。用腳本 discover／tracked／busy 規則移除105個已辨識舊 Karma 及本次隔離 build，共約5.3 GiB；重新 discover 已辨識 Karma=0。無法辨識的空目錄／其他專案不刪，主要 Desktop 使用中 build 仍保留。
+- 六主線 goal active，未提交／push，未宣稱 cloud 方案簿／正式多人／真人付費 AI／完整跨端 GUI 等剩餘交付已完成。
+
+## 2026-10-10：Web 本機／伺服器模式入口與失敗恢復 GUI
+
+- 新增 browserWorkspaceStorageRuntime 並在 Web main 注入 App；復用既有模式 chooser、偏好與切換 gate。Local factory 提供 await 文件及原檔 gateway；mediaRuntimeFor 會要求本機 AssetDownloadGateway，缺少時拒絕而非 fallback HTTP，Server factory 沿用 backend repository。媒體活動 StateFlow 在切換時保留。
+- 新增二項 runtime 整合回歸：production factory 保存／關閉／重建 UTF-8 本機文件、媒體入口及 activity 共用、缺少本機 gateway 拒絕、server factory 無請求建立／關閉；UiPreferences 模式 Local／Server／null 新實例重讀及 IndexedDB persistence denial 不降級 memory。偏好新實例重讀不是整個瀏覽器重啟驗收。
+- CUA 實際載入 development Web：內建瀏覽器拒絕持久化，App 正確顯示本機文件失敗，無成功保存宣稱。補上 common WorkspaceScreen 的首次失敗面板（session==null）：直接重試連線及 guarded 切換儲存模式。實際 reload 看見兩個按鈕，點切換返回 chooser，兩種模式選項仍可見。沒有 fake production grant，也未切 Server 或啟動／修改 backend。
+- GUI 截圖 /tmp/boarderless-web-mode-failure.png 及 /tmp/boarderless-web-mode-chooser.png；Chrome browser automation surface 本次不可用，改用 IAB。本機保存成功的 GUI、真實 production persisted grant／重啟／eviction／原檔交換仍待後續，不能把 denial UI 當成功存檔證據。
+- 最終 JS 9／9、Wasm 9／9，均無 failure／error／skip（mode2、gateway3、originals4），Web JS／Wasm compile 及 development webpack 成功；最後 BUILD SUCCESSFUL（1m35s），log /tmp/boarderless-browser-mode-final.log。diff check 通過。關閉 QA tab 與 port9863 臨時 server 後，沿清理腳本 discover／tracked／busy 規則回收隔離 build 約1.1 GiB。
+- 六主線 goal active；模式已接入 Web 入口，但完整平台／跨端／真人正式協作／AI 付費驗收仍未完成，未提交／push，保留主要 Desktop 使用中輸出及使用者文件。
+
+## 2026-10-10：Web 本機素材 gateway、文件與預覽整合
+
+- 新增 BrowserLocalAssetGateway（AssetTransferGateway／AssetDownloadGateway），使用 awaited metadata 與原始分塊儲存。prepare 保存 Pending；upload 分塊傳輸、驗完整 checksum 並 seal；confirm 核對同 ticket／內容且重新確認原檔後保存 Ready。owner／workspace／session、ticket URL／headers、完整 source metadata、closed lifecycle 都有檢查。
+- 原檔 status 是只讀交易，區別 missing／pending／ready；已 seal 但 catalog 寫入失敗的 Pending 可驗原始 bytes 後恢復 Ready。abandon 不刪 uncertain completion 已 seal 的原始內容；沒有開始原檔的 Pending 也能清掉，並留下 ID fence。關閉／取消於異步讀取後被檢查，不回傳舊 gateway 成功結果。
+- browserLocalWorkspaceRepository 現為 documents delegate 加本機 gateway，listAssets／getAsset 支援目錄及恢復，close 同時關閉 gateway／documents。browserMediaImportRuntime／rememberBrowserMediaImportRuntime 接受 optional 本機 AssetDownloadGateway，預覽／GIF／video／export 共用它；每次預覽只關閉新建 backend adapter，不關閉本機共享 gateway。Web main 的模式 UI 尚未注入，不能宣稱使用者已可切換本機。
+- 真實 Chrome IndexedDB 新增三項 gateway 回歸：匯入協調器保存 CRC 正確 PNG、建立 MediaNode、關閉／重開文件與儲存後下載 exact bytes、實際 Skia 解碼 preview／export（1×1）、wrong owner／closed 拒絕；原檔已 seal 但 metadata 更新中斷後保持原檔並恢復 Ready；無原檔 Pending abandon 及 forged ticket 拒絕。測試來源由呼叫端 finally release，符合現有 runtime 的責任。
+- 最終 JS 16／16、Wasm 16／16，0 failure／error／skip（gateway3、originals4、catalog4、documents5）；BUILD SUCCESSFUL（1m11s），log /tmp/boarderless-browser-asset-gateway-verified.log。JS syntax／diff check 通過；沿清理腳本 discover／tracked／busy 規則刪除隔離建置 655.5 MiB。
+- Web mode UI、真實 persistence grant／瀏覽器重啟／eviction、GIF／video／大素材完整 GUI、跨端 bundle 實際操作及其他五主線總驗收仍未完成。六主線 goal active，未提交／push，主要 Desktop 使用中的輸出與文件保留。
+
+## 2026-10-10：Web 原始檔案分塊保存與發布入口
+
+- 新增 local-originals.js，production 獨立 BoarderLess.local-originals.v1。manifest、chunks、usedIds 同 strict IndexedDB 交易；每塊至多 1 MiB、整體延用 200 MiB 上限，僅 tx.oncomplete 回報成功。持久化權限拒絕／quota／abort／cancel 不降級 volatile storage；未 sealed 的 bytes 不可供下載。
+- BrowserOriginalStore 的 JS／Wasm 橋接提供 begin、write、publish、download、abandon。publish 在 Kotlin 分塊重新讀取整個暫存並驗大小及 SHA-256，符合後才 seal；download 再驗 manifest checksum 與實際內容。全檔沒有一次轉為 ByteArray 或 Base64，橋接僅傳单塊。
+- manifest 的 token、next offset 與不可變 sealed 狀態 fence 同 ID 的競爭／錯序寫入。abandon 清除暫存內容但留下 usedIds 永久 ID fence；不允許較晚的舊 publish 把同 ID 重建內容當原稿。取消於 bridge 呼叫前已生效時不啟動新交易。
+- 實際 Chrome IndexedDB 新增四項原檔回歸：跨 1 MiB 分塊與重讀精確位元組、部分原檔／錯誤 checksum 不发布、put success 之後取消會回滾 offset、seal abort 後精確重試、storage denial、token／offset／競爭寫入及 abandon 後重開不能重用 ID（後數项合併於四個測試）。fixture permission 不代表真實 production origin 授權。
+- 最終 JS 13／13、Wasm 13／13，無 failure／error／skip，含 originals4、catalog4、documents5；BUILD SUCCESSFUL（1m20s）。log /tmp/boarderless-browser-originals-final.log，JS 語法及 diff check 通過。沿清理腳本 discover／tracked／busy 規則移除本次隔離輸出 656.3 MiB；不刪主要 Desktop 使用中輸出與文件。
+- 目前交付原始 bytes 儲存底層，尚未接入 Browser AssetTransfer／Download gateway、匯入／預覽與 Web 本機模式；跨瀏覽器實際 permission／eviction／GUI／原檔交換仍未驗收。六主線 goal active，未提交／push。
+
+## 2026-10-10：Web 本機素材目錄的 awaited 保存
+
+- 新增 AwaitedLocalAssetCatalog，重用既有 PersistentLocalAssetCatalog 的格式與校驗。每次操作載入私有 snapshot，真正 CAS 與 confirmDurable 完成後才回傳；取消不回報成功。相同 Pending ID／完整 metadata 在未知確認後可核對重試，不再分配另一份記錄；同 ID 改 byteSize 等內容會拒絕。
+- 新增 browserLocalAssetCatalog 及 AssetCatalog scope、JS／Wasm operation／cancel 橋接；production 使用獨立 BoarderLess.local-asset-catalog.v1（4 MiB）。此階段只交付 metadata；原始 bytes 的分塊保存、checksum、完成 manifest／下載／preview 及 Web 本機模式尚待接入。ready 的呼叫契約仍要求 gateway 先驗證並持久化原始內容，不能用 metadata 測試宣稱素材匯入交付。
+- Chrome 真實 strict IndexedDB 新增四項目錄回歸：Pending／Ready 重讀與固定 ID 重試、CAS 已提交但 confirm 中止後精確核對與 abandon、put success 後取消及持久化拒絕、兩個 catalog 競爭寫入不覆蓋已確認素材及損壞資料不得重設。permissions 為明確 fixture；不是實際 production origin 的持久化授權驗收。
+- 最終 JS 19／19、Wasm 19／19，0 failure／error／skip；含目錄4、文件5、durable records4、方案簿6。BUILD SUCCESSFUL（1m57s）；log /tmp/boarderless-browser-local-assets.log。JS 語法與 diff check 通過。
+- 使用清理腳本 discover／tracked／busy 規則刪除本次隔離建置 648.6 MiB；保留主要 Desktop 使用中輸出及使用者文件。六條主線 goal 保持 active，未提交／push。
+
+## 2026-10-10：Web 本機文件的獨立 IndexedDB 儲存入口
+
+- 新增 browserLocalWorkspaceRepository，使用既有 AwaitedLocalWorkspaceRepository 文件編碼、操作收據與 generation fence。文件儲存入口等待 strict transaction 完成及 confirmDurable 後才回傳；取消、拒絕持久化權限或交易中止均不回報成功，也不降級成記憶體保存。
+- BrowserDurableLocalRecordStore 改用 Receipts／Library／Documents 明確 scope；JS 與 Wasm 新增文件橋接，production 資料庫 BoarderLess.local-documents.v1（4 MiB）與 bundle receipts／quick schemes 分開，取消也路由到對應 operation registry。尚未注入 Web App 的本機模式，仍需原始素材 gateway、模式 UI、真正權限／瀏覽器重啟與 eviction 驗收。
+- 實際 Chrome IndexedDB 回歸新增五項：UTF-8 文件／重讀／相同 receipt／UndoRedo、put success 後取消不發布 session、權限拒絕與 abort、同 key 的收據／方案儲存不覆蓋文件、競爭寫入不丟失已確認 workspace。permission 是明確測試 fixture，並非宣稱真實 origin 已取得持久化授權。
+- BUILD SUCCESSFUL（2m36s）：JS 998／998、Wasm 15／15 通過，均無 failure／error／skip；兩端各含新文件五項及既有 durable records／quick schemes 測試。驗證 log：/tmp/boarderless-browser-local-documents.log。JavaScript 語法及 diff check 通過。
+- 透過 clean-build-artifacts.py 的 discover／tracked／busy 規則清理本次隔離輸出 646.6 MiB。主要 Desktop 使用中的專案輸出仍保留；不刪使用者文件。六條主線保持 active，尚未提交或 push。
+
+## 2026-10-10：剩餘確認與連線入口接入 awaited publication
+
+- connectNodes不再同步回nullable RelationId；四個menu／選取／connector呼叫改onConnected，dispatchOperation确认保存後才選取新edge。GIPHY插入與支持CanvasStyle的背景apply改dispatcher，成功才關閉library／background picker。ColorPickerWindow新增可選busy状態，保留hsb／token等parent state而显示保存中，期間不提供edit／apply／cancel；其他picker預設行為不變。
+- RelationInsertionDialog的onConfirm改suspend，attempted plan保持固定node／edge IDs，saving禁止重複consent／apply／cancel／dismiss，只有true才close。ClipboardPasteRetryDialog也await onRetry，成功才清除同一private draft；取消不吞CancellationException，不以queued coroutine當保存成功。
+- WorkspaceScreen剩餘一般內容入口不再直接使用同步execute：該方法只由native dispatcher分支呼叫。這是來源檢查，不是宣稱Web runtime已注入或完整GUI驗收；REST recovery／外部runtime callback仍需在總驗收中核對。
+- 新回歸用真正backward relation insertion transaction驗ACK前原edge／node保留、失敗後固定split IDs再試，成功後actual方向與first-segment條件／label保留且新圖完整。最終28/28 pass、0failed/errors/skipped（publication13、relation insertion8、canvas style6、Desktop方案1），JVM／JS／Wasm／iOS simulator／Android共用compile成功(2m)，diff check通過。
+- 下一步是Web document專用strict IDB、原檔gateway、模式UI及瀏覽器重開／permission／eviction驗收；目前未宣稱該主線完成，也未做本次新增視窗GUI／live AI／GIPHY／正式多人backend驗收。六主線goal保持active，未提交／push。
+- 沿cleanup discover／tracked／busy清除独立build約95.6MiB；保留主要Desktop使用中輸出。
+
+## 2026-10-10：gesture／文字／貼上發布入口
+
+- Group／Text／Media／GIPHY card drag、move＋reparent transaction、兩類resize／rotation handles及relation geometry release改dispatchOperation；新物件與變形仍由same retained operation更新history。此步不宣稱滑鼠拖曳GUI先前缺口已驗過。
+- dispatchOperation新增onFailed，只在captured owner及beforeHistory仍為當前scope時回呼；save waiting顯示保存中。貼上（含快速方案與v9 external refs）和自循環在onSaved才更新selection；貼上失敗保留原ClipboardPasteDraft供同operation retry。
+- 新文字commit保留pendingNewNode及已輸入文字，成功才清除private draft；既有EditText也只在成功後結束editing，失敗保留input。NodeTextEditor新增enabled以禁止保存期間修改／commit，可在再次聚焦或修改後明確重試。原生delegate仍同步保存，未換文件格式或server契約。
+- 新publication回歸驗commitNewNodeDraft真正UTF8文本保存失敗后同ID／內容再save；最終32/32 pass、0failed/errors/skipped（publication12、new node4、relation gesture6、geometry integration7、hit2、Desktop方案1），JVM／JS／Wasm／iOS simulator／Android共用compile成功(2m3s)，diff check通過。
+- 仍有connectNodes返回值、GIPHY插入按鈕、background picker、relation insertion confirm及paste retry boolean入口待轉換；Web document IDB／原檔gateway／模式UI尚未完整接入。未做新的GUI／付費AI／live GIPHY／多人server驗收，六主線goal保持active；未提交／push。
+- 沿cleanup discover／tracked／busy清除独立build約95.4MiB；保留主要Desktop使用中輸出。
+
+## 2026-10-10：一般屬性／排序／群組操作接入 awaited dispatcher
+
+- WorkspaceScreen新增dispatchOperation，原生沿既有同步execute，awaitsDraftPublication repository則冻结owner／完整beforeHistory／HistoryResult後launch等待synchronizeAwaited。synchronizeAwaited支援明確captured owner／history，不能用較新的畫布狀態套用舊操作；非同步queue／submit期間inputBlocked，避免再接受依舊版本建立的操作。
+- 刪除、關係attributes、TextNode／Group／Media attributes、三類layer排序、選取transform、group／ungroup／fit、keyboard nudge、自動排版／分配／對齊及numeric precise transform等18個一般操作入口已轉dispatcher。只有onSaved才清除delete選取、選取新group／ungroup children；失敗保持原選取。原生無suspension的新工作流程不改原有即時同步publication。
+- 新兩項回歸驗已在UI排隊的舊transform結果遇較新history不啟retention，以及真正group transaction的group／parent IDs在ACK前不得出現在文件、ACK後一次保存完整parent tree。最終37/37 pass、0failed/errors/skipped（publication11、history14、layer5、movement4、alignment2、media1），JVM／JS／Wasm／iOS simulator／Android共用compile成功(2m10s)，diff check通過。
+- 連線建立／貼上／GIPHY插入／背景picker及部分card gesture回呼仍待逐一處理，Web document IDB／原檔gateway／模式UI尚未接完；未做GUI、live provider或多人backend驗收。六主線goal保持active，未提交／push。
+- 沿cleanup discover／tracked／busy清除独立build約95.3MiB；保留主要Desktop使用中輸出。
+
+## 2026-10-10：筆刷物件建立等待 durable publication
+
+- CanvasBrushControls／BrushCanvasLayer commit改為suspend，WorkspaceScreen筆刷入口接executeAwaited。完整筆畫prepare完成後先設定pending draft，再由composition coroutine等待保存；Ready才清除預覽並由既有畫布渲染物件。避免onRelease先清points導致等待時畫面筆畫消失。
+- saving期間禁止新stroke、樣式變更、retry及close；显示保存中。失敗保留同一BrushCanvasDraft與object／operation IDs及線寬／顏色，手動retry不重新prepare或配置ID。live scope啟動前再檢查，CancellationException原樣傳遞。pointerInput沒有把saving／pending加入key，保留原有避免同一按下事件被重啟成重複tap的保護。
+- 新publication回歸用真正prepareBrushStroke檢ACK前文件仍舊、失敗後prepared object及style不變、再次保存同ID成功且只有一物件。最終27/27 pass、0failed/errors/skipped（publication9、brush3、vector geometry7、pen creation8），JVM／JS／Wasm／iOS simulator／Android共用編譯成功(2m10s)，diff check通過。
+- 此輪未做實際GUI绘製／waiting／retry，沒有宣稱該證據已補齐；一般sync按鈕與Web document IDB／原檔gateway／模式仍待接入，跨使用者backend等其餘主線缺口維持原範圍。六主線goal保持active，未提交／push。
+- 沿cleanup discover／tracked／busy清除独立build約95.1MiB；保留主Desktop正在使用的輸出。
+
+## 2026-10-10：鋼筆／時序圖審閱套用等待保存 ACK
+
+- SequenceCreationDialog及PenCanvasDialog的commit改為suspend，WorkspaceScreen两個authoring入口轉executeAwaited。只有confirmed publication回true才選取新物件／fit sequence並關閉審閱，失敗保留prepared operation與固定IDs。
+- SequenceCreationDialog及PenEditorDialog用自身coroutine scope等待套用；saving期間禁止重複insert／apply、draft修改及dismiss／discard，顯示保存中。鋼筆冻结當次path／text／textPlacement，將saving納入cameraBusy並停止pointer authoring。確認失敗保留attempted path，既有同操作retry行為保持；CancellationException不再當普通Retry吞掉。
+- 新publication回歸驗真正PenCanvasCreation與SequenceCanvasCreation操作：第一次save失敗不變文件，再次await ACK前不Ready，同一prepared operation重試後物件IDs、sequence bindings／vector內容及ID allocator數不變，重新解碼workspace等於預覽結果。
+- 最終29/29 pass、0failed/errors/skipped（publication8、pen creation8、pen editing6、sequence publication7），JVM／JS／Wasm／iOS simulator／Android共用compile成功(2m21s)，diff check通過。此輪未做GUI等待／重試／dismiss的操作驗收，不把單元結果視為GUI證據。
+- 一般sync畫布按鈕與brush commit、Web document專用IDB／原檔gateway／模式UI仍需接入，其他主線缺口保持原範圍。未改backend server、未送live AI、未提交／push；六主線goal保持active。
+- 沿cleanup discover／tracked／busy清除独立build約95.0MiB；確認主要Desktop PID19229仍在執行，保留其使用中輸出。
+
+## 2026-10-10：Undo／Redo 接入 awaited draft publication
+
+- WorkspaceScreen抽出synchronizeAwaited(HistoryResult)，executeAwaited仍用于AI與素材入口，Undo／Redo現在用真實undo／redo結果等待retainDraftAwaited ACK後才更新history／submission queue及清除選取。保存失敗保留原画布與歷程stack，不再先清除選取。
+- WorkspaceRepository新增awaitsDraftPublication capability，原生預設false、AwaitedLocalWorkspaceRepository true。異步歷程命令等待前筆submission及publication結束，再以最新session／history計算Undo／Redo；native仍可沿既有optimistic queue運作。submit effect在開始前等待draftPublicationBusy結束，避免新保存與舊收據確認相互交錯；等待若失去owner／connection則停止。
+- 新兩項回歸驗背景Undo的ACK等待期間可見style／history不變、ACK後UndoRedo canvasStyleVersion依序1→2→3且objects不變／record重新解碼一致；失敗Undo不改visible history／redo stack。最終18/18 pass、0failed/errors/skipped（publication7、awaited local4、canvas style6、Desktop持久1），JVM／JS／Wasm／iOS simulator／Android共用compile成功(2m16s)，diff check通過。
+- 一般sync按鈕、sequence／pen callback及Web模式／document IDB／原檔gateway仍未全部接上；此輪未做GUI／live provider／多人backend驗收，不能宣稱Web本機或共用背景跨使用者同步已交付。六主線goal保持active，未提交／push。
+- 沿cleanup discover／tracked／busy清除独立build約94.7MiB，保留主Desktop使用中輸出。
+
+## 2026-10-10：AI／素材插入等待 durable draft ACK 後發布
+
+- 新awaitDraftPublication，保存前後檢查user／client／workspace／role／session checkpoint及完整WorkspaceHistory；等待retainDraftAwaited完成並ensureActive後才回Ready。role撤銷、不同文件／歷程、disabled scope拒發布，保存exception回Unconfirmed，Cancellation原樣傳遞；已保留收據不被scope拒發布刪除。
+- WorkspaceScreen增加executeAwaited，AI圖形工具最終proposal apply、匯入素材與重用既有素材三個真正APP入口已接入。只有Ready更新history／submissionQueue與queued狀態；不回傳先算好的success。新增中英unconfirmed／scopeChanged訊息，避免把未確認保存說成已套用。
+- draftPublicationBusy期間阻止其他同步synchronize／画布互動、workspace切換與remote catch-up。現有原生同步保存入口保持原行为；既有每回合AI授權／完整方案review不變。一般同步按鈕、UndoRedo、sequence／pen commit callbacks仍需逐一轉換，Web awaited repository尚未注入，不能把這三個入口當作完整Web發布管線。
+- 新五項publication回歸驗ACK前不得Ready、保存後歷程changed不發布但receipt仍可submit、foreign owner／viewer／disabled不啟動retention、保存途中role撤銷，以及失敗／取消不成功發布。最終10/10 pass、0failed/errors/skipped（publication5、awaited local4、Desktop持久1），JVM／JS／Wasm／iOS simulator／Android共用編譯成功(2m23s)，diff check通過。
+- 仍需真正Web strict IDB／permissions／重開、原檔gateway與模式UI，及實際付費provider成功／GUI終局套用等完整主線證據；此次未改backend server、未送live AI、未提交／push。六主線goal保持active。
+- 沿cleanup discover／tracked／busy清除独立build約94.5MiB；主Desktop使用中輸出保留。
+
+## 2026-10-10：Web 本機文件 awaited 持久化邊界
+
+- Web目前APP仍使用預設repository，只有快速方案／bundle receipts具備真正strict IndexedDB；同步retainDraft不能等待IDB completion，因此沒有將新repository直接注入、也未用localStorage或記憶體ACK替代。
+- 新common AwaitedLocalWorkspaceRepository使用既有PersistentLocalWorkspaceRepository文件codec／驗證／收據規則，對單一載入snapshot計算結果，再以AwaitedDurableLocalRecordStore CAS＋confirm完成後才回傳。snapshot是私有工作資料，每次operation重讀durable state，Mutex序列化同instance，跨instance由generation fence拒覆寫；未改原生文件格式或backend。
+- WorkspaceRepository新增retainDraftAwaited，原生預設轉給現有同步retainDraft。新awaited repository同步retainDraft明確拒絕，避免未await就發布；close／取消不回傳未確認結果。已commit但confirm失敗需同操作明確retry，沿原有saved receipt確認generation，不再配置ID或寫第二次。Local documents Key只改成可供internal共用，SHA256與record scope保持一致。
+- 新四項回歸驗CAS及confirm完成前session不得escape、unknown publication同收據retry沒有新增write／同ID改內容拒絕、UndoRedo與重新建立repo讀回UTF8、兩repo競爭只有一winner、不因cancel／closed／invalidUTF8回報新文件或reset。最終5/5 pass、0failed/errors/skipped（awaited4＋Desktop實際文件1）；JVM／JS／Wasm／iOS simulator／Android共用compile成功(2m7s)，diff check通過。
+- 此次為Web離線交付必要的production保存邊界，尚未接WorkspaceScreen等待保存／Web模式選擇、document專用IDB database／原檔gateway，也未驗實際browser permissions、eviction或APP重開。不能宣稱Web本機模式已交付；六主線goal保持active，未提交／push。
+- 沿cleanup discover／tracked／busy清除独立build約94.1MiB；主Desktop仍使用的輸出保留。
+
+## 2026-10-10：GIPHY Desktop 真實 GUI 屬性／移動／重開驗收
+
+- 自建独立bundle與user.home、memory preferences，使用測試引用qa-unresolved／文字target／連線，不操作主要Desktop文件、不輸入provider key／送AI請求。GUI保存「GIPHY GUI 已修改🙂」、鎖定使操作框消失，Undo後恢復未鎖定、Redo重現鎖定，再解鎖。
+- ExternalMediaNodeCard標題改用與本機素材一致的單一awaitEachGesture流程，補Role.Button／a11y select action。真正GUI AX現在可選取標題，重開後顯示修改文字。此改動未以測試宣稱修好滑鼠拖曳：CUA drag在新舊引用卡片及既有TextNode都只有選取，沒有移動，原因仍未確定；拖曳中預覽與滑鼠放開保存驗收仍缺。
+- GUI用Shift+Right兩次及Shift+Down一次移動引用，畫布物件／操作框／連線端點更新，target沒有移動。點新路徑開連線屬性，點舊路徑清除選取，沒有殘留旧hitbox。讀取独立QA BLDS0001，校驗header／payload checksum、strict UTF8，確認position(400,220)→(440,240)、reference不變、target仍(780,240)、替代文字已保存、locked=false。
+- 結束並重啟owned QA APP，GUI顯示修改文字、移動後物件及連線；record SHA256重開前後相同。fixture與evidence留在独立QA資料夾，不保存key／remote media。fixture準備曾遇參數／不存在root／root權限錯誤，修正測試資料建立流程後fixture1/1與Desktop打包成功，未改APP儲存保護。
+- 最終回歸11/11 pass、0failed/errors/skipped（GIPHY6、gesture4、Desktop持久1），Desktop/JVM compile與createDistributable成功(1m9s)，JS／Wasm／iOS simulator／Android共用compile成功(1m39s)，diff check通過。仍無live GIPHY／原生跨裝置／背景GIF／外部引用export或backend契約證據，六主線goal保持active。未提交／push。
+- 沿cleanup discover／tracked／busy檢查刪除独立build及QA APP約538.3MiB。仅終止owned QA process，保留主Desktop正在使用的輸出，未宣稱整體0B。
+
+## 2026-10-09：GIPHY 引用屬性與素材圖層操作
+
+- 共用媒體屬性辨識涵蓋MediaNode與ExternalMediaNode。選取引用物件現在有替代文字編輯／保存與lock／unlock，素材混合選取可共同改鎖定；標題／狀態計數、兩物件建立關係及group selection納入引用。GIPHY屬性顯示provider ID，沒有虛構本機asset ID／觸發上傳。
+- 素材圖層操作及Layers面板的canMove／move入口同時接受本機與外部引用，兩類素材使用同一排序集合。修改沿UpdateMediaNodeAttributesOperation→既有draft保存及UndoRedo，不新增第二套持久模型。仍沿原有依物件類型排序設計，沒有宣稱已統一所有type的z-order。
+- MediaObjectPropertiesTest驗混合選取／排除文字node、相對排序／鎖定／UTF8替代文字、UndoRedo與兩種identity不變。DesktopExternalMediaNodeTest加入locked／zIndex重新開檔確認。最終11/11 pass、0failed/errors/skipped（properties1、media operation1、desktop持久1、layer tree3、ordering5），JVM／JS／Wasm／iOS simulator／Android共用編譯成功（3m47s），diff check通過。
+- 初次Kotlin daemon引用上輪已刪inline class而失敗，fallback完成後再補Layers分支入口；最終以in-process compiler重新驗證。沒有實際GUI屬性點按／live provider／跨實體裝置驗收，外部引用export與backend契約仍未交付，六主線goal保持active；未提交／push。
+- 沿清理腳本discover／tracked／busy檢查刪除本輪独立build約93.5MiB；既有Desktop正在使用的專案輸出仍保留。
+
+## 2026-10-09：GIPHY 背景回應防護與拖曳連線同步
+
+- 背景／工作區切換／連線失敗停止可見引用解析；user、client、workspace、key、activity epoch共同界定scope，回應與still解碼完成時再檢查scope。快速背景再回前景，即使UI未觀察中間狀態，舊epoch回應仍不能發布；只清除暫存metadata，不修改持久node。
+- ExternalMediaNodeCard移動改用畫布共用dragPreviews，不再只有卡片私有位移。連線render／hit test、共用媒體操作框與GIPHY可見集合使用同一位移；取消清除預覽，放開後走TransformObjectsOperation，重新檢查可寫／locked／version。
+- 新回歸驗外部引用拖曳後連線點擊位置更新、移出視野無引用、取消恢復原位置；17/17 pass（GIPHY6、geometry7、selection4），JVM／JS／Wasm／iOS simulator／Android共用編譯成功（1m23s）。前次lifecycle驗證21/21 pass（1m7s）。此次第一輪isolated JVM測試編譯classpath缺main，明確將新main jar加入test compiler libraries／friendPaths後重跑成功，沒有把失敗算通過。
+- 沒有實際GUI拖曳、live GIPHY／付費AI或跨實體装置驗收；backend外部引用契約、PNG/PDF外部引用輸出與其餘主線仍待交付，六主線goal保持active。未提交／push。
+- 沿清理腳本discover／tracked／busy檢查移除此次独立build約110.6MiB；既有Desktop仍使用的專案輸出未刪，未宣稱整體0B。
+
+## 2026-10-09：可見 GIPHY 引用批次解析
+
+- 新GiphyVisibleReferences，以單一workspace UI scope保存當前可見provider identities的Pending／Ready／Missing／Failed狀態；同ID的多物件只解析一次，每批最多100 ID。只保留仍可見的metadata，離開視野丟棄URL；沒有設定／檔案或素材cache保存。
+- WorkspaceScreen按user／workspace／本次GIPHY key重建resolver與client；可見集合以真正旋轉後corners及resize/rotation preview計算，初始0×0 viewport不送請求。150ms合併可見集合變更，Compose effect取消舊回合，resolver generation再拒絕遲到回應，不能覆寫新集合。
+- ExternalMediaNodeCard不再每個物件自建GiphyClient；改讀batch resolution並只在可見scope直接載入still／播放GIF。缺失內容保留畫布node，顯示中英missing提示；Ready也可手動重新讀取。resolver只重试被明確指定的引用，失敗／限流停止剩餘批次，不加自動retry或timer。key／workspace變更會重建card scope與清除frame。
+- 新GiphyVisibleReferencesTest驗101不同IDs的HTTP MockEngine請求100＋1、重複引用／集合不變不花第二次budget、URL離開可見集合即移除、集合改變後非取消的遲到回應也不能commit、missing不自動恢復／手動retry指定ID、限流只呼叫第一批且其餘Failed、取消不改成Unavailable，以及viewport與preview transforms／去重。
+- 第一輪編譯缺Compose runtime.key import而失敗；等待terminal後修正，最終20/20 pass、0failed/errors/skipped（新batch4＋GiphyClient15＋原生方案交換1），Desktop/JVM、JS、Wasm、iOS simulator與Android共用編譯BUILD SUCCESSFUL（58s）。未呼叫live GIPHY，沒有將MockEngine視為provider／GUI驗收。
+- 仍需真正GUI驗可見／背景／移動／重試與多物件播放，跨端原生v9方案交換、live key／provider內容移除、backend支援與PNG／PDF外部引用輸出仍未交付；六主線goal保持active。
+- 沿cleanup discover／tracked／busy檢查清除本輪独立build約110.2MiB，既有Desktop使用中輸出保留，未宣稱整體0B。未改backend server、未提交／push。
+
+## 2026-10-09：GIPHY 選取、方案與素材包引用交換
+
+- ClipboardPayload新增可選externalMedia與ClipboardExternalMedia，version9才可包含引用。版本1..8既有內容仍可讀；空externalMedia不寫入JSON，舊版格式不自動升級。跨type共同檢查總數／ID唯一／transform／parent／relation，引用沿用嚴格provider＋ID型別，altText上限8192。
+- workspaceClipboardPayload不再拒絕ExternalMediaNode，保留群組包含、世界位置／旋轉／大小／locked／相對圖層與連線。prepareClipboardInsertion／clipboardMaterialization将外部引用一起重配新畫布ID、父群組與端點，provider ID保持不變；新增圖層加法溢位拒絕，避免Long.MAX_VALUE貼上產生錯誤圖層。
+- 快速方案decode／PersistentQuickSchemeStore支援v9；JSON transfer、BLQS0001素材包保留引用定義，referencedAssets仍只收真正MediaNode原檔，純引用方案不需要sourceWorkspaceId／asset download／upload。QuickSchemePreview納入引用的bounds、連線位置與矩形占位，不載入GIPHY媒體；objectCount包含引用。
+- pastePayload在套用前檢supportsExternalMedia；SchemeBundleDialog對不支援workspace阻擋review同意與import，并在任何materialize／原檔upload前再次確認。審閱中英顯示GIPHY引用數及只交換ID、顯示需key的說明。此版本仍不支援含引用的PNG／PDF輸出，不會默默漏掉。
+- 新DesktopExternalMediaSchemeTest使用實際本機workspace／scheme library／file bundle，保存群組、GIPHY與text及一條關係→JSON轉移→bundle export/review→另一份repository materialize、library重開→插入並再次文件重開。目的畫布IDs／parent／relation端點重配、引用同ID，原檔authorize次數0、materialize沒有任何asset receipt回合、listAssets空，Undo清空整組／Redo恢復三物件；另驗v8含引用拒絕、錯parent與圖層溢位拒絕。
+- 最終交換／bundle／payload聚焦28/28 pass、0failed/skipped，Desktop/JVM、JS、Wasm、iOS simulator、Android共用編譯BUILD SUCCESSFUL（1m33s）。另跑SequenceClipboard6＋TextPlacementAndPenAlignment3，9/9 pass、0failed/errors/skipped，BUILD SUCCESSFUL（18s）。future-version拒絕測試从9更新為10，沒有取消未來版本拒絕。
+- 尚未操作clipboard／scheme GUI，未驗相同v9素材包在實體Android/iOS/Web匯入與GIPHY live渲染；仍需可見引用批次解析、原生／Desktop GUI及backend外部引用契約。未改backend server、未提交／push，六主線goal保持active。
+- 驗收後沿cleanup discover／tracked／busy檢查刪除本輪独立build約109.6MiB，既有Desktop使用中輸出保留，沒有宣稱整體build為0B。
+
+## 2026-10-09：GIPHY 本機画布引用物件與保存
+
+- 新 ExternalMediaNode，保存provider＋ID與可讀altText，沒有Workspace asset ID／media URL／API key／local path。共用transform／version／parent helpers與MediaNodeAttributes歷程支援該物件；本機repository明確supportsExternalMedia=true，其他repository預設false。客戶端BackendWorkspaceRepository serializer明確拒绝該类型，未更動backend server契約或啟動服務。
+- GIPHY Browser在可寫本機模式提供中英「插入GIPHY引用」，以一般CreateObjectsOperation→retainDraft→submission queue保存，不上传或复制GIPHY原檔。本次輸入的GIPHY key只留在當前APP／repository的remember狀態；mode切換／APP關閉後不持久保留。
+- 新ExternalMediaNodeCard按viewport可見性重新Get GIFs by ID，still／animation使用原API網址與既有各端直接loader，圖片與網址僅在可見scope記憶體。缺key／移除／失敗有提示或手動重試；still decoder失敗不遮掉仍可使用的GIF播放。原始Powered By GIPHY標誌與內容一起等比例縮放，不改圖；文字header可選取拖曳，與既有通用resize／rotation／connection handles接合。
+- connectableNodes／拖曳連線目標、LayerTree、AI結構上下文／review預覽、draft merge納入新type；AI仍不傳pixels或media URLs。apply前再檢repository capability，避免其他入口將provider物件排入不支援的Server保存。
+- 暫時明確阻擋含ExternalMediaNode的clipboard／quick scheme capture，不能把它默默漏掉；PNG／PDF原檔export也顯示專用未支援提示。下一步需完成portable selection與方案引用交換、批次解析以及真正GUI／live GIPHY驗收，不能以此宣稱素材主線完整交付。
+- DesktopExternalMediaNodeTest使用真實DesktopFileWorkspaceRepository，保存建立／移動／35度旋轉／屬性修改與UndoRedo，重開完整workspace與provider identity相同，listAssets保持空，重開projection不含URL或key。第一次測試錯把Desktop二進位record當UTF8讀取而失敗，修正為核對真正重開workspace的序列化projection；最終42/42 pass、0failed/errors/skipped（新本機1、GIPHY15、MediaNode1、History14、draft merge8、LayerTree3）。
+- 最終Desktop/JVM、JS、Wasm、iOS simulator、Android共用編譯BUILD SUCCESSFUL（58s）。這是程式編譯／真實本機檔案與mock provider回歸，沒有宣稱新增node GUI、跨端原生重開或live provider操作通過。
+- 驗收後沿cleanup discover／tracked／busy清除本輪独立build約109.8MiB；先前僅Jvm compile曾復用configuration cache，最終驗證明確--no-configuration-cache，沒有刪除既有Desktop仍在使用的專案build。未提交／push，六主線goal仍active。
+
+## 2026-10-09：GIPHY 可持久引用與重新解析
+
+- 新 domain/media/ExternalMediaReference，明確序列化provider=giphy＋opaque ID；不含API key、媒體網址、檔案路徑或bytes。ID為1..128個ASCII字母數字／底線／連字號，拒絕URL、path與控制文字。這是後續畫布／portable selection使用的引用層，尚未新增ExternalMediaNode或宣稱可插入畫布。
+- GiphyItem.durableReference及GiphyClient.resolveReferences接到現有「重新讀取預覽」操作；每次直接Get GIFs by ID，不回用舊metadata。resolve在花budget前拒絕URL／path／過長ID，browse遇不合法provider ID拒絕整份response而非过滤／改排序。
+- GiphyClientTest新增持久JSON往返→第一次拿新媒體URL→第二次provider省略該ID仍為missing的流程驗收，保留既有搜尋locale、order、rate limit、取消與batch測試。最終15/15 pass、0failed/errors/skipped。Desktop/JVM、JS、Wasm、iOS simulator、Android共用編譯 BUILD SUCCESSFUL（1m）。使用MockEngine，沒有用實際GIPHY key或宣稱live provider驗收。
+- 第一輪因清除獨立build後增量編譯仍引用不存在BoarderLessColors.class而失敗；等待該程序terminal後，以--rerun-tasks -Pkotlin.incremental=false重新全部驗證，通過結果來自第二輪，不把第一輪fallback視為成功。
+- 官方要求仍是client直接API與media loads，標準整合不可自行cache／proxy／改寫或持久保存media URLs／原檔：[GIPHY API要求](https://developers.giphy.com/docs/api/)。後續還需接畫布物件、selection／quick schemes／UndoRedo與各端渲染，不能以目前typed reference取代完整GIPHY主線交付。
+- 驗收後沿cleanup discover／tracked／busy檢查刪除本輪獨立build約109.3MiB；既有Desktop使用中的build保留。未改backend、未提交／push，goal繼續active。
+
+## 2026-10-09：Desktop 素材包交付 iOS 原生保存
+
+- 先實際執行 DesktopSchemeBundleTest.originalBundleTravelsToAnotherNativeRepositoryAndReceiptsSurviveRestart，透過既有明確 QA-only export hook 匯出965-byte BLQS0001素材包，含真正 ImageIO 產生32×24 PNG原檔及「原檔🙂」方案。Desktop測試1/1 pass、0failed/errors/skipped，BUILD SUCCESSFUL（23s）。
+- 新 IosDesktopSchemeBundleTest 保存同一實際匯出位元組作固定驗收樣本（SHA-256 bfd0087c7c3f916807e989dc2c7a925f8d02cdc9f38c8795d92e9ef07fea3016），並核對固定樣本與匯出檔逐位元一致。iOS27 simulator 用真正 IosSchemeBundleSource private snapshot review，刪除選取來源後仍可匯入。
+- IosFileWorkspaceRepository／IosFileAssetGateway materialize 在原檔Ready後、方案保存前刻意中斷；重開repository與PersistentSchemeBundleImportReceipts後只恢復原先記錄的目的asset ID，不重傳或建立第二份asset。目的ID與Desktop來源ID不同，payload與sourceWorkspaceId改成目的文件。
+- 真正 IosFileQuickSchemeStore 保存並重開方案，saveMaterializedBundle重試保持同一方案ID；prepareClipboardInsertion＋retainDraft將MediaNode保存到文件，重開文件仍引用同一目的asset ID。原生download比對PNG全bytes，IosAssetPreviewLoader實際解碼32×24。iOS test XML確認1/1 pass、0failed/errors/skipped，BUILD SUCCESSFUL（1m58s）。
+- 此證據是Desktop產出的實際格式交付到iOS原生檔案／方案／畫布流程，沒有mock asset gateway；尚未涵蓋實體裝置、UIDocumentPicker GUI、Android／Web同一素材包匯入、GIF／video或雲端方案同步，六主線仍未完整交付。
+- 驗收後確認無使用本輪exact build的程序，再沿cleanup discover／tracked／busy檢查清除獨立輸出約167.9MiB、移除暫存.blscheme與本輪產生Python cache，將本輪simulator恢復Shutdown。不清除既有Desktop程序使用中的build。未改backend、未提交／push，goal保持active。
+
+## 2026-10-09：行動端快捷入口綁定儲存模式
+
+- RecentWorkspace 新增可選 storageMode；行動端 RecentWorkspaceStore 以 local/server 不同設定鍵保存、改名、刪除與 reconcile。相同 workspace ID 不再互相覆蓋或被另一模式清單清除；Desktop 舊入口仍用原設定鍵。
+- Android dynamic shortcut 的 ID 與 Intent 新增模式；iOS Home Screen quick action userInfo 新增模式。行動端舊的未帶模式快捷入口視為 Server（原本入口只有 Server）。未知模式或不合法 workspace ID 被拒絕，pending request 以 ID＋mode 一起 compareAndSet，避免同 ID 的舊請求清除另一模式新請求。
+- App 冷啟動先保存快捷入口指定模式，再建立對應 repository；偏好寫失敗停在 chooser。WorkspaceScreen 初次 openOrCreate 只讀符合當前模式的 request。執行中收到另一模式的快捷入口，使用與手動切換相同的保存／編輯／復原／拖曳／匯入／筆刷 gate；可以切換才保存偏好並重建畫布，不能切換則提示先完成編輯與保存，不將 ID 交給錯誤 repository。
+- RecentWorkspacesTest 6/6 pass、0failed/skipped，含相同 ID 兩種模式重開／改名／reconcile 隔離與同 ID 跨模式 request CAS。Desktop、Android debug Kotlin、iOS simulator、JS、Wasm 編譯全部 BUILD SUCCESSFUL（3m6s）。主畫面快捷操作的實際冷／熱啟動 GUI 尚未驗收，不能用這些測試代替。
+- build-and-clean wrapper 在建置成功後因既有 Desktop hot-reload PID19229 使用專案 build 而清理退出1（不是編譯失敗）。另沿同一 cleanup discover／tracked／busy 檢查，僅刪除本輪 exact /tmp/boarderless-ai-reasoning-build 約119.7MiB。既有 Desktop 使用中的輸出仍保留，未終止該程序，也未宣稱整體0B。未改 backend、未提交／push，六主線 goal 繼續 active。
+
+## 2026-10-09：iOS 本機模式 GUI 與程序重啟驗收
+
+- 使用獨立 QA bundle `org.boarderless.qa.mode`，iPhone 18 Pro／iOS 27.0 simulator（1241AD9A-8A40-4B06-A313-002C357CE81D）。Debug xcodebuild BUILD SUCCEEDED；安裝後清理建置輸出約735.1MiB。所有 GUI 透過 Device Hub／cua_repl 操作，未使用 simctl launch 或其他 UI 注入。
+- APP 初次進入顯示繁體中文「選擇畫布儲存方式」；選「本機畫布（可離線）」後實際進入文件。使用「第一個想法」及裝置鍵盤輸入「我」，按完成；私有 local-documents record generation=2 包含該節點，偏好 ui.workspace.storageMode=local。
+- 以 simctl terminate 終止確切 QA 程序，再從 App 資料庫圖示重新開啟。AX 顯示「想法：我」和「本機檔案 · 已開啟本機文件：BoarderLess」；畫面截圖確認網格、繁體中文節點與本機狀態實際顯示。再次進「選單 → 空間 → 切換儲存模式」顯示 chooser，重選本機後同節點仍在。兩次重開後 record SHA-256 保持 922ccc365e28361da273c41e3c2b48477f05b19dfce0f51be792913d6f2cdb0e，generation 仍為2。
+- Android debug APK BUILD SUCCESSFUL（1m10s），已安裝於獨立 read-only emulator-5560，隨後移除並關閉；CUA 無法綁定 SDK Qt emulator app，因此 Android GUI 尚未通過。Android 建置輸出清理約149.3MiB。
+- 本輪證據限 iOS 本機模式入口、單一文字節點落盤、程序終止重啟與回到本機模式；未驗正式多人／Server 模式連線、原生 picker、GIF/video、大檔、跨裝置 bundle、OS 斷電或快捷入口與模式配對。六主線仍未完成，goal 保持 active。
+- 驗收後已 uninstall 確切 QA bundle 並將本輪 simulator 恢復 Shutdown。最後 cleanup --apply 偵測到既有 Desktop hot-reload APP PID19229 仍使用專案 build，安全拒絕刪除約134.0MiB；沒有結束非本輪建立的程序，也未宣稱最終 dry-run 0B。該 APP 結束後仍需執行清理腳本。
+
 ## 2026-10-09：行動端本機／伺服器 APP 模式入口
 
 - 新WorkspaceStorageRuntime與WorkspaceStorageMode，Android MainActivity／iOS MainViewController實際注入native local file factory及media runtime factory，伺服器仍使用既有BackendWorkspaceRepository。未選過模式時先顯示中英文選擇；明確選擇才建立repository並保存偏好，未知token不擅自選Server，偏好寫失敗保留chooser提示重試。不搬移本機或server資料。

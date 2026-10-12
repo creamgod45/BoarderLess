@@ -1,5 +1,15 @@
 # 後端下一批交付依賴（2026-10-11）
 
+大型時序圖原子容量新增缺口：見 [BACKEND_SEQUENCE_ATOMIC_CAPACITY_SPEC.md](BACKEND_SEQUENCE_ATOMIC_CAPACITY_SPEC.md)。現有200 operations無法覆蓋最大模型；需正式REST／WS容量協商與舊版相容策略，不允許APP自行放寬或分批假裝原子。此為提案、尚未交付。
+
+## 2026-10-12 更新：A–F已交付，F需補mediaKind歷史語意
+
+功能源碼已交付至ebd05fd，文件基準167086a；下方「尚未出現的路由」屬交付前歷史，不再當作APP停止接線的原因。正式auth／429／跨workspace materialization／endpoint rewire仍未交付。
+
+F新增缺口（程式碼核對，未真HTTP重現）：APP MediaReference包含assetId、mediaKind、thumbnailAssetId，UpdateMediaReferenceOperation可跨種類替換；backend mediaReferenceOf／sameReference與provenance只保存assetId、thumbnailAssetId，restore_media_references只還原這兩欄、保留目前mediaKind。Image→Video後Undo可能形成舊Image資產＋Video種類，與原APP history不一致。
+
+請擴充F provenance before／after及restoredReference為完整三欄引用，同時驗相反側mediaKind與target原素材MIME對應；沒有舊kind provenance時明確unsupported，不根據目前asset狀態猜測歷史。migration、capability／committed schema與fixtures需一併交付，含Image→Video→原圖missing→Undo／Redo、縮圖null與種類／引用被並行改寫的原子拒絕。普通替換仍Ready，歷史還原不復活素材、不授予下載。APP目前只建立same-kind證據模型，cross-kind不硬送；不將這個子路徑冒充完整F完成。
+
 實作入口：[尚缺後端能力實作規格](BACKEND_MISSING_IMPLEMENTATION_SPEC.md)。包含A–F交付批次、路由／operation、CAS／durability與APP版本對齊；不是只有驗收計畫。
 
 素材 preparation v2 已交付；APP 接線已實作、尚待所有功能完成後集中驗證。本文件整理仍未出現在目前後端路由／projection 的依賴，不是新的服務宣告，也不授權 APP 猜 endpoint 或略過不支援欄位。
