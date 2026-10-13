@@ -1,6 +1,7 @@
 package cg.creamgod.boarderless.data.remote
 
 import cg.creamgod.boarderless.data.WorkspaceSession
+import cg.creamgod.boarderless.data.canEditContent
 import cg.creamgod.boarderless.domain.history.MediaReference
 import cg.creamgod.boarderless.domain.history.MediaReferenceChange
 import cg.creamgod.boarderless.domain.history.mediaReference

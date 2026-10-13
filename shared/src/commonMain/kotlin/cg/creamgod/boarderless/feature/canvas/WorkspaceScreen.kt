@@ -2743,8 +2743,8 @@ fun WorkspaceScreen(
         } == true
         mediaImportBusy = true
         mediaImportLabel = Strings.media.checkingAsset()
-        mediaImportJob =
-            uiScope.launch {
+        val insertionJob =
+            uiScope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) {
                 var publicationAttempted = false
                 try {
                     val asset = awaitActiveMediaRead { repository.getAsset(openedSession, entry.asset.id) }

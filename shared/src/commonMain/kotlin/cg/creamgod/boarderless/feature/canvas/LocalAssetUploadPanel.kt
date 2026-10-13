@@ -156,7 +156,7 @@ import kotlinx.coroutines.launch
             }
         }
         consent?.let { step ->
-            BasicText(Strings.localSync.uploadConsent(step), style = TextStyle(color = colors.accent, fontSize = 12.sp))
+            BasicText(Strings.localSync.assetUploadConsent(step), style = TextStyle(color = colors.accent, fontSize = 12.sp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 ShellButton(Strings.localSync.uploadConfirm(), accent = true, enabled = enabled, onClick = { run(step) { preparationGateway, coordinator ->
                     when (step) {

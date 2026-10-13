@@ -1736,7 +1736,7 @@
     "uploadBytes": "Review sending original bytes",
     "uploadComplete": "Review notifying completion",
     "uploadConfirm": "Confirm this step",
-    "uploadConsent": "Confirm {step}. prepare reserves an asset; ticket signs a lease; renew supersedes it. upload uses network/storage; complete starts verification. publish rechecks Ready, original hash and access before saving the ID mapping; review a new canvas proposal afterwards. No automatic retry or canvas upload.",
+    "assetUploadConsent": "Confirm {step}. prepare reserves an asset; ticket signs a lease; renew supersedes it. upload uses network/storage; complete starts verification. publish rechecks Ready, original hash and access before saving the ID mapping; review a new canvas proposal afterwards. No automatic retry or canvas upload.",
     "uploadIdentity": "Original request {request} · Server asset {asset}",
     "uploadDeclaredMeasurements": "Declared locally: {measurements}",
     "uploadVerifiedMeasurements": "Verified by server: {measurements}",

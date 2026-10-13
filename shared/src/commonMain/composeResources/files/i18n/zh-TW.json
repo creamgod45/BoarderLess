@@ -1746,7 +1746,7 @@
     "uploadBytes": "審閱傳送原檔",
     "uploadComplete": "審閱通知上傳完成",
     "uploadConfirm": "確認這一步",
-    "uploadConsent": "確認執行 {step}。prepare 保留伺服器素材，ticket 簽發票券，renew 取代舊票券；upload 使用網路與空間，complete 啟動驗證。publish 重新核對 Ready、原檔 hash 及權限後保存 ID 映射，舊畫布方案必須重新審閱。不自動重試或上傳畫布。",
+    "assetUploadConsent": "確認執行 {step}。prepare 保留伺服器素材，ticket 簽發票券，renew 取代舊票券；upload 使用網路與空間，complete 啟動驗證。publish 重新核對 Ready、原檔 hash 及權限後保存 ID 映射，舊畫布方案必須重新審閱。不自動重試或上傳畫布。",
     "uploadIdentity": "原請求 {request} · 伺服器素材 {asset}",
     "uploadDeclaredMeasurements": "本機宣告值：{measurements}",
     "uploadVerifiedMeasurements": "伺服器驗證值：{measurements}",

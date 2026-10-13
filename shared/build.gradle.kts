@@ -73,7 +73,7 @@ abstract class GenerateI18nStrings : DefaultTask() {
 
         fun id(name: String) = if (name in keywords) "`$name`" else name
 
-        fun literal(text: String) = "\"" + text.replace("\\", "\\\\").replace("\"", "\\\"").replace("$", "\\$") + "\""
+        fun literal(text: String) = "\"" + text.replace("\\", "\\\\").replace("\"", "\\\"").replace("$", "\\$").replace("\r", "\\r").replace("\n", "\\n").replace("\t", "\\t") + "\""
 
         fun params(vararg texts: String) = texts.flatMap { text -> placeholder.findAll(text).map { it.groupValues[1] } }.distinct()
 

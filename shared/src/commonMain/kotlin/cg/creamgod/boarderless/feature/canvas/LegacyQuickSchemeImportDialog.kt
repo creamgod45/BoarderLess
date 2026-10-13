@@ -115,7 +115,7 @@ import kotlinx.serialization.encodeToString
                             }
                         }
                     }
-                    ShellButton(Strings.schemes.legacyConsent(), selected = confirmed,
+                    ShellButton(Strings.schemes.legacyConsent(), accent = confirmed,
                         enabled = enabled && copy != null && library.supportsIdentifiedSave,
                         onClick = { confirmed = !confirmed })
                     ShellButton(Strings.schemes.legacySave(),
