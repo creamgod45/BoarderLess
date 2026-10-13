@@ -1,5 +1,11 @@
 # BoarderLess 產品 QA 品質檢驗 SOP
 
+## 共用樣式範圍與預覽重置（最後集中驗收）
+
+背景 picker 應區分文件 style version 與不支援時的 device-only preference：Server 文件 Apply 可共用並進 Undo／Redo，Local 文件可 Undo／Redo 但不冒充已送伺服器；visibility／snap／zoom 始終個人偏好。支持 style 卻缺 capture 必須重新審阅，不能默默轉 local preference。
+
+Grid panel 原／預覽 pattern、color 應完整顯示。回原預覽與預設 lines／auto 只改 preview，不送 operation、改 background 或歷史；Close 清 preview。Apply 才單次 CAS style operation、可 Undo／Redo；遠端改 style／scope 後拒 stale。首次 attempt 後重置／選色／再 Apply 不可用，未知結果仍審原 transaction，不猜 ACK。視覺／遮擋由使用者判定，尚未執行。
+
 ## 物件庫向量預設（最後集中驗收）
 
 Geometry／All／搜尋／收藏／最近使用驗八個 vector 預設：標籤、書籤、雲朵、對話泡泡、愛心、齒輪、放射形、橫幅。卡片真路徑預覽須與插入輪廓一致；click／drag 保留 vectorPath commands、viewBox、paint 與正常 transform，不改成新的 shape token。放大／旋轉、鋼筆編輯、連線、選取、Undo／Redo、clipboard、方案簿與跨裝置定義保存另驗。

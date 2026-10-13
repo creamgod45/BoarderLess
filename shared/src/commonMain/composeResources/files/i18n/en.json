@@ -1156,6 +1156,11 @@
     "labelFarther": "Move label outward"
   },
   "canvasBackground": {
+    "documentStyleVersion": "Document style · version {version}. Apply saves a document operation with Undo/Redo; visibility, snapping and zoom remain personal preferences. Server workspaces share the style with collaborators.",
+    "localPreferenceOnly": "Device preference only. This backend has not enabled document styles; this change is not shared and does not enter document Undo/Redo.",
+    "gridComparison": "Original: {beforePattern} · {beforeColor}\nPreview: {afterPattern} · {afterColor}",
+    "gridRestorePreview": "Restore original preview",
+    "gridDefaultPreview": "Preview default grid",
     "gridTitle": "Document grid style",
     "gridHint": "Document content with Undo support. Preview is not saved. Personal grid visibility, snapping and viewport are unchanged; server sharing requires canvas-style capability.",
     "gridLines": "Lines",

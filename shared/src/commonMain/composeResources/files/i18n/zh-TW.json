@@ -1170,6 +1170,11 @@
     "labelFarther": "標籤向外移"
   },
   "canvasBackground": {
+    "documentStyleVersion": "文件樣式・版本 {version}。套用才保存文件操作，可 Undo／Redo；顯示、沾黏與縮放仍是個人偏好。伺服器工作區會與協作者共用樣式。",
+    "localPreferenceOnly": "僅裝置偏好。此後端尚未啟用文件樣式，變更不共用，也不進入文件 Undo／Redo。",
+    "gridComparison": "原樣式：{beforePattern}・{beforeColor}\n預覽：{afterPattern}・{afterColor}",
+    "gridRestorePreview": "回到原樣式預覽",
+    "gridDefaultPreview": "預覽預設網格",
     "gridTitle": "文件網格樣式",
     "gridHint": "此為可 Undo 的文件內容，預覽不保存。個人的網格可見性、吸附與視角不變；伺服器共用需正式樣式能力。",
     "gridLines": "線條",

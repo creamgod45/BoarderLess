@@ -1,5 +1,11 @@
 # 當前 loop 剩餘目標
 
+## 2026-10-13：共用樣式範圍、版本與網格預覽重置（源碼已接、未驗證）
+
+- 背景 picker 固定 status 區分 document style／captured style version 與 backend 未啟用時的 device-only preference，明示 Undo／Redo 與 Server 共用範圍；缺 capture 但已支持 style 時提示重新審閱，不誤稱 local fallback。
+- Grid editor 顯示原 pattern／color 與 chosen 預覽，增加回原樣式預覽、預覽預設 grid（lines／auto）。兩者只改 ephemeral chosen，LaunchedEffect 預覽保持；仍須 Apply 原 CAS style operation，background 不變，首次 attempted 後 reset／選色／Apply 禁止。
+- 顯示／snap／viewport 個人偏好與 document style 語意不改，shared undo 原 operation 不改。未 compile／test／launch／HTTP，六主線 active；完整業務完成後集中驗收，視覺與遮擋由使用者判定，效能最後。
+
 ## 2026-10-13：物件庫可編輯向量圖形預設（源碼已接、未驗證）
 
 - 新增八個 native VectorPath 預設：tag／bookmark／cloud／speech／heart／gear／burst／banner，僅 move／line／cubic／close 與合法 paint，不用 SVG markup、新 backend shape token 或外部素材。方形 viewBox 與插入尺寸保持比例，路徑保留在 ClipboardNode.vectorPath。

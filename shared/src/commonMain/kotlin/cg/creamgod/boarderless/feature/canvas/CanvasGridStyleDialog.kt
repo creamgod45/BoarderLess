@@ -53,6 +53,8 @@ import cg.creamgod.boarderless.i18n.Strings
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     BasicText(Strings.canvasBackground.gridTitle(), style = TextStyle(color = colors.contentText, fontSize = 18.sp))
                     BasicText(Strings.canvasBackground.gridHint(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
+                    BasicText(Strings.canvasBackground.documentStyleVersion(capture.styleVersion.toString()),
+                        style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
                     if (problem) BasicText(Strings.canvasBackground.changedWhileEditing(), style = TextStyle(color = colors.danger, fontSize = 12.sp))
                     if (publicationFailed) BasicText(Strings.canvasBackground.publicationUnconfirmed(), style = TextStyle(color = colors.danger, fontSize = 12.sp))
                     else if (attempted) BasicText(Strings.canvasBackground.publicationPending(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
@@ -60,13 +62,26 @@ import cg.creamgod.boarderless.i18n.Strings
                         ShellButton(Strings.draftReview.originalTransactions(), onClick = { onDismiss(); reviewOriginal() })
                     }
                     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    fun patternLabel(pattern: String) = when (pattern) {
+                        "lines" -> Strings.canvasBackground.gridLines()
+                        "dots" -> Strings.canvasBackground.gridDots()
+                        else -> Strings.canvasBackground.gridNone()
+                    }
+                    BasicText(Strings.canvasBackground.gridComparison(
+                        patternLabel(capture.before.gridStyle.pattern), capture.before.gridStyle.colorToken,
+                        patternLabel(chosen.pattern), chosen.colorToken),
+                        style = TextStyle(color = colors.contentText, fontSize = 12.sp))
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        ShellButton(Strings.canvasBackground.gridRestorePreview(), icon = ShellIcon.Undo,
+                            enabled = !busy && !attempted && prepared == null && chosen != capture.before.gridStyle,
+                            onClick = { chosen = capture.before.gridStyle; problem = false })
+                        ShellButton(Strings.canvasBackground.gridDefaultPreview(), icon = ShellIcon.Grid,
+                            enabled = !busy && !attempted && prepared == null && chosen != CanvasGridStyle(),
+                            onClick = { chosen = CanvasGridStyle(); problem = false })
+                    }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         listOf("lines", "dots", "none").forEach { pattern ->
-                            val label = when (pattern) {
-                                "lines" -> Strings.canvasBackground.gridLines()
-                                "dots" -> Strings.canvasBackground.gridDots()
-                                else -> Strings.canvasBackground.gridNone()
-                            }
+                            val label = patternLabel(pattern)
                             ShellButton(label, accent = chosen.pattern == pattern, enabled = !busy && prepared == null,
                                 onClick = { chosen = chosen.copy(pattern = pattern); problem = false })
                         }

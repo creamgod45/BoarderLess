@@ -8939,7 +8939,10 @@ fun WorkspaceScreen(
             ColorPickerWindow(
                 busy = draftPublicationBusy,
                 readOnly = canvasBackgroundApply != null,
-                statusText = canvasBackgroundProblem ?: canvasBackgroundApply?.let { Strings.canvasBackground.publicationPending() },
+                statusText = canvasBackgroundProblem ?: canvasBackgroundApply?.let { Strings.canvasBackground.publicationPending() }
+                    ?: canvasBackgroundDraft?.let { Strings.canvasBackground.documentStyleVersion(it.styleVersion.toString()) }
+                    ?: if (repository.supportsCanvasStyle) Strings.canvasBackground.changedWhileEditing()
+                        else Strings.canvasBackground.localPreferenceOnly(),
                 onReviewPending = {
                     closeBackgroundPicker()
                     backgroundOwner?.let(::openOriginalSubmissionReviewFor)
