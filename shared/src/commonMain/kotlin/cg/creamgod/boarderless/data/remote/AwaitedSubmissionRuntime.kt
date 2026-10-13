@@ -10,7 +10,27 @@ import kotlinx.coroutines.withContext
  * itself never initializes a ledger, migrates Settings or changes the selected client. */
 class AwaitedSubmissionRuntime internal constructor(internal val drafts: AwaitedWorkspaceDraftPersistence,
     internal val sequences: AwaitedClientSequenceAllocator, internal val safety: AwaitedRecoverySafetyPersistence,
-    internal val requireActive: (PendingSubmissionScope) -> Unit)
+    internal val requireActive: (PendingSubmissionScope) -> Unit,
+    internal val activationTarget: PendingSubmissionScope) {
+    /** Factories keep the original origin and identity. These checks never initialize a
+     * client, adopt a new namespace, or change the selected workspace in Settings. */
+    internal fun serverBaseUrl(): String {
+        requireActive(activationTarget)
+        require(activationTarget.apiBase.endsWith("/api/v1"))
+        return activationTarget.apiBase.removeSuffix("/api/v1").also { require(it.isNotBlank()) }
+    }
+
+    internal fun originalPreferences(preferences: SessionPreferences = SessionPreferences()): SessionPreferences {
+        requireActive(activationTarget)
+        val selected = activationTarget.copy(workspaceId = requireNotNull(preferences.workspaceId) {
+            "Original workspace selection is missing"
+        })
+        requireActive(selected)
+        preferences.requireExistingLegacyIdentity(selected)
+        requireActive(selected)
+        return preferences
+    }
+}
 
 /** Repository-facing awaited operations. Legacy records stay in their existing namespace;
  * the adapter never merges the two stores or falls back after an awaited write fails. */

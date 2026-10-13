@@ -1,5 +1,7 @@
 # 後端下一批交付依賴（2026-10-11）
 
+2026-10-13 唯讀核對：`backend/DELIVERY.md` 仍記 A–F 功能基準 `ebd05fd`／文件 `167086a1`；`backend/src` 最近提交 `64b0cb75` 主要清理未使用宣告，並非下列補充契約交付。現存 `auth.ts` 仍用開發 header、materialization／endpointRewire 仍未啟用、REST／WS 仍 200 operations、media provenance 仍缺 mediaKind。未查到新部署或正式驗收證據。本輪未修改／啟動後端，也不要求使用者先自行判別契約。
+
 大型時序圖原子容量新增缺口：見 [BACKEND_SEQUENCE_ATOMIC_CAPACITY_SPEC.md](BACKEND_SEQUENCE_ATOMIC_CAPACITY_SPEC.md)。現有200 operations無法覆蓋最大模型；需正式REST／WS容量協商與舊版相容策略，不允許APP自行放寬或分批假裝原子。此為提案、尚未交付。
 
 ## 2026-10-12 更新：A–F已交付，F需補mediaKind歷史語意

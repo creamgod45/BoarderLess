@@ -2,7 +2,6 @@ package cg.creamgod.boarderless.data.remote
 
 import cg.creamgod.boarderless.data.PendingReceiptStatus
 import cg.creamgod.boarderless.data.WorkspaceSession
-import cg.creamgod.boarderless.data.parseStrictJsonObject
 import cg.creamgod.boarderless.data.persistence.AwaitedDurableLocalRecordStore
 import cg.creamgod.boarderless.domain.history.WorkspaceOperation
 import cg.creamgod.boarderless.domain.model.Workspace
@@ -12,12 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.*
-import org.kotlincrypto.hash.sha2.SHA256
 
-@Serializable private data class AwaitedSubmissionActivationRecord(val version: Int = 1, val target: PendingSubmissionScope,
-    val publicationGeneration: Long, val sourceDigest: String, val planDigest: String)
 internal class ActivatedAwaitedSubmission internal constructor(val runtime: AwaitedSubmissionRuntime,
     private val awaitCalls: suspend () -> Unit, private val release: () -> Unit) {
     fun close() = release()
@@ -35,14 +29,11 @@ internal class AwaitedSubmissionActivationManager(private val controls: AwaitedD
     private val sequences: AwaitedAtomicClientSequenceAllocator, private val safety: AwaitedAtomicRecoverySafetyPersistence,
     private val requireAllOtherWritersExcluded: () -> Unit, private val requireOriginalIdentity: (PendingSubmissionScope) -> Unit) {
     private val mutex = Mutex()
-    private val json = Json { encodeDefaults = true }
     private class LeaseIdentity
     private data class LeaseState(val closed: Boolean = false, val calls: Int = 0, val releasing: Boolean = false)
     private val issued = MutableStateFlow<LeaseIdentity?>(null)
-    private fun key(target: PendingSubmissionScope) = SHA256().digest(
-        "boarderless.awaited-submission-activation.v1\n${WorkspaceDraftScopeBundleCodec.scopeHash(target)}".encodeToByteArray())
-        .joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
     private fun guard(target: PendingSubmissionScope) { requireAllOtherWritersExcluded(); requireOriginalIdentity(target) }
+    private val activationStore = AwaitedSubmissionActivationStore(controls, ::guard)
     suspend fun confirm(target: PendingSubmissionScope, review: LegacySubmissionMigrationReview,
         recapture: suspend () -> LegacySubmissionMigrationPlan): ActivatedAwaitedSubmission =
         confirmOrReopen(target, review, recapture, reopening = false)
@@ -50,6 +41,90 @@ internal class AwaitedSubmissionActivationManager(private val controls: AwaitedD
     suspend fun reopen(target: PendingSubmissionScope, review: LegacySubmissionMigrationReview,
         recapture: suspend () -> LegacySubmissionMigrationPlan): ActivatedAwaitedSubmission =
         confirmOrReopen(target, review, recapture, reopening = true)
+
+    /** Explicit local enrollment while the original runtime is closed and drained. Does not
+     * create a server workspace, initialize/reset its shared sequence ledger or switch APP.
+     * A new invocation resumes only the same Preparing entry after a fresh complete capture. */
+    suspend fun registerWorkspace(target: PendingSubmissionScope, scope: PendingSubmissionScope,
+        review: LegacySubmissionMigrationReview, recapture: suspend () -> LegacySubmissionMigrationPlan) = mutex.withLock {
+        check(issued.value == null) { "Close and drain the runtime before workspace enrollment" }
+        currentCoroutineContext().ensureActive(); guard(target)
+        WorkspaceDraftScopeBundleCodec.scopeHash(scope)
+        require(scope.apiBase == target.apiBase && scope.userId == target.userId && scope.clientId == target.clientId)
+        var control = requireNotNull(activationStore.read(target)) { "Activation receipt missing; do not initialize" }
+        val published = publisher.confirmAdvanced(target, review, recapture)
+        currentCoroutineContext().ensureActive(); guard(target)
+        require(control.record.samePublication(AwaitedSubmissionActivationRecord(target = target,
+            publicationGeneration = published.generation, sourceDigest = review.sourceDigest, planDigest = review.planDigest)))
+        val plan = review.requireUnchanged(recapture())
+        val originalScopes = plan.scopes.map { it.scope }.toSet()
+        require(control.record.enrollments.none { it.scope in originalScopes })
+        require(control.record.enrollments.none { it.phase == AwaitedWorkspaceEnrollmentPhase.Preparing && it.scope != scope }) {
+            "Resume the original workspace enrollment first"
+        }
+        require(originalScopes.size + control.record.enrollments.size <= 256)
+        confirmEnrollments(target, control, allowPreparing = true)
+        if (scope in originalScopes || control.record.enrollments.any {
+                it.scope == scope && it.phase == AwaitedWorkspaceEnrollmentPhase.Ready }) return@withLock
+        if (control.record.enrollments.none { it.scope == scope }) {
+            require(originalScopes.size + control.record.enrollments.size < 256)
+            require(drafts.read(scope) == null && safety.read(scope) == null) {
+                "Unregistered records require recovery; cannot enroll as empty"
+            }
+            sequences.readDurable(scope) // Must already exist for this exact origin/user/client.
+            currentCoroutineContext().ensureActive(); guard(target)
+            review.requireUnchanged(recapture())
+            control = activationStore.save(target, control, control.record.copy(version = 2,
+                enrollments = control.record.enrollments + AwaitedWorkspaceEnrollment(scope, AwaitedWorkspaceEnrollmentPhase.Preparing)))
+        }
+        // Preparing binds the identity BEFORE either artifact. An advanced or foreign record
+        // cannot be adopted after a lost acknowledgement, even if it currently looks empty.
+        confirmEnrollments(target, control, allowPreparing = true)
+        currentCoroutineContext().ensureActive(); guard(target)
+        drafts.adoptReviewedBundle(scope, null)
+        currentCoroutineContext().ensureActive(); guard(target)
+        safety.adoptLegacy(scope, emptyList(), emptyList())
+        require(drafts.readDurable(scope) == AwaitedDraftBundle(1, null))
+        require(safety.readDurable(scope) == AwaitedRecoverySafetyRecord(1,
+            RecoverySafetyBundleCodec.prepareLegacy(scope, emptyList(), emptyList())))
+        sequences.readDurable(scope)
+        review.requireUnchanged(recapture())
+        currentCoroutineContext().ensureActive(); guard(target)
+        control = activationStore.save(target, control, control.record.copy(version = 2,
+            enrollments = control.record.enrollments.map {
+                if (it.scope == scope) it.copy(phase = AwaitedWorkspaceEnrollmentPhase.Ready) else it
+            }))
+        confirmEnrollments(target, control, allowPreparing = false)
+    }
+
+    private suspend fun confirmEnrollments(target: PendingSubmissionScope, control: AwaitedSubmissionActivationReceipt,
+        allowPreparing: Boolean) {
+        activationStore.confirm(target, control)
+        for (entry in control.record.enrollments) {
+            currentCoroutineContext().ensureActive(); guard(target)
+            val scope = entry.scope
+            val emptySafety = RecoverySafetyBundleCodec.prepareLegacy(scope, emptyList(), emptyList())
+            if (entry.phase == AwaitedWorkspaceEnrollmentPhase.Preparing) {
+                require(allowPreparing) { "Workspace enrollment needs explicit recovery before activation" }
+                val draft = drafts.read(scope)
+                val safe = safety.read(scope)
+                require(draft == null || draft == AwaitedDraftBundle(1, null))
+                require(safe == null || safe == AwaitedRecoverySafetyRecord(1, emptySafety))
+            } else {
+                val draft = drafts.readDurable(scope)
+                val safe = safety.readDurable(scope)
+                if (draft.generation == 1L) require(draft.bundle == null)
+                if (safe.generation == 1L) require(safe.bundle == emptySafety)
+                require(safe.bundle.legacyImportDigest == emptySafety.legacyImportDigest)
+                val ledger = sequences.readDurable(scope)
+                val wires = listOfNotNull(draft.bundle?.pending, draft.bundle?.stoppedPending) +
+                    draft.bundle?.retainedStopped.orEmpty().map { it.submitted }
+                require(wires.all { wire -> wire.request.operations.all { it.clientSeq <= ledger.highWater } })
+            }
+            sequences.readDurable(scope)
+        }
+        activationStore.confirm(target, control)
+    }
 
     private suspend fun confirmOrReopen(target: PendingSubmissionScope, review: LegacySubmissionMigrationReview,
         recapture: suspend () -> LegacySubmissionMigrationPlan, reopening: Boolean): ActivatedAwaitedSubmission = mutex.withLock {
@@ -59,7 +134,7 @@ internal class AwaitedSubmissionActivationManager(private val controls: AwaitedD
         guard(target)
         val plan = review.requireUnchanged(recapture()); guard(target)
         // Reopen cannot adopt coincidentally matching files without an activation receipt.
-        if (reopening) requireNotNull(controls.read(key(target))) { "Activation receipt missing; do not initialize" }
+        if (reopening) requireNotNull(activationStore.read(target)) { "Activation receipt missing; do not initialize" }
         currentCoroutineContext().ensureActive(); guard(target)
         val published = if (reopening) publisher.confirmAdvanced(target, review, recapture)
             else publisher.confirmPublished(target, review, recapture)
@@ -67,30 +142,27 @@ internal class AwaitedSubmissionActivationManager(private val controls: AwaitedD
         currentCoroutineContext().ensureActive(); guard(target)
         val next = AwaitedSubmissionActivationRecord(target = target, publicationGeneration = published.generation,
             sourceDigest = review.sourceDigest, planDigest = review.planDigest)
-        val recordKey = key(target); val before = controls.read(recordKey)
+        val before = activationStore.read(target)
         currentCoroutineContext().ensureActive(); guard(target)
         if (before != null) {
-            require(before.generation in 1 until RealtimeMaxSequence && before.payload.size in 1..64 * 1024)
-            val raw = parseStrictJsonObject(before.payload.decodeToString(throwOnInvalidSequence = true))
-            require(raw.keys == setOf("version", "target", "publicationGeneration", "sourceDigest", "planDigest") && raw["version"] == JsonPrimitive(1))
-            require((raw["publicationGeneration"] as? JsonPrimitive)?.takeUnless { it.isString }?.longOrNull != null)
-            require(json.decodeFromJsonElement(AwaitedSubmissionActivationRecord.serializer(), raw) == next) {
+            require(before.record.samePublication(next)) {
                 "Activation receipt changed; explicit reconciliation required"
             }
-            controls.confirmDurable(recordKey, before.generation)
+            activationStore.confirm(target, before)
         } else {
             require(!reopening) { "Activation receipt disappeared during reopen" }
-            val bytes = json.encodeToString(AwaitedSubmissionActivationRecord.serializer(), next).encodeToByteArray(throwOnInvalidSequence = true)
-            require(bytes.size <= 64 * 1024)
-            controls.compareAndSet(recordKey, null, bytes); controls.confirmDurable(recordKey, 1)
+            activationStore.save(target, null, next)
         }
         currentCoroutineContext().ensureActive(); guard(target)
-        val saved = requireNotNull(controls.read(recordKey))
-        require(saved.generation == (before?.generation ?: 1L) && saved.payload.size <= 64 * 1024)
-        require(json.decodeFromJsonElement(AwaitedSubmissionActivationRecord.serializer(),
-            parseStrictJsonObject(saved.payload.decodeToString(throwOnInvalidSequence = true))) == next)
+        val saved = requireNotNull(activationStore.read(target))
+        require(saved == (before ?: AwaitedSubmissionActivationReceipt(1, next)))
+        val originalScopes = plan.scopes.map { it.scope }.toSet()
+        require(saved.record.enrollments.none { it.scope in originalScopes })
+        require(originalScopes.size + saved.record.enrollments.size <= 256)
+        confirmEnrollments(target, saved, allowPreparing = false)
+        review.requireUnchanged(recapture())
         currentCoroutineContext().ensureActive(); guard(target)
-        val scopes = plan.scopes.map { it.scope }.toSet()
+        val scopes = originalScopes + saved.record.enrollments.map { it.scope }
         val state = MutableStateFlow(LeaseState())
         val drained = MutableStateFlow(false)
         val leaseIdentity = LeaseIdentity()
@@ -173,7 +245,7 @@ internal class AwaitedSubmissionActivationManager(private val controls: AwaitedD
             closeLease()
             throw failure
         }
-        ActivatedAwaitedSubmission(AwaitedSubmissionRuntime(guardedDrafts, guardedSequences, guardedSafety, ::active),
+        ActivatedAwaitedSubmission(AwaitedSubmissionRuntime(guardedDrafts, guardedSequences, guardedSafety, ::active, target),
             awaitCalls = {
                 check(state.value.closed)
                 drained.first { it }

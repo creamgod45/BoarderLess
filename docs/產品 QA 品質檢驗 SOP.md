@@ -1,5 +1,15 @@
 # BoarderLess 產品 QA 品質檢驗 SOP
 
+## Awaited workspace 註冊與 activated factory（最後集中驗收）
+
+宿主先停止原 runtime 並等待 logical／physical drain、持續維持真正 writer 排他，再明確註冊同 origin/user/client 的新 workspace。註冊不建立伺服器工作區、不初始化或重設 sequence、不修改原 Settings 草稿。Preparing 寫入前拒絕孤兒 draft／safety；保存後取消／丟回應、僅 draft 或 safety 已保存時，只能恢復原 scope。未完成 Preparing 時所有 reopen 拒絕，不能改登記另一個 workspace。
+
+Ready 後重新建立 manager，核對原完整來源／publication、所有註冊 artifacts、共用 ledger 與 pending sequence 上界，再啟用。缺 draft／safety／ledger、v2 缺 catalog、重複 scope、未知欄位／版本、錯 generation／identity 均拒絕，不當空資料修復。v1 reopen 不改寫，首次明確 enrollment 才升 v2；現有與新增 scopes 合計最多 256，超量不裁剪。
+
+四端 activated factory 必須使用原 endpoint、client/user 與已註冊的原 workspace selection；遺失 client 不產生新 ID。Desktop 不進 fresh native identity 路徑，普通未 activated 啟動保持既有行為。宿主先保留 installation 再 prepare；media／身份驗證失敗及 close 失敗不得遺失候選 handle，取消 physical drain 不可先 release exclusion，明確 retry 不建立第二個 repository。
+
+本批新增 13 個共用測試案例，尚未編譯／執行。App 正式入口及平台完整 exclusion／ownership transfer 仍未接通，不能透過直接測核心宣稱 UI 遷移或真雙端已驗收。四端操作／視覺與斷電驗收待宿主完成後執行，效能最後。
+
 ## AI 未送出預覽匯出方案（最後集中驗收）
 
 Ready preview、尚未 Apply 時明確「匯出整份預覽方案」。確認 UI 說明包含原未變节点／私人文字、媒體引用來源；不包含 original AI transaction、delete instructions、Undo authority 或 canvas style。匯出使用既有 quick-scheme 格式，原方案匯入審阅後才能插入新副本，不恢復原 pending 或原操作 IDs。

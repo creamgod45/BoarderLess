@@ -24,10 +24,14 @@ fun browserWorkspaceStorageRuntime(activity: StateFlow<MediaPlaybackActivity>? =
     )
 
 private fun browserServerRepository(submission: cg.creamgod.boarderless.data.remote.AwaitedSubmissionRuntime? = null): cg.creamgod.boarderless.data.remote.BackendWorkspaceRepository {
+            val preferences = submission?.originalPreferences() ?: cg.creamgod.boarderless.data.remote.SessionPreferences()
+            val baseUrl = submission?.serverBaseUrl() ?: cg.creamgod.boarderless.data.remote.defaultBackendBaseUrl()
             val lease = cg.creamgod.boarderless.data.remote.BrowserServerWriterLease()
             val owner = cg.creamgod.boarderless.data.remote.ServerRepositoryWriterCoordinator.candidate()
             val operations = owner.operations()
             return cg.creamgod.boarderless.data.remote.BackendWorkspaceRepository(
+            baseUrl = baseUrl,
+            preferences = preferences,
             awaitedSubmissionRuntime = submission,
             prepareServerWriter = { lease.acquire(); owner.claimAfterDrain(); lease.requireActive() },
             requireServerWriterActive = { lease.requireActive(); owner.requireActive() },

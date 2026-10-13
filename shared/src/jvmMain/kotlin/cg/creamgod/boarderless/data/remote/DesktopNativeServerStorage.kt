@@ -391,7 +391,9 @@ internal class DesktopNativeServerStorage private constructor(
 }
 
 fun desktopNativeBackendWorkspaceRepository(root: Path, submission: AwaitedSubmissionRuntime? = null): BackendWorkspaceRepository =
-    BackendWorkspaceRepository(preferences = DesktopNativeServerStorage(root).preferences,
+    BackendWorkspaceRepository(
+        baseUrl = submission?.serverBaseUrl() ?: defaultBackendBaseUrl(),
+        preferences = submission?.originalPreferences() ?: DesktopNativeServerStorage(root).preferences,
         awaitedSubmissionRuntime = submission,
         legacyQuickSchemeReader = {
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {

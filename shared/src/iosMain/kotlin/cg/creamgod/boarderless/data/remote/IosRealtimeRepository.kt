@@ -6,11 +6,15 @@ import cg.creamgod.boarderless.data.persistence.withWriterOperations
 import cg.creamgod.boarderless.data.persistence.iosPrivateRecordRoot
 
 internal fun iosRealtimeBackendRepository(submission: AwaitedSubmissionRuntime? = null): BackendWorkspaceRepository {
+    val preferences = submission?.originalPreferences() ?: SessionPreferences()
+    val baseUrl = submission?.serverBaseUrl() ?: defaultBackendBaseUrl()
     val lease = IosServerWriterLease.acquire(iosPrivateRecordRoot("server-writer-control"))
     lease.requireActive()
     val owner = ServerRepositoryWriterCoordinator.candidate()
     val operations = owner.operations()
     return BackendWorkspaceRepository(
+        baseUrl = baseUrl,
+        preferences = preferences,
         awaitedSubmissionRuntime = submission,
         prepareServerWriter = { lease.requireActive(); owner.claimAfterDrain(); lease.requireActive() },
         requireServerWriterActive = { lease.requireActive(); owner.requireActive() },

@@ -138,6 +138,13 @@ class SessionPreferences(
                 settings.putString(ClientIdKey, it)
             }
 
+    internal fun requireExistingLegacyIdentity(scope: PendingSubmissionScope) {
+        check(nativeClientIdentity == null) { "Activated legacy identity cannot use a fresh native namespace" }
+        check(settings.getStringOrNull(ClientIdKey) == scope.clientId &&
+            settings.getStringOrNull(UserIdKey) == scope.userId &&
+            settings.getStringOrNull(WorkspaceIdKey) == scope.workspaceId) { "Original activation identity changed or is missing" }
+    }
+
     var clientSequence: Long
         get() {
             check(nativeClientIdentity == null) { "Native sequences require a scoped allocator" }

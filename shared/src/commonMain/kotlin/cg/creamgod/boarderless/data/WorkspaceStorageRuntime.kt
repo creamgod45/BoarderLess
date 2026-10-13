@@ -23,19 +23,18 @@ class WorkspaceStorageRuntime(
     internal fun createActivatedServerRepository(
         activation: cg.creamgod.boarderless.data.remote.ActivatedAwaitedSubmission,
         scope: cg.creamgod.boarderless.data.remote.PendingSubmissionScope,
+        retainCandidate: (CanvasWorkspaceRepository) -> Unit,
     ): CanvasWorkspaceRepository {
         activation.runtime.requireActive(scope)
         val factory = requireNotNull(serverRepositoryWithSubmission) { "Activated server factory unavailable" }
         val candidate = factory(activation.runtime)
-        try {
-            activation.runtime.requireActive(scope)
-            requireNotNull(candidate as? BackendWorkspaceRepository) { "Activated server adapter unavailable" }
-                .requireActivatedSubmissionRuntime(activation.runtime, scope)
-            return candidate
-        } catch (failure: Throwable) {
-            candidate.close()
-            throw failure
-        }
+        // Installation retains the exact candidate before any post-construction guard can
+        // fail. Throwing from here must not lose a handle whose close/drain can also fail.
+        retainCandidate(candidate)
+        activation.runtime.requireActive(scope)
+        requireNotNull(candidate as? BackendWorkspaceRepository) { "Activated server adapter unavailable" }
+            .requireActivatedSubmissionRuntime(activation.runtime, scope)
+        return candidate
     }
     /** Ordinary startup stays local; only a host's explicit launch can override it. */
     fun createRepository(mode: WorkspaceStorageMode = initialMode): CanvasWorkspaceRepository =

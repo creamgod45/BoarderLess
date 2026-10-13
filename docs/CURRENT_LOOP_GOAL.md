@@ -1,5 +1,16 @@
 # 當前 loop 剩餘目標
 
+## 2026-10-13：恢復開發；awaited scope 註冊與 activated factory 身分接線（源碼已補、未驗證）
+
+- 本批基底 `c622e091`。使用者已要求繼續；六主線仍未完整交付，不以本批核心變更標完成。只改 APP／追蹤文件，未啟動或修改後端服務、未清理舊資料。
+- `AwaitedSubmissionActivationManager.registerWorkspace` 在原 runtime 關閉／logical drain 後，重驗原 Published receipt、完整來源與所有既有 scope，再保存同一 activation control 的 Preparing→Ready。空 draft 與 safety 明確保存／durable readback；共用 origin/user/client sequence 僅核對，不初始化或降 floor。回應遺失／取消保留原 Preparing，新 scope 不可繞過；孤兒資料、跨 identity、來源漂移、缺 ledger 拒絕。
+- activation control v2 包含有界 append-only enrollments，v1 唯讀相容，首次明確註冊才 CAS 升級；缺 v2 catalog／錯 generation／重複 scope 拒絕。reopen 核對所有 Ready artifacts 與 pending sequence 上界，Preparing 必須先恢復；允許清單才包含已註冊 scope。這是 APP 本機控制格式變更，沒有改 backend wire schema。
+- Android／iOS／Web／Desktop activated factory 保留 activation 原 API origin 與既有 Settings client/user，接受已註冊的原 workspace selection，不使用預設 endpoint 或建立替代 client。Desktop 的 activated 路徑不再建立 fresh native identity；一般未 activated 啟動維持原路徑。缺 client／selection 或不符 scope 在 factory 開始前拒絕，不補寫 Settings。
+- `ActivatedServerInstallation` 改為宿主先保留 instance、再單次 prepare；候選在驗身分／media 構造前即歸原 instance 保留。失敗後原 handle 仍可 explicit closeAndDrain；close／physical drain／release 失敗或取消沿原階段重試，不造替代 candidate。
+- 新增 `AwaitedWorkspaceEnrollmentTest` 13 cases（尚未執行），涵蓋註冊／重啟、lost Preparing／Ready ACK、取消、孤兒／缺檔、identity／source／exclusion、v1／v2、端點／身分零初始化、media failure 與 close/drain 恢復。僅源碼審閱與 `git diff --check`；未 compile／test／launch／HTTP／打包，依既定順序最後集中驗收、效能最後。
+- **仍未完成**：App 正式 migration／registration UI caller、各平台完整 all-writer 排他與來源 capture／ownership transfer、reconciliation 宿主與實際切換。`SubmissionMigrationDialog` 及 installation 尚無 App caller，不能將本批描述成正式遷移可用或 WS 已啟用。下一步必須接這些宿主，不再重做已補的 scope control。
+- 後端唯讀核對：DELIVERY 仍以 `ebd05fd` 作 A–F 功能基準，文件 `167086a1`；目前 `backend/src` 最近變更為 `64b0cb75`（清理未使用宣告等），未補 auth／429／materialization／endpointRewire／mediaKind provenance／大型交易缺口。未取得新部署或正式驗收證據，使用者不需自行辨識契約。
+
 ## 2026-10-13：AI 預覽圖形定義方案匯出（源碼已接、未驗證）
 
 - AI Ready preview 增明確「匯出整份預覽方案」，四平台沿 DraftBackupRuntime 與 QuickSchemeTransferCodec。包含結果全部 objects／內部 relations（含原未變物件），保留 clipboard 的 path／sequence／external media 與 media provenance，不下載素材。不是原 AI proposal／交易／刪除指令／Undo 或完整 canvas style 備份，UI 明示私人文字與範圍。
