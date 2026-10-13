@@ -5948,8 +5948,8 @@ fun WorkspaceScreen(
                 Column(
                     modifier =
                         Modifier
-                            .width(inspectorWidth)
-                            .heightIn(max = 520.dp)
+                            .width((canvasSize.width / density * 0.7f).dp)
+                            .height((canvasSize.height / density * 0.7f).dp)
                             .verticalScroll(rememberScrollState())
                             .padding(8.dp),
                     verticalArrangement = Arrangement.spacedBy(ButtonGap),
