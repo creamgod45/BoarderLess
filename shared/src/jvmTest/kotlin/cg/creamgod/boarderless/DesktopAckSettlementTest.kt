@@ -106,7 +106,10 @@ class DesktopAckSettlementTest {
                     inject = false
                     assertEquals(1, sent.size) // Storage failure never retries HTTP automatically.
                     val reopened = assertNotNull(DesktopDraftScopeBundleStore(normalFiles).read(scope)).bundle!!
-                    val ackPublished = fault == null || (writeNumber == 2 && fault != AtomicDraftStage.DataForced)
+                    // Write order after the response: [1] deletion evidence, [2] sequence-ledger confirmation (which has
+        // no Published stage, so Published#2 is already the ACK bundle), [3] ACK bundle. Faults 1..2 under
+        // DataForced/DirectoryForced therefore stop before the ACK is published.
+        val ackPublished = fault == null || (writeNumber == 2 && fault == AtomicDraftStage.Published)
                     if (ackPublished) {
                         assertNull(reopened.pending)
                         assertEquals(LocalDraftAcknowledgement(entry, 9, 20), reopened.acknowledged)
