@@ -1,5 +1,13 @@
 # 當前 loop 剩餘目標
 
+## 2026-10-14：使用者重新界定遷移範圍（空專案、尚未發布）
+
+- 使用者確認專案目前是空專案、尚未發布，沒有需要保護的既有使用者資料；明確准許推進，不必為舊資料額外停下確認。
+- 因此「舊 Settings 草稿 → 新儲存」的正式遷移精靈、activation 與 scope 註冊 caller，暫不列為發布前必要項目；`SubmissionMigrationDialog`／`ActivatedServerInstallation` 保留為已測試的元件，待首次公開發布前若發現真實舊資料再接線。
+- 仍保留的發布前風險（不因空專案而消失）：Android／iOS／Web 的伺服器模式草稿與序號仍走 Settings 路徑，不是完整 durable queue。Desktop 已使用全新原生 `server-v1` 命名空間，無此問題。處理方向是替 Android／iOS／Web 建立全新（不經遷移）的 awaited 原生儲存，需設計動態 scope 註冊（現有 Awaited* 儲存的 `requireScope` 為同步，無法在其中做非同步註冊）。
+- 此段為範圍說明，不是完成宣告；六主線仍未完整交付。
+
+
 ## 2026-10-13：恢復開發；awaited scope 註冊與 activated factory 身分接線（源碼已補、未驗證）
 
 - 本批基底 `c622e091`。使用者已要求繼續；六主線仍未完整交付，不以本批核心變更標完成。只改 APP／追蹤文件，未啟動或修改後端服務、未清理舊資料。
