@@ -28,6 +28,11 @@ import cg.creamgod.boarderless.domain.model.*
 import cg.creamgod.boarderless.i18n.Strings
 import io.ktor.http.*
 import kotlinx.coroutines.*
+import cg.creamgod.boarderless.data.DraftBackupRuntime
+import cg.creamgod.boarderless.data.DraftBackupResult
+import cg.creamgod.boarderless.data.exportLocalJsonBackup
+import cg.creamgod.boarderless.data.persistence.QuickScheme
+import kotlinx.serialization.encodeToString
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -48,6 +53,7 @@ internal fun AiDiagramToolDialog(
     initialChangesExpanded: Boolean = true,
     onChangesExpandedChange: (Boolean) -> Unit = {},
     onReviewOriginalSubmission: (() -> Unit)? = null,
+    previewBackupRuntime: DraftBackupRuntime = DraftBackupRuntime.Unavailable,
 ) {
     val colors = BoarderLessTheme.colors
     val scope = rememberCoroutineScope()
@@ -76,6 +82,8 @@ internal fun AiDiagramToolDialog(
     var open by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
     var applying by remember { mutableStateOf(false) }
+    var exportingPreview by remember { mutableStateOf(false) }
+    var exportJob by remember { mutableStateOf<Job?>(null) }
     var appliedSuccessfully by remember { mutableStateOf(false) }
     var job by remember { mutableStateOf<Job?>(null) }
     var pending by remember { mutableStateOf<AiDiagramRequestReview?>(null) }
@@ -121,6 +129,7 @@ internal fun AiDiagramToolDialog(
         open = false
         gate.close()
         job?.cancel()
+        exportJob?.cancel()
         token = ""
         clearPlan()
         onDismiss()
@@ -138,6 +147,7 @@ internal fun AiDiagramToolDialog(
             open = false
             gate.close()
             job?.cancel()
+            exportJob?.cancel()
             token = ""
             plan = null
             frozenApplyPlan = null
@@ -364,7 +374,7 @@ internal fun AiDiagramToolDialog(
                 }
             }
     }
-    Dialog(onDismissRequest = { if (!applying) close() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    Dialog(onDismissRequest = { if (!applying || exportingPreview) close() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).imePadding(), contentAlignment = Alignment.Center) {
             GlassSurface(Modifier.widthIn(max = 920.dp).fillMaxWidth(.94f).fillMaxHeight(.92f)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -392,7 +402,8 @@ internal fun AiDiagramToolDialog(
                                 clearPlan()
                             })
                         }
-                        ShellButton(Strings.common.close(), compact = true, enabled = !applying, onClick = { close() })
+                        if (exportingPreview) ShellButton(Strings.common.cancel(), onClick = { exportJob?.cancel() })
+                        ShellButton(Strings.common.close(), compact = true, enabled = !applying || exportingPreview, onClick = { close() })
                     }
                     BasicText(
                         aiProbeDiagnosticLabel(diagnostics.lastOrNull()) + (diagnostics.lastOrNull()?.httpStatus?.let { " · HTTP $it" } ?: ""),
@@ -453,6 +464,41 @@ internal fun AiDiagramToolDialog(
                                     AiProposalChangeReview(workspace, p.workspace, changesExpanded) {
                                         changesExpanded = it
                                         onChangesExpandedChange(it)
+                                    }
+                                    if (previewBackupRuntime.chooseDestination != null && frozenApplyPlan == null) {
+                                        BasicText(Strings.aiTools.previewExportHint(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
+                                        ShellButton(Strings.aiTools.previewExport(), enabled = !busy && !applying && sessionCurrent(),
+                                            onClick = {
+                                                if (busy || applying || frozenApplyPlan != null || plan !== proposal || !sessionCurrent()) return@ShellButton
+                                                applyConsent = false
+                                                applying = true; exportingPreview = true
+                                                message = Strings.aiTools.previewExportWorking()
+                                                exportJob = scope.launch {
+                                                    fun current() = open && sessionCurrent() && plan === proposal && frozenApplyPlan == null
+                                                    try {
+                                                        val result = exportLocalJsonBackup(previewBackupRuntime, "boarderless-ai-preview-scheme.json", ::current) {
+                                                            check(current() && validate())
+                                                            currentCoroutineContext().ensureActive(); check(current())
+                                                            val payload = requireNotNull(workspaceClipboardPayload(p.workspace, p.workspace.objects.keys))
+                                                            val definition = QuickScheme(0, Strings.aiTools.preview(),
+                                                                ClipboardJson.encodeToString(payload), payload.version,
+                                                                p.workspace.id.value.takeIf { payload.media.isNotEmpty() })
+                                                            QuickSchemeTransferCodec.encode(definition)
+                                                        }
+                                                        currentCoroutineContext().ensureActive(); check(current())
+                                                        message = when (result) {
+                                                            DraftBackupResult.Saved -> Strings.aiTools.previewExportSaved()
+                                                            DraftBackupResult.DownloadRequested -> Strings.aiTools.previewDownloadRequested()
+                                                            DraftBackupResult.Cancelled -> Strings.aiTools.previewExportStopped()
+                                                        }
+                                                    } catch (cancelled: CancellationException) {
+                                                        if (open) message = Strings.aiTools.previewExportStopped()
+                                                        throw cancelled
+                                                    } catch (_: Exception) {
+                                                        if (open) message = Strings.aiTools.previewExportFailed()
+                                                    } finally { applying = false; exportingPreview = false; exportJob = null }
+                                                }
+                                            })
                                     }
                                 }
                                 is AiProposalPreview.Conflict -> BasicText(Strings.aiTools.conflict(), style = TextStyle(color = colors.danger))

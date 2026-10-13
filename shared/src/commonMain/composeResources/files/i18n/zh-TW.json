@@ -1499,6 +1499,13 @@
     "selectThought": "選取想法"
   },
   "aiTools": {
+    "previewExport": "匯出整份預覽方案",
+    "previewExportHint": "保存結果圖形定義，包含未變更的原節點及可能私人的畫布文字。不是原 AI 交易、刪除指令、Undo 權限或完整工作區／背景備份。素材僅保留來源引用，不下載；之後從方案簿匯入，審閱後才能插入新副本。",
+    "previewExportWorking": "匯出本機預覽定義…",
+    "previewDownloadRequested": "已請求下載預覽方案，下載完成由瀏覽器控制。",
+    "previewExportSaved": "預覽方案檔已保存，草稿仍未送出；套用仍須重新授權。",
+    "previewExportStopped": "預覽匯出已停止，未套用草稿；重試前請核對已選目的地。",
+    "previewExportFailed": "預覽匯出格式無效或結果未確認，未送出的草稿仍在本視窗。請核對目的地與匯出上限再重試，不會默默保存縮小或部分定義。",
     "chatReasoningNone": "GPT-5.6 Chat 圖形工具相容設定：reasoning_effort = none。此設定會包含在每次待批准的請求中。",
       "title": "AI 協助編輯圖形（草稿）",
       "warning": "工具只修改隔離草稿。每次可能計費的請求須分別審閱與同意，再審核完整方案後套用。Router 工具支援需以實際成功任務確認。",

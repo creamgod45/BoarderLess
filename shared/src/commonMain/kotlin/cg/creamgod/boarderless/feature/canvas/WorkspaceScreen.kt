@@ -9091,6 +9091,7 @@ fun WorkspaceScreen(
                     AiDiagramToolDialog(
                         snapshot,
                         selectedIds,
+                        previewBackupRuntime = draftBackupRuntime,
                         supportsRelationGeometry = repository.supportsRelationGeometry,
                         validateScope = { diagramFresh() },
                         isSessionCurrent = { diagramCurrent() },

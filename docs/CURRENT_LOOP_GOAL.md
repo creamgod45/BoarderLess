@@ -1,5 +1,11 @@
 # 當前 loop 剩餘目標
 
+## 2026-10-13：AI 預覽圖形定義方案匯出（源碼已接、未驗證）
+
+- AI Ready preview 增明確「匯出整份預覽方案」，四平台沿 DraftBackupRuntime 與 QuickSchemeTransferCodec。包含結果全部 objects／內部 relations（含原未變物件），保留 clipboard 的 path／sequence／external media 與 media provenance，不下載素材。不是原 AI proposal／交易／刪除指令／Undo 或完整 canvas style 備份，UI 明示私人文字與範圍。
+- 尚未 Apply 才可匯出；凍結當前 proposal／preview，清 Apply consent，選目的地後 fresh scope 檢查、strict scheme encode。export 期間禁 mutation／Apply，可停止與關窗；取消／錯誤保留未送出 plan，未知檔案結果提示核目的地，Web 只 DownloadRequested。原方案 import 流程審閱後才能插入新副本，不冒充重放原修改／restore。
+- 沿原 1MiB definition／4MiB scheme 限額，超量拒不裁剪；未 compile／test／launch／AI request／picker／HTTP，六主線 active。完整功能後集中驗收、視覺／遮擋交使用者、效能最後。
+
 ## 2026-10-13：時序原始碼本機備份／載入（源碼已接、未驗證）
 
 - SequenceCreationDialog 接四平台既有 DraftBackupRuntime／DraftImportRuntime，明確 source export／import；backup schema boarderless.sequence-source.v1 僅 version／source，不含 operation、receipt 或已發布 authority。沿 parser 64KiB strict UTF-8 source 上限、512KiB envelope 上限、exact keys／numeric version 與 strict JSON，非法內容保留原 source。

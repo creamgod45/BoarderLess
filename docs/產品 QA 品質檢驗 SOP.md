@@ -1,5 +1,11 @@
 # BoarderLess 產品 QA 品質檢驗 SOP
 
+## AI 未送出預覽匯出方案（最後集中驗收）
+
+Ready preview、尚未 Apply 時明確「匯出整份預覽方案」。確認 UI 說明包含原未變节点／私人文字、媒體引用來源；不包含 original AI transaction、delete instructions、Undo authority 或 canvas style。匯出使用既有 quick-scheme 格式，原方案匯入審阅後才能插入新副本，不恢復原 pending 或原操作 IDs。
+
+匯出期間 plan／include／Apply 凍結並清前次 Apply consent；目的地選取後 fresh scope 檢查，取消／scope 變更不得採晚到結果。停止／錯誤保留本視窗未送出草稿，檔案結果不明提示查目的地；Web 僅下載請求。驗 vector path／sequence／media provenance，definition／file 超量不得裁剪成小方案，不能自動上傳素材／方案或插畫布。四端文字可讀性／遮擋交使用者，尚未執行。
+
 ## 時序原始碼備份／匯入（最後集中驗收）
 
 四端在時序編輯視窗明確 export source，guided 先 review；backup 僅 schema／numeric version／source，不含 transaction 或原 receipt。目的地選取前不能把畫布內容交 adapter；native 新檔與取消 cleanup 沿原機制，Web 只說下載請求，不冒充完成。取消、scope 切換、內容改變禁止晚到檔案回覆套用。

@@ -1489,6 +1489,13 @@
     "selectThought": "Select thought"
   },
   "aiTools": {
+    "previewExport": "Export whole preview as a scheme",
+    "previewExportHint": "Saves the entire resulting graph definition, including unchanged original nodes and private canvas text. It is not the original AI transaction, deletion instructions, Undo authority or a full workspace/style backup. Media references retain provenance without downloading assets. Import later through the scheme library and review before inserting a new copy.",
+    "previewExportWorking": "Exporting the local preview definition…",
+    "previewDownloadRequested": "Preview scheme download requested; completion is controlled by the browser.",
+    "previewExportSaved": "Preview scheme file saved. The proposal remains unsent; applying still needs fresh consent.",
+    "previewExportStopped": "Preview export stopped. No proposal was applied; check any selected output before retrying.",
+    "previewExportFailed": "Preview export is invalid or unconfirmed. The unsent proposal remains in this window. Check the output and export limits before retrying; no smaller or partial definition was silently saved.",
     "chatReasoningNone": "GPT-5.6 Chat tool compatibility: reasoning_effort = none. This setting appears in every request for approval.",
       "title": "Edit diagram with AI (draft)",
       "warning": "Tools change an isolated draft. Review each paid request separately, then review the whole proposal before applying. Router tool support is unverified until a task succeeds.",
