@@ -1,5 +1,6 @@
 package cg.creamgod.boarderless.feature.canvas
 
+import cg.creamgod.boarderless.i18n.Strings
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
@@ -54,7 +55,7 @@ import kotlinx.coroutines.launch
         if (!valid() || busy) return
         if (!armed) { armed = true; return }
         armed = false; busy = true
-        status = tr("submissionMigration.working", "Checking and durably saving…")
+        status = Strings.submissionMigration.working()
         job = coroutineScope.launch {
             try {
                 ensureActive(); check(valid())
@@ -62,7 +63,7 @@ import kotlinx.coroutines.launch
                     publisher.publish(target, review) { ensureActive(); check(valid()); currentCapture() }
                     ensureActive(); check(valid())
                     published = true
-                    status = tr("submissionMigration.published", "Published locally. Activation still requires a separate confirmation.")
+                    status = Strings.submissionMigration.published()
                 } else {
                     val capture: suspend () -> LegacySubmissionMigrationPlan = { ensureActive(); check(valid()); currentCapture() }
                     val lease = if (reopening) activation.reopen(target, review, capture)
@@ -77,10 +78,10 @@ import kotlinx.coroutines.launch
                     } finally { if (!transferred) lease.close() }
                 }
             } catch (cancelled: CancellationException) {
-                if (valid()) status = tr("submissionMigration.cancelled", "Stopped. Publication or activation may already have been saved. Original records remain; verify the original receipt before another attempt.")
+                if (valid()) status = Strings.submissionMigration.cancelled()
                 throw cancelled
             } catch (_: Exception) {
-                if (valid()) status = tr("submissionMigration.failed", "Not confirmed. Original records and request IDs are retained; review source, identity and writer exclusion before trying again.")
+                if (valid()) status = Strings.submissionMigration.failed()
             } finally { busy = false; job = null }
         }
     }
@@ -88,30 +89,26 @@ import kotlinx.coroutines.launch
         Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing), contentAlignment = Alignment.Center) {
             GlassSurface(Modifier.widthIn(max = 760.dp).fillMaxWidth(0.94f).fillMaxHeight(0.85f)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    BasicText(tr("submissionMigration.title", "Review durable draft migration"), style = TextStyle(color = colors.contentText, fontSize = 18.sp))
-                    BasicText(tr("submissionMigration.warning", "Local storage migration only. No pending transaction is resent, no legacy record is removed, and publication alone does not activate the new writer."), style = TextStyle(color = colors.contentMuted, fontSize = 13.sp))
+                    BasicText(Strings.submissionMigration.title(), style = TextStyle(color = colors.contentText, fontSize = 18.sp))
+                    BasicText(Strings.submissionMigration.warning(), style = TextStyle(color = colors.contentMuted, fontSize = 13.sp))
                     status?.let { BasicText(it, style = TextStyle(color = colors.contentMuted, fontSize = 13.sp)) }
-                    if (busy) ShellButton(tr("submissionMigration.stop", "Stop (retain original records)"), onClick = { job?.cancel() })
-                    ShellButton(label = tr("submissionMigration.close", "Close (retain records)"), onClick = { close() })
+                    if (busy) ShellButton(Strings.submissionMigration.stop(), onClick = { job?.cancel() })
+                    ShellButton(label = Strings.submissionMigration.close(), onClick = { close() })
                     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     BasicText("Source SHA-256: ${review.sourceDigest}\nPlan SHA-256: ${review.planDigest}", style = TextStyle(color = colors.contentMuted, fontSize = 11.sp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ShellButton(tr("submissionMigration.previousScope", "Previous scope"), enabled = !busy && scopeIndex > 0,
+                        ShellButton(Strings.submissionMigration.previousScope(), enabled = !busy && scopeIndex > 0,
                             onClick = { scopeIndex-- })
-                        ShellButton(tr("submissionMigration.nextScope", "Next scope"), enabled = !busy && scopeIndex + 1 < review.scopes.size,
+                        ShellButton(Strings.submissionMigration.nextScope(), enabled = !busy && scopeIndex + 1 < review.scopes.size,
                             onClick = { scopeIndex++ })
                     }
                     review.scopes.getOrNull(scopeIndex)?.let { item ->
-                        BasicText(tr("submissionMigration.scope", "Scope {index}: {hash}\nDraft operations: {operations}; pending: {pending}; stopped: {stopped}\nFences: {fences}; deletion evidence: {deletions}; sequence floor: {floor}; quarantined: {quarantined}",
-                            "index" to scopeIndex + 1, "hash" to item.scopeHash, "operations" to item.draftOperationCount,
-                            "pending" to item.hasPendingWire, "stopped" to item.stoppedWireCount, "fences" to item.fenceCount,
-                            "deletions" to item.deletionEvidenceCount, "floor" to item.minimumClientSequence,
-                            "quarantined" to item.retryQuarantined), style = TextStyle(color = colors.contentText, fontSize = 12.sp))
+                        BasicText(Strings.submissionMigration.scope(scopeIndex + 1, item.scopeHash, item.draftOperationCount, item.hasPendingWire, item.stoppedWireCount, item.fenceCount, item.deletionEvidenceCount, item.minimumClientSequence, item.retryQuarantined), style = TextStyle(color = colors.contentText, fontSize = 12.sp))
                     }
-                    ShellButton(tr("submissionMigration.inspectPacket", "Show / hide full local review packet"), enabled = !busy,
+                    ShellButton(Strings.submissionMigration.inspectPacket(), enabled = !busy,
                         onClick = { showPacket = !showPacket })
                     scopePacket?.let { packet ->
-                        BasicText(tr("submissionMigration.packetWarning", "Local review only: this packet includes canvas text, original transaction IDs and recovery evidence. It is not sent to the backend or diagnostic log."),
+                        BasicText(Strings.submissionMigration.packetWarning(),
                             style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
                         val pages = ((packet.length + 4095) / 4096).coerceAtLeast(1)
                         val page = packetPage.coerceIn(0, pages - 1)
@@ -123,18 +120,18 @@ import kotlinx.coroutines.launch
                         BasicText("${scopeIndex + 1}/${review.scopes.size} · ${page + 1}/$pages",
                             style = TextStyle(color = colors.contentMuted, fontSize = 11.sp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            ShellButton(tr("submissionMigration.previousPage", "Previous packet page"), enabled = !busy && page > 0,
+                            ShellButton(Strings.submissionMigration.previousPage(), enabled = !busy && page > 0,
                                 onClick = { packetPage = page - 1 })
-                            ShellButton(tr("submissionMigration.nextPage", "Next packet page"), enabled = !busy && page + 1 < pages,
+                            ShellButton(Strings.submissionMigration.nextPage(), enabled = !busy && page + 1 < pages,
                                 onClick = { packetPage = page + 1 })
                         }
                         SelectionContainer { BasicText(packet.substring(start, end), style = TextStyle(color = colors.contentText, fontSize = 11.sp)) }
                     }
                     ShellButton(label = when {
-                        armed -> tr("submissionMigration.confirm", "Confirm this step")
-                        reopening -> tr("submissionMigration.reopen", "Review reopening (keep current data)")
-                        published -> tr("submissionMigration.activate", "Review activation")
-                        else -> tr("submissionMigration.publish", "Review local publication")
+                        armed -> Strings.submissionMigration.confirm()
+                        reopening -> Strings.submissionMigration.reopen()
+                        published -> Strings.submissionMigration.activate()
+                        else -> Strings.submissionMigration.publish()
                     }, enabled = valid() && !busy, onClick = { perform() })
                     }
                 }

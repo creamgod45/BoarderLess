@@ -1,5 +1,6 @@
 package cg.creamgod.boarderless.feature.canvas
 
+import cg.creamgod.boarderless.i18n.Strings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.text.BasicText
@@ -18,7 +19,7 @@ import cg.creamgod.boarderless.i18n.tr
     var visible by remember(review) { mutableStateOf(false) }
     var scope by remember(review) { mutableStateOf(0) }
     var page by remember(review, scope) { mutableStateOf(0) }
-    ShellButton(tr("submissionMigration.inspectPacket", "Show / hide full local review packet"), enabled = enabled,
+    ShellButton(Strings.submissionMigration.inspectPacket(), enabled = enabled,
         onClick = { visible = !visible })
     if (!visible || review.scopes.isEmpty()) return
     val packet = remember(review, scope) { review.scopePacket(scope) }
@@ -28,16 +29,16 @@ import cg.creamgod.boarderless.i18n.tr
     var end = minOf(packet.length, start + 4096)
     if (start > 0 && packet[start].isLowSurrogate() && packet[start - 1].isHighSurrogate()) start--
     if (end < packet.length && packet[end - 1].isHighSurrogate() && packet[end].isLowSurrogate()) end--
-    BasicText(tr("submissionMigration.packetWarning", "Local review only: this packet includes canvas text, original transaction IDs and recovery evidence. It is not sent to the backend or diagnostic log."),
+    BasicText(Strings.submissionMigration.packetWarning(),
         style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
     BasicText("${scope + 1}/${review.scopes.size} · ${current + 1}/$pages", style = TextStyle(color = colors.contentMuted, fontSize = 11.sp))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        ShellButton(tr("submissionMigration.previousScope", "Previous scope"), enabled = enabled && scope > 0, onClick = { scope-- })
-        ShellButton(tr("submissionMigration.nextScope", "Next scope"), enabled = enabled && scope + 1 < review.scopes.size, onClick = { scope++ })
+        ShellButton(Strings.submissionMigration.previousScope(), enabled = enabled && scope > 0, onClick = { scope-- })
+        ShellButton(Strings.submissionMigration.nextScope(), enabled = enabled && scope + 1 < review.scopes.size, onClick = { scope++ })
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        ShellButton(tr("submissionMigration.previousPage", "Previous packet page"), enabled = enabled && current > 0, onClick = { page = current - 1 })
-        ShellButton(tr("submissionMigration.nextPage", "Next packet page"), enabled = enabled && current + 1 < pages, onClick = { page = current + 1 })
+        ShellButton(Strings.submissionMigration.previousPage(), enabled = enabled && current > 0, onClick = { page = current - 1 })
+        ShellButton(Strings.submissionMigration.nextPage(), enabled = enabled && current + 1 < pages, onClick = { page = current + 1 })
     }
     SelectionContainer { BasicText(packet.substring(start, end), style = TextStyle(color = colors.contentText, fontSize = 11.sp)) }
 }

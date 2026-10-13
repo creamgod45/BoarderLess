@@ -6834,7 +6834,7 @@ fun WorkspaceScreen(
                     val realtimeBackend = repository as? BackendWorkspaceRepository
                     if (realtimeBackend?.canReviewLegacyMigration == true) {
                         ShellButton(
-                            label = cg.creamgod.boarderless.i18n.tr("submissionMigration.openPreview", "Review local draft storage"),
+                            label = Strings.submissionMigration.openPreview(),
                             icon = ShellIcon.History,
                             enabled = activeSession != null && !connectionFailed && !workspaceSwitchInProgress &&
                                 !syncInProgress && !draftPublicationBusy && submissionQueue.isEmpty && editingId == null &&

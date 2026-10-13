@@ -1,5 +1,6 @@
 package cg.creamgod.boarderless.feature.canvas
 
+import cg.creamgod.boarderless.i18n.Strings
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
@@ -50,25 +51,21 @@ import kotlinx.coroutines.ensureActive
         Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing), contentAlignment = Alignment.Center) {
             GlassSurface(Modifier.widthIn(max = 760.dp).fillMaxWidth(0.94f).fillMaxHeight(0.85f)) {
                 Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    BasicText(tr("submissionMigration.title", "Review durable draft migration"), style = TextStyle(color = colors.contentText, fontSize = 18.sp))
-                    BasicText(tr("submissionMigration.previewOnly", "Read-only source review. No data is migrated, no transaction is resent, and no storage mode is changed. Publication and activation are not yet connected on this platform."), style = TextStyle(color = colors.contentMuted, fontSize = 13.sp))
-                    if (busy) BasicText(tr("submissionMigration.reading", "Reading complete local source…"), style = TextStyle(color = colors.contentMuted, fontSize = 13.sp))
-                    if (failed) BasicText(tr("submissionMigration.previewFailed", "Cannot confirm the complete source. A missing legacy scope/archive catalog, identity/counter, corrupt data or changed source needs recovery; original data is retained."), style = TextStyle(color = colors.danger, fontSize = 13.sp))
+                    BasicText(Strings.submissionMigration.title(), style = TextStyle(color = colors.contentText, fontSize = 18.sp))
+                    BasicText(Strings.submissionMigration.previewOnly(), style = TextStyle(color = colors.contentMuted, fontSize = 13.sp))
+                    if (busy) BasicText(Strings.submissionMigration.reading(), style = TextStyle(color = colors.contentMuted, fontSize = 13.sp))
+                    if (failed) BasicText(Strings.submissionMigration.previewFailed(), style = TextStyle(color = colors.danger, fontSize = 13.sp))
                     review?.let { packet ->
                         BasicText("Source SHA-256: ${packet.sourceDigest}\nPlan SHA-256: ${packet.planDigest}", style = TextStyle(color = colors.contentMuted, fontSize = 11.sp))
                         LegacyMigrationFullPacketReview(packet, enabled = !busy && gate())
                         packet.scopes.forEachIndexed { index, item ->
-                            BasicText(tr("submissionMigration.scope", "Scope {index}: {hash}\nDraft operations: {operations}; pending: {pending}; stopped: {stopped}\nFences: {fences}; deletion evidence: {deletions}; sequence floor: {floor}; quarantined: {quarantined}",
-                                "index" to index + 1, "hash" to item.scopeHash, "operations" to item.draftOperationCount,
-                                "pending" to item.hasPendingWire, "stopped" to item.stoppedWireCount, "fences" to item.fenceCount,
-                                "deletions" to item.deletionEvidenceCount, "floor" to item.minimumClientSequence,
-                                "quarantined" to item.retryQuarantined), style = TextStyle(color = colors.contentText, fontSize = 12.sp))
+                            BasicText(Strings.submissionMigration.scope(index + 1, item.scopeHash, item.draftOperationCount, item.hasPendingWire, item.stoppedWireCount, item.fenceCount, item.deletionEvidenceCount, item.minimumClientSequence, item.retryQuarantined), style = TextStyle(color = colors.contentText, fontSize = 12.sp))
                         }
                     }
-                    ShellButton(tr("submissionMigration.catalogToggle", "Supplement original scope/archive locators"),
+                    ShellButton(Strings.submissionMigration.catalogToggle(),
                         enabled = !busy, onClick = { catalogVisible = !catalogVisible })
                     if (catalogVisible) {
-                        BasicText(tr("submissionMigration.catalogHint", "Optional private JSON: {\"version\":1,\"scopes\":[{\"apiBase\":\"exact original /api/v1 URL\",\"userId\":\"original ID\",\"clientId\":\"original ID\",\"workspaceId\":\"original ID\"}],\"stopped\":[{\"scope\":{\"apiBase\":\"…\",\"userId\":\"…\",\"clientId\":\"…\",\"workspaceId\":\"…\"},\"transactionId\":\"original transaction ID\"}]}. Use original values, never API keys. This is only locator input; records must match existing hashes and complete contents. Nothing is saved or sent."), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
+                        BasicText(Strings.submissionMigration.catalogHint(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
                         BasicTextField(catalogDraft, onValueChange = { next ->
                             val fits = next.length <= LegacyMigrationCatalogInput.MaximumBytes && runCatching {
                                 next.encodeToByteArray(throwOnInvalidSequence = true).size <= LegacyMigrationCatalogInput.MaximumBytes
@@ -77,13 +74,13 @@ import kotlinx.coroutines.ensureActive
                             if (fits) { catalogDraft = next; review = null; failed = false }
                         }, enabled = !busy && gate(), textStyle = TextStyle(color = colors.contentText, fontSize = 12.sp),
                             modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp, max = 180.dp).padding(6.dp))
-                        if (catalogTooLarge) BasicText(tr("submissionMigration.catalogLimit", "Input exceeds 4 MiB or contains invalid Unicode; it was not accepted."), style = TextStyle(color = colors.danger, fontSize = 12.sp))
+                        if (catalogTooLarge) BasicText(Strings.submissionMigration.catalogLimit(), style = TextStyle(color = colors.danger, fontSize = 12.sp))
                     }
-                    ShellButton(tr("submissionMigration.refresh", "Read source again"), enabled = !busy && gate(), onClick = {
+                    ShellButton(Strings.submissionMigration.refresh(), enabled = !busy && gate(), onClick = {
                         submittedCatalog = catalogDraft.takeIf { it.isNotBlank() }
                         revision++
                     })
-                    ShellButton(tr("submissionMigration.close", "Close (retain records)"), onClick = onDismiss)
+                    ShellButton(Strings.submissionMigration.close(), onClick = onDismiss)
                 }
             }
         }
