@@ -27,6 +27,8 @@ import kotlinx.coroutines.*
     onTextEditingChange: (Boolean) -> Unit = {},
     onInsertReference: ((GiphyItem, String) -> Unit)? = null,
     onKeyChange: (String) -> Unit = {},
+    /** Key already accepted in this session; the panel is recreated each time it is reopened. */
+    sessionKey: String = "",
 ) {
     val colors = BoarderLessTheme.colors
     val searchLanguage = giphySearchLanguage(Localization.language.tag)
@@ -38,8 +40,9 @@ import kotlinx.coroutines.*
     // Report the actual fields as well as the library's focus group. Ancestor canvas handlers
     // run before TextField editing handlers and must yield even during a focus transition.
     DisposableEffect(Unit) { onDispose { editingCallback(false) } }
-    var keyDraft by remember { mutableStateOf(runtime.giphyApiKey.orEmpty()) }
-    var activeKey by remember { mutableStateOf(runtime.giphyApiKey.orEmpty()) }
+    val initialKey = sessionKey.ifBlank { runtime.giphyApiKey.orEmpty() }
+    var keyDraft by remember { mutableStateOf(initialKey) }
+    var activeKey by remember { mutableStateOf(initialKey) }
     var query by remember { mutableStateOf("") }
     var issuedQuery by remember { mutableStateOf<String?>(null) }
     var pendingQuery by remember { mutableStateOf<String?>(null) }

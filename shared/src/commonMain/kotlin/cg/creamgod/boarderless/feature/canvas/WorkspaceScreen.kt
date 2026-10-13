@@ -7143,6 +7143,7 @@ fun WorkspaceScreen(
                         reduceMotion,
                         onTextEditingChange = { giphyTextEditing = it },
                         onKeyChange = { externalGiphyKey = it },
+                        sessionKey = externalGiphyKey,
                         onInsertReference = if (!repository.supportsExternalMedia || inputBlocked || history.workspace.objects.values.any { it.zIndex == Long.MAX_VALUE }) null else ({ item, key ->
                             externalGiphyKey = key
                             val node = cg.creamgod.boarderless.domain.model.ExternalMediaNode(
