@@ -1108,6 +1108,9 @@ class BackendWorkspaceRepository(
     /** Used only while holding submissionMutex, before settlement removes the journal head. */
     private suspend fun pendingHistoryOperation(pending: PendingWorkspaceSubmission): WorkspaceOperation? {
         val journal = draftPersistence.journal(pending.scope) ?: return null
+        // An interrupted wire cleanup leaves the journal already rebased past the acknowledged head;
+        // the original operation is then unavailable and the saved wire is reused without history.
+        if (journal.baseVersion > pending.request.baseVersion) return null
         check(journal.baseVersion == pending.request.baseVersion)
         val head = checkNotNull(journal.operations.firstOrNull())
         check(head.operationId == pending.localOperationId)

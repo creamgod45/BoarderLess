@@ -194,7 +194,7 @@ class AiProbeDiagnosticsTest {
                         )
                     }
                 assertFails { runAiUnderstandingProbe(server, credentials, secrets, { true }, {}, c, events::add) }
-                assertEquals(AiProbeFailure.Incomplete, events.last().failure)
+                assertEquals(AiProbeFailure.EmptyResponse, events.last().failure)
                 assertFalse(events.any { it.stage == AiProbeStage.Completed })
             }
         }

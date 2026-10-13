@@ -102,6 +102,14 @@ internal class SettingsWorkspaceDraftPersistence(
     ) = journals.append(scope, session, before, operation)
 
     override fun stage(entry: PendingWorkspaceSubmission) {
+        val advanced = journals.load(entry.scope)?.let {
+            it.baseVersion > entry.request.baseVersion && it.operations.firstOrNull()?.operationId != entry.localOperationId
+        } == true
+        if (advanced) {
+            // Interrupted wire cleanup: the journal already settled this head, so only the saved wire is reused.
+            submissions.save(entry)
+            return
+        }
         entry.historyIntent?.let { intent ->
             val journal = checkNotNull(journals.load(entry.scope))
             check(journal.operations.firstOrNull()?.operationId == entry.localOperationId &&

@@ -26,14 +26,17 @@ class BackendCanvasRestorationFixtureTest {
         assertTrue(workspace.relations.values.any { it.version == 3L })
     }
 
-    @Test fun officialRestoreRequestCurrentlyRejectedForUnnormalizedVersionKeysAndMissingCas() {
+    @Test fun officialRestoreObjectsRequestIsAcceptedButRelationsAreRejectedForMissingCas() {
         val body = fixture("20-restore-objects-relations-accepted").getValue("request").jsonObject.getValue("body")
         val request = json.decodeFromJsonElement<SubmitOperationsRequest>(body)
         assertEquals(listOf("restore_objects", "restore_relations"), request.operations.map { it.kind })
-        request.operations.forEach { assertFailsWith<IllegalArgumentException> { validateRestorationWire(it) } }
+        // restore_objects is normalized; the official restore_relations carries no expectedObjectVersions,
+        // which the app validator still requires. Not repaired here: a backend contract question.
+        validateRestorationWire(request.operations.single { it.kind == "restore_objects" })
+        assertFailsWith<IllegalArgumentException> { validateRestorationWire(request.operations.single { it.kind == "restore_relations" }) }
     }
 
-    @Test fun officialRestoreResponseCurrentlyRejectedForUnnormalizedRestoredVersionKeys() {
+    @Test fun officialRestoreResponseRestoredVersionKeysMatchTheRestoredIds() {
         val body = fixture("20-restore-objects-relations-accepted").getValue("response").jsonObject.getValue("body")
         val accepted = json.decodeFromJsonElement<AcceptedOperationsDto>(body)
         for (record in accepted.operations) {
@@ -44,7 +47,7 @@ class BackendCanvasRestorationFixtureTest {
                     .jsonArray
                     .map { it.jsonPrimitive.content }
                     .toSet()
-            assertNotEquals(
+            assertEquals(
                 ids,
                 record.payload
                     .getValue("restoredVersions")
