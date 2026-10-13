@@ -86,3 +86,31 @@ internal fun penEditorTransform(
     if (!scale.isFinite() || scale <= 0f) return null
     return PenEditorTransform(viewport.center, Vec2(width / 2, height / 2), scale)
 }
+
+/** Two-finger camera transform: the editor point under the starting midpoint stays under the
+ * current midpoint while the finger distance scales the zoom. Device-local; never edits the path. */
+internal fun PenEditorTransform.pinchFrom(
+    start: PenEditorViewport,
+    startA: Vec2,
+    startB: Vec2,
+    nowA: Vec2,
+    nowB: Vec2,
+): PenEditorViewport {
+    fun distance(a: Vec2, b: Vec2) = kotlin.math.hypot((a.x - b.x).toDouble(), (a.y - b.y).toDouble())
+    val before = distance(startA, startB)
+    val after = distance(nowA, nowB)
+    if (before < 1.0 || after < 1.0) return start
+    val zoom = (start.zoom.toDouble() * after / before).coerceIn(PenEditorViewport.MIN_ZOOM.toDouble(), PenEditorViewport.MAX_ZOOM.toDouble()).toFloat()
+    val newScale = scale * (zoom / start.zoom)
+    val startMid = Vec2((startA.x + startB.x) / 2f, (startA.y + startB.y) / 2f)
+    val nowMid = Vec2((nowA.x + nowB.x) / 2f, (nowA.y + nowB.y) / 2f)
+    val anchor = local(startMid)
+    return PenEditorViewport(
+        Vec2(
+            (anchor.x - (nowMid.x - screenCenter.x) / newScale).coerceIn(-1_000_000f, 1_000_000f),
+            (anchor.y - (nowMid.y - screenCenter.y) / newScale).coerceIn(-1_000_000f, 1_000_000f),
+        ),
+        zoom,
+    )
+}
+

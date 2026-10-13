@@ -517,7 +517,13 @@ internal fun PenEditorDialog(
                                         try {
                                             while (true) {
                                                 val event = awaitPointerEvent()
-                                                if (event.changes.count { it.pressed } > 1) break
+                                                if (event.changes.count { it.pressed } > 1) {
+                                                    committed = true // Camera only; keep what the pan had shown.
+                                                    val base = viewport
+                                                    penPinch(base, penEditorTransform(latestHistory.draft.viewBox, base,
+                                                        previewSize.width.toFloat(), previewSize.height.toFloat(), padding) ?: transform) { viewport = it }
+                                                    break
+                                                }
                                                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
                                                 val delta = change.position - down.position
                                                 viewport = transform.panFrom(initialViewport, Vec2(delta.x, delta.y))
@@ -553,7 +559,13 @@ internal fun PenEditorDialog(
                                         try {
                                             while (true) {
                                                 val event = awaitPointerEvent()
-                                                if (event.changes.count { it.pressed } > 1) break
+                                                if (event.changes.count { it.pressed } > 1) {
+                                                    gesture = null; alignment = null // Drop the unfinished edit; no history step.
+                                                    val base = latestViewport
+                                                    penPinch(base, penEditorTransform(latestHistory.draft.viewBox, base,
+                                                        previewSize.width.toFloat(), previewSize.height.toFloat(), padding) ?: transform) { viewport = it }
+                                                    break
+                                                }
                                                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
                                                 if (change.position != change.previousPosition &&
                                                     (
@@ -691,5 +703,36 @@ internal fun PenEditorDialog(
                 }
             }
         }
+    }
+}
+
+/** Runs until fewer than two fingers remain. Pinch changes only the editor camera. */
+private suspend fun androidx.compose.ui.input.pointer.AwaitPointerEventScope.penPinch(
+    start: PenEditorViewport,
+    transform: PenEditorTransform,
+    onViewport: (PenEditorViewport) -> Unit,
+) {
+    var first: androidx.compose.ui.input.pointer.PointerId? = null
+    var second: androidx.compose.ui.input.pointer.PointerId? = null
+    var startA = Vec2.Zero
+    var startB = Vec2.Zero
+    while (true) {
+        val event = awaitPointerEvent()
+        val pressed = event.changes.filter { it.pressed }
+        if (pressed.size < 2) {
+            event.changes.forEach { it.consume() }
+            return
+        }
+        if (first == null || second == null || pressed.none { it.id == first } || pressed.none { it.id == second }) {
+            val a = pressed[0]
+            val b = pressed[1]
+            first = a.id; second = b.id
+            startA = Vec2(a.position.x, a.position.y); startB = Vec2(b.position.x, b.position.y)
+            continue
+        }
+        val a = pressed.first { it.id == first }
+        val b = pressed.first { it.id == second }
+        onViewport(transform.pinchFrom(start, startA, startB, Vec2(a.position.x, a.position.y), Vec2(b.position.x, b.position.y)))
+        event.changes.forEach { it.consume() }
     }
 }
