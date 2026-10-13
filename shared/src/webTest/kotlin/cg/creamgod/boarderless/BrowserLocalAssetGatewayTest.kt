@@ -120,12 +120,12 @@ class BrowserLocalAssetGatewayTest {
             var id: String? = null
             assertFails {
                 // Cleanup's bounded timeout uses real browser time, not runTest's eager virtual clock.
-                withContext(Dispatchers.Default) { AssetImportCoordinator(gateway) { allocated ->
+                withContext(Dispatchers.Default) { AssetImportCoordinator(gateway, beforeComplete = { allocated ->
                     id = allocated
                     assertEquals(AssetStatus.Pending, repo.getAsset(session, allocated).status)
                     assertFails { gateway.authorize(session, allocated) }
                     error("Receipt not started")
-                }.import(session, Source(png)) }
+                }).import(session, Source(png)) }
             }
             assertNotNull(id)
             assertTrue(repo.listAssets(session).isEmpty())

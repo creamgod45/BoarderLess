@@ -288,13 +288,13 @@ internal object QuickSchemeBundleCodec {
                     return bytes
                 }
             }
-            val coordinator = AssetImportCoordinator(gateway, retainCheckpointOnFailure = true) { destinationId ->
+            val coordinator = AssetImportCoordinator(gateway, retainCheckpointOnFailure = true, beforeComplete = { destinationId ->
                 require(readBytes == asset.byteSize && hashText(digest.digest()) == asset.checksum)
                 authority()
                 beforeComplete(asset.sourceId, destinationId)
                 // A durable browser transaction can yield; permissions/version may change while waiting.
                 authority()
-            }
+            })
             val recovered = readImported(asset)
             authority()
             val imported = recovered ?: coordinator.import(destination, source) { onStage(asset.sourceId, it) }

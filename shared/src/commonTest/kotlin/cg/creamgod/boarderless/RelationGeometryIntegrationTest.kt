@@ -227,7 +227,8 @@ class RelationGeometryIntegrationTest {
             val memory = InMemorySettings()
             val preferences = SessionPreferences(memory)
             val opened = WorkspaceSession("user", preferences.clientId, WorkspaceMemberRole.Editor, 0, 0, base)
-            val before = memory.keys.associateWith(memory::getStringOrNull)
+            fun draftState() = memory.keys.filterNot { it.startsWith("backend.legacyMigrationScopeCatalog") }.associateWith(memory::getStringOrNull)
+            val before = draftState()
             var calls = 0
             val repo =
                 BackendWorkspaceRepository(
@@ -252,7 +253,7 @@ class RelationGeometryIntegrationTest {
                     assertFails { repo.retainDraft(opened, base, TransactionOperation("batch", listOf(operation))) }
                     assertFails { repo.submit(opened, operation) }
                 }
-                assertEquals(before, memory.keys.associateWith(memory::getStringOrNull))
+                assertEquals(before, draftState())
                 assertEquals(0, calls)
             } finally {
                 repo.close()

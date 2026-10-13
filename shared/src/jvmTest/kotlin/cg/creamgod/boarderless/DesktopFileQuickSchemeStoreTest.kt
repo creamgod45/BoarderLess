@@ -97,7 +97,7 @@ class DesktopFileQuickSchemeStoreTest {
             val valid = Json.parseToJsonElement(original.decodeToString()).jsonObject
             val invalid =
                 listOf(
-                    JsonObject(valid + ("version" to JsonPrimitive(2))).toString(),
+                    JsonObject(valid + ("version" to JsonPrimitive(4))).toString(),
                     JsonObject(valid - "nextId").toString(),
                     JsonObject(valid + ("nextId" to JsonPrimitive(1))).toString(),
                     "{\"version\":1,\"version\":1,\"nextId\":2,\"items\":[]}",
