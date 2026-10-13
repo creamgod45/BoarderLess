@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -51,6 +53,7 @@ internal data class ComponentLibraryEntry(
     val colorToken: String,
     val shape: NodeShape = NodeShape.RoundedRectangle,
     val categories: Set<ComponentLibraryCategory> = componentCategories(id, shape),
+    val previewPayload: ClipboardPayload? = null,
 )
 
 internal enum class ComponentLibraryCategory(
@@ -396,6 +399,7 @@ internal fun ComponentLibrary(
                                         ),
                             ) {
                                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    entry.previewPayload?.let { QuickSchemePreview(it, Modifier.fillMaxWidth().height(120.dp)) }
                                     BasicText(
                                         text = entry.title,
                                         style =

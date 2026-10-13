@@ -1,5 +1,11 @@
 # 當前 loop 剩餘目標
 
+## 2026-10-13：物件庫可編輯向量圖形預設（源碼已接、未驗證）
+
+- 新增八個 native VectorPath 預設：tag／bookmark／cloud／speech／heart／gear／burst／banner，僅 move／line／cubic／close 與合法 paint，不用 SVG markup、新 backend shape token 或外部素材。方形 viewBox 與插入尺寸保持比例，路徑保留在 ClipboardNode.vectorPath。
+- Geometry 分類提供英／中文標題與鋼筆編輯提示，卡片增加真 QuickSchemePreview 路徑預覽；沿既有 drag／click insert、pastePayload capability gate、交易、Undo／Redo、clipboard／方案簿。後端無 vectorPath capability 不退成方形寫入。原 25 shape token 與既有 starters 不改。
+- 這不是完整 Mermaid shape 覆蓋或 Freeform 全庫仿製完成；source 交付未 compile／test／render／HTTP，六主線 active。全部功能後集中驗收，視覺與遮擋由使用者判定，效能最後。
+
 ## 2026-10-13：四平台舊方案簿明確恢復宿主（源碼已接、未驗證）
 
 - 核對 Android／iOS／Web 已傳 private persistent／awaited library，並非退 Settings；原缺口是舊索引定義無明確恢復入口。新增 lazy legacyQuickSchemeCatalogReader capability，由四平台 App 宿主提供，Workspace 優先 host reader、再 repo reader；Desktop Local 也可審閱，不限 Server。

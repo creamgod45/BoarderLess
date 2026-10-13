@@ -753,6 +753,15 @@
     "connectionIntent": "Connection • {intent}"
   },
   "library": {
+    "vectorTag": "Tag",
+    "vectorBookmark": "Bookmark",
+    "vectorCloud": "Cloud",
+    "vectorSpeech": "Speech bubble",
+    "vectorHeart": "Heart",
+    "vectorGear": "Gear",
+    "vectorBurst": "Burst",
+    "vectorBanner": "Banner",
+    "vectorPresetDescription": "Editable vector path · customize with the pen editor",
     "categories": "Categories",
     "allCategories": "All categories",
     "categoryGeometry": "Basic geometry",

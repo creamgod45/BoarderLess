@@ -1060,6 +1060,13 @@ private fun builtInComponents(density: Float): List<BuiltInComponent> {
                 "paper",
                 shape,
             )
+        } + vectorShapePresets().map { preset ->
+            val payload = ClipboardPayload(nodes = listOf(
+                node(preset.id, 0f, 0f, preset.title, shape = NodeShape.Rectangle,
+                    width = nodeWidth, height = nodeWidth).copy(vectorPath = preset.path),
+            ))
+            BuiltInComponent(ComponentLibraryEntry(preset.id, preset.title, Strings.library.vectorPresetDescription(),
+                "paper", NodeShape.Rectangle, setOf(ComponentLibraryCategory.Geometry), previewPayload = payload), payload)
         }
 }
 

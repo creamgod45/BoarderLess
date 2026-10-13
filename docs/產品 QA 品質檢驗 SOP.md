@@ -1,5 +1,11 @@
 # BoarderLess 產品 QA 品質檢驗 SOP
 
+## 物件庫向量預設（最後集中驗收）
+
+Geometry／All／搜尋／收藏／最近使用驗八個 vector 預設：標籤、書籤、雲朵、對話泡泡、愛心、齒輪、放射形、橫幅。卡片真路徑預覽須與插入輪廓一致；click／drag 保留 vectorPath commands、viewBox、paint 與正常 transform，不改成新的 shape token。放大／旋轉、鋼筆編輯、連線、選取、Undo／Redo、clipboard、方案簿與跨裝置定義保存另驗。
+
+不支援 vectorPath 的後端須在既有 capability gate 拒絕，不默默寫方形。AI flowchart 的 shape 近似仍是語意表達，不承諾保真輪廓。八個 presets 不代表 Mermaid／Freeform 全部 shape 已支持。四端圖形視覺與文字／線條遮擋由使用者判定，目前未執行，效能最後。
+
 ## 四平台舊方案簿宿主恢復（最後集中驗收）
 
 Android／iOS／Web／Desktop Local 與 Server 分別驗「恢復裝置舊方案簿」入口；APP 啟動／開窗不自動讀舊 Settings。先確認平台原 Settings default factory 指向實際舊索引 namespace，再手動讀取、逐筆審原 JSON／副本／結構預覽，明確同意 identified save。目的地沿目前 private library，不能混合 Local／Server namespace 或猜素材 workspace。

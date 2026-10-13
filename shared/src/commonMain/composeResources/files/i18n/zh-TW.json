@@ -781,6 +781,15 @@
     "connectionIntent": "連線 • {intent}"
   },
   "library": {
+    "vectorTag": "標籤",
+    "vectorBookmark": "書籤",
+    "vectorCloud": "雲朵",
+    "vectorSpeech": "對話泡泡",
+    "vectorHeart": "愛心",
+    "vectorGear": "齒輪",
+    "vectorBurst": "放射形",
+    "vectorBanner": "橫幅",
+    "vectorPresetDescription": "可編輯向量路徑 · 可用鋼筆編輯器自訂",
     "categories": "分類",
     "allCategories": "全部分類",
     "categoryGeometry": "基本幾何",
