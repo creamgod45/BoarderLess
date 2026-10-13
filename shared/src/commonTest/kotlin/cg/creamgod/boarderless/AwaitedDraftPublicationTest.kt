@@ -28,6 +28,10 @@ class AwaitedDraftPublicationTest {
                 barrier()
                 engine.retainDraft(session, before, operation)
             }
+            override suspend fun retainHistoryDraftAwaited(session: WorkspaceSession, before: Workspace,
+                operation: WorkspaceOperation, intent: WorkspaceHistoryIntent, beforeHistory: WorkspaceHistory?) {
+                retainDraftAwaited(session, before, operation)
+            }
         }
         val operation = CreateObjectsOperation("draft", listOf(TextNode(CanvasObjectId("draft-node"),
             transform = CanvasTransform(Vec2.Zero, CanvasSize(40f, 40f)), text = "中文🙂")))
