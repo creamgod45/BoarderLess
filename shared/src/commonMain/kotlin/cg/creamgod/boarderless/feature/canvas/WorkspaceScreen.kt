@@ -1218,6 +1218,7 @@ fun WorkspaceScreen(
     var componentLibraryFocused by remember { mutableStateOf(false) }
     var giphyTextEditing by remember { mutableStateOf(false) }
     var externalGiphyKey by remember { mutableStateOf(mediaImportRuntime.giphyApiKey.orEmpty()) }
+    var giphyRetryAction by remember { mutableStateOf<((cg.creamgod.boarderless.domain.media.ExternalMediaReference) -> Unit)?>(null) }
     var editingId by remember { mutableStateOf<CanvasObjectId?>(null) }
     var pendingNewNode by remember { mutableStateOf<TextNode?>(null) }
     var dragPreviews by remember { mutableStateOf<Map<CanvasObjectId, Vec2>>(emptyMap()) }
@@ -5226,6 +5227,7 @@ fun WorkspaceScreen(
             val externalNodes = history.workspace.objects.values.filterIsInstance<cg.creamgod.boarderless.domain.model.ExternalMediaNode>()
             val giphyReferences = remember(session?.userId, session?.clientId, session?.workspace?.id, externalGiphyKey, presenceActivity.epoch) { GiphyVisibleReferences() }
             val giphyClient = remember(giphyReferences) { GiphyClient(externalGiphyKey) }
+            SideEffect { giphyRetryAction = { giphyReferences.retry(it) } }
             DisposableEffect(giphyClient) { onDispose { giphyClient.close() } }
             val giphyOwner = session
             val giphyKey = externalGiphyKey
@@ -5248,7 +5250,7 @@ fun WorkspaceScreen(
                 }
                 externalNodes.forEach { node -> key(giphyReferences, node.id) {
                     ExternalMediaNodeCard(node, viewport, canvasSize, dragPreviews[node.id] ?: Vec2.Zero, transformPreviews[node.id], externalGiphyKey.isNotBlank(),
-                        resolutions[node.reference] ?: GiphyReferenceResolution.Pending, { giphyReferences.retry(node.reference) },
+                        resolutions[node.reference] ?: GiphyReferenceResolution.Pending,
                         mediaImportRuntime, reduceMotion, node.id in selectedIds, !canvasInteractionBlocked, !inputBlocked,
                         canPublish = { giphyScopeCurrent() &&
                             (history.workspace.objects[node.id] as? cg.creamgod.boarderless.domain.model.ExternalMediaNode)?.reference == node.reference &&
@@ -7148,7 +7150,7 @@ fun WorkspaceScreen(
                                 altText = item.alt_text.ifBlank { item.title }.take(8192),
                                 zIndex = (history.workspace.objects.values.maxOfOrNull { it.zIndex } ?: 0) + 1,
                                 transform = CanvasTransform(viewport.screenToWorld(Vec2(canvasSize.width / 2f, canvasSize.height / 2f)),
-                                    CanvasSize(240f * density, 360f * density)))
+                                    giphyInsertionSize(item, density)))
                             dispatchOperation(CreateObjectsOperation("giphy-${node.id.value}", listOf(node)), onSaved = {
                                 selectedIds = setOf(node.id); showComponentLibrary = false
                             })
@@ -7969,6 +7971,13 @@ fun WorkspaceScreen(
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
                                     style = TextStyle(color = colors.contentMuted, fontSize = 11.sp),
                                 )
+                                if (media is cg.creamgod.boarderless.domain.model.ExternalMediaNode) {
+                                    ShellButton(
+                                        label = Strings.giphy.refreshPreview(),
+                                        enabled = !inputBlocked && giphyRetryAction != null,
+                                        onClick = { giphyRetryAction?.invoke(media.reference) },
+                                    )
+                                }
                                 BasicTextField(
                                     value = mediaAltTextDraft,
                                     onValueChange = { mediaAltTextDraft = it.take(500) },

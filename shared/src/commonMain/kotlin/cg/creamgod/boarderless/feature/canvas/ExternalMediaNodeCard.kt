@@ -16,6 +16,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
@@ -39,7 +42,7 @@ import kotlinx.coroutines.ensureActive
 /** URLs/frames live only in this visible scope. Reopening always resolves the durable ID again. */
 @Composable internal fun ExternalMediaNodeCard(
     node: ExternalMediaNode, viewport: Viewport, canvasSize: IntSize, previewDelta: Vec2, previewTransform: CanvasTransform?,
-    keyAvailable: Boolean, resolution: GiphyReferenceResolution, onRetry: () -> Unit, runtime: MediaImportRuntime, reduceMotion: Boolean, selected: Boolean,
+    keyAvailable: Boolean, resolution: GiphyReferenceResolution, runtime: MediaImportRuntime, reduceMotion: Boolean, selected: Boolean,
     interactionEnabled: Boolean, mutationEnabled: Boolean, canPublish: () -> Boolean, onSelect: () -> Unit, onDragPreview: (Vec2) -> Unit, onDragCancel: () -> Unit, onDragCommit: (Vec2) -> Unit,
 ) {
     val latestCanPublish by rememberUpdatedState(canPublish)
@@ -71,67 +74,77 @@ import kotlinx.coroutines.ensureActive
     }
     val naturalWidth = with(density) { transform.size.width.toDp() }
     val naturalHeight = with(density) { transform.size.height.toDp() }
-    val contentScale = minOf(naturalWidth.value / 240f, naturalHeight.value / 360f)
+    val shape = RoundedCornerShape(10.dp)
+    // Full-bleed media; the whole object is the drag/select target. Provider mark and playback control float on it.
     Box(Modifier.canvasObjectBounds(position, naturalWidth * viewport.zoom, naturalHeight * viewport.zoom)
         .graphicsLayer { rotationZ = transform.rotationDegrees }
-        .zIndex(node.zIndex.toFloat()).background(colors.contentSurface)
-        .border(if (selected) 2.dp else 1.dp, if (selected) colors.accent else colors.contentBorder)) {
-        Column(Modifier.wrapContentSize(Alignment.TopStart, unbounded = true).requiredSize(240.dp, 360.dp)
-            .graphicsLayer { scaleX = viewport.zoom * contentScale; scaleY = viewport.zoom * contentScale; transformOrigin = TransformOrigin(0f, 0f) }
-            .padding(8.dp)) {
-            BasicText(node.altText.ifBlank { "GIPHY · ${node.reference.id}" },
-                style = TextStyle(color = colors.contentText, fontSize = 13.sp), maxLines = 2, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth()
-                    .semantics {
-                        role = Role.Button
-                        onClick(label = Strings.a11y.selectThought()) {
-                            if (interactionEnabled) { currentSelect(); true } else false
-                        }
-                    }
-                    .pointerInput(interactionEnabled, mutationEnabled, node.locked, node.id, node.version, viewport.zoom, contentScale, transform.rotationDegrees) {
-                        if (interactionEnabled) awaitEachGesture {
-                            val down = awaitFirstDown(requireUnconsumed = true)
-                            down.consume()
-                            val motion = ObjectSelectionGesture(false,
-                                if (down.type == PointerType.Touch) viewConfiguration.touchSlop else 0f)
-                            var moved = false
-                            var delta = Vec2.Zero
-                            val completed = drag(down.id) { change ->
-                                val amount = change.positionChange()
-                                if (motion.move(Vec2(amount.x, amount.y)) && mutationEnabled && !node.locked) {
-                                    if (!moved) currentSelect()
-                                    moved = true
-                                    change.consume()
-                                    // The graphics layer already converts pointer pixels to the header's
-                                    // natural size. Apply its object scale and rotation once, without zoom twice.
-                                    delta = objectLocalDragToWorld(motion.displacement * contentScale, transform.rotationDegrees, 1f)
-                                    currentPreview(delta)
-                                }
-                            }
-                            when {
-                                !completed -> currentCancel()
-                                moved -> currentCommit(delta)
-                                motion.canTap -> currentSelect()
-                            }
-                        }
-                    })
-            if (!keyAvailable) BasicText(Strings.giphy.invalidKey(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
-            else {
-                val hint = when (resolution) {
-                    GiphyReferenceResolution.Pending -> Strings.giphy.loadingReference()
-                    GiphyReferenceResolution.Missing -> Strings.giphy.referenceMissing()
-                    is GiphyReferenceResolution.Failed -> when (resolution.issue) {
-                        GiphyIssue.RateLimited -> Strings.giphy.rateLimit()
-                        GiphyIssue.MissingKey, GiphyIssue.Unauthorized -> Strings.giphy.invalidKey()
-                        else -> Strings.giphy.previewUnavailable()
-                    }
-                    is GiphyReferenceResolution.Ready -> null
-                }
-                hint?.let { BasicText(it, style = TextStyle(color = colors.contentMuted, fontSize = 12.sp)) }
-                if (resolution !is GiphyReferenceResolution.Pending) ShellButton(Strings.giphy.refreshPreview(), onClick = onRetry)
+        .zIndex(node.zIndex.toFloat()).clip(shape).background(colors.contentSurface)
+        .border(if (selected) 2.dp else 1.dp, if (selected) colors.accent else colors.contentBorder, shape)
+        .semantics {
+            role = Role.Button
+            contentDescription = node.altText.ifBlank { "GIPHY" }
+            onClick(label = Strings.a11y.selectThought()) {
+                if (interactionEnabled) { currentSelect(); true } else false
             }
-            if (visible && latestCanPublish()) item?.let { GiphyAnimationPreview(it, bitmap, runtime, reduceMotion) }
-            GiphyAttribution()
         }
+        .pointerInput(interactionEnabled, mutationEnabled, node.locked, node.id, node.version, viewport.zoom, transform.rotationDegrees) {
+            if (interactionEnabled) awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = true)
+                down.consume()
+                val motion = ObjectSelectionGesture(false,
+                    if (down.type == PointerType.Touch) viewConfiguration.touchSlop else 0f)
+                var moved = false
+                var delta = Vec2.Zero
+                val completed = drag(down.id) { change ->
+                    val amount = change.positionChange()
+                    if (motion.move(Vec2(amount.x, amount.y)) && mutationEnabled && !node.locked) {
+                        if (!moved) currentSelect()
+                        moved = true
+                        change.consume()
+                        delta = objectLocalDragToWorld(motion.displacement, transform.rotationDegrees, viewport.zoom)
+                        currentPreview(delta)
+                    }
+                }
+                when {
+                    !completed -> currentCancel()
+                    moved -> currentCommit(delta)
+                    motion.canTap -> currentSelect()
+                }
+            }
+        }) {
+        val hint = when {
+            !keyAvailable -> Strings.giphy.invalidKey()
+            else -> when (resolution) {
+                GiphyReferenceResolution.Pending -> Strings.giphy.loadingReference()
+                GiphyReferenceResolution.Missing -> Strings.giphy.referenceMissing()
+                is GiphyReferenceResolution.Failed -> when (resolution.issue) {
+                    GiphyIssue.RateLimited -> Strings.giphy.rateLimit()
+                    GiphyIssue.MissingKey, GiphyIssue.Unauthorized -> Strings.giphy.invalidKey()
+                    else -> Strings.giphy.previewUnavailable()
+                }
+                is GiphyReferenceResolution.Ready -> null
+            }
+        }
+        if (keyAvailable && visible && latestCanPublish() && item != null) {
+            GiphyAnimationPreview(item, bitmap, runtime, reduceMotion, Modifier.fillMaxSize(), overlayControl = true)
+        } else if (hint != null) {
+            BasicText(hint, style = TextStyle(color = colors.contentMuted, fontSize = 12.sp), modifier = Modifier.align(Alignment.Center).padding(8.dp))
+        }
+        // Provider mark: 8.dp high, width follows the approved asset's aspect ratio.
+        Box(Modifier.align(Alignment.TopEnd).padding(4.dp)) { GiphyAttribution(width = 8.dp * 200f / 42f) }
     }
+}
+
+/** Default node box follows the GIF's own aspect ratio (about 260 dp on the long side) instead of a fixed portrait card. */
+internal fun giphyInsertionSize(item: GiphyItem, density: Float): CanvasSize {
+    val rendition = listOf("fixed_width", "downsized", "original").firstNotNullOfOrNull { name ->
+        item.images[name]?.let { r -> r.width.toFloatOrNull()?.let { w -> r.height.toFloatOrNull()?.let { h -> w to h } } }
+            ?.takeIf { (w, h) -> w > 0f && h > 0f }
+    }
+    val (w, h) = rendition ?: (1f to 1f)
+    val longSide = 260f
+    val ratio = (w / h).coerceIn(0.4f, 2.5f)
+    val width = if (ratio >= 1f) longSide else longSide * ratio
+    val height = width / ratio
+    return CanvasSize(width * density, height * density)
 }

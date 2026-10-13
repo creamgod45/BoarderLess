@@ -4,6 +4,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -38,6 +39,8 @@ internal fun giphyAnimationUrl(item: GiphyItem): String? =
     fallback: ImageBitmap?,
     runtime: MediaImportRuntime,
     reduceMotion: Boolean,
+    modifier: Modifier = Modifier,
+    overlayControl: Boolean = false,
 ) {
     val colors = BoarderLessTheme.colors
     val url = giphyAnimationUrl(item)
@@ -115,11 +118,55 @@ internal fun giphyAnimationUrl(item: GiphyItem): String? =
             }
         }
     }
+    val toggle = {
+        if (finished || failed) {
+            attempt++
+            playing = true
+            activated = true
+        } else {
+            activated = true
+            playing = !playing
+        }
+    }
+    val canAnimate = url != null && runtime.loadGiphyAnimation != null
+    val bounds = Modifier.onGloballyPositioned {
+        val area = it.boundsInWindow()
+        visible = area.width > 0f && area.height > 0f
+    }
+    if (overlayControl) {
+        Box(modifier.then(bounds)) {
+            (frame ?: fallback)?.let {
+                Image(
+                    it,
+                    contentDescription = item.alt_text.ifBlank { item.title },
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            if (canAnimate) {
+                Box(Modifier.align(Alignment.BottomEnd).padding(6.dp)) {
+                    ShellButton(
+                        label = if (playing) Strings.media.pauseAnimation() else Strings.media.playAnimation(),
+                        icon = if (playing) ShellIcon.Pause else ShellIcon.Play,
+                        showLabel = false,
+                        compact = true,
+                        enabled = !reduceMotion && activity.available && visible,
+                        onClick = toggle,
+                    )
+                }
+            }
+            if (failed) {
+                BasicText(
+                    Strings.giphy.previewUnavailable(),
+                    style = TextStyle(color = colors.contentMuted, fontSize = 11.sp),
+                    modifier = Modifier.align(Alignment.BottomStart).padding(6.dp),
+                )
+            }
+        }
+        return
+    }
     Box(
-        Modifier.fillMaxWidth().heightIn(min = 80.dp, max = 160.dp).onGloballyPositioned {
-            val bounds = it.boundsInWindow()
-            visible = bounds.width > 0f && bounds.height > 0f
-        },
+        Modifier.fillMaxWidth().heightIn(min = 80.dp, max = 160.dp).then(bounds),
     ) {
         (frame ?: fallback)?.let {
             Image(
@@ -130,23 +177,14 @@ internal fun giphyAnimationUrl(item: GiphyItem): String? =
             )
         }
     }
-    if (url != null && runtime.loadGiphyAnimation != null) {
+    if (canAnimate) {
         ShellButton(
             label = if (playing) Strings.media.pauseAnimation() else Strings.media.playAnimation(),
             icon = if (playing) ShellIcon.Pause else ShellIcon.Play,
             showLabel = false,
             compact = true,
             enabled = !reduceMotion && activity.available && visible,
-            onClick = {
-                if (finished || failed) {
-                    attempt++
-                    playing = true
-                    activated = true
-                } else {
-                    activated = true
-                    playing = !playing
-                }
-            },
+            onClick = toggle,
         )
     }
     if (failed) BasicText(Strings.giphy.previewUnavailable(), style = TextStyle(color = colors.contentMuted, fontSize = 11.sp))
