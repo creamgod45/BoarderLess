@@ -67,6 +67,7 @@ internal class IosMediaPicker(
                     }
                 }
             },
+            giphyKeyStore = cg.creamgod.boarderless.data.IosGiphyKeyStore(),
             loadGiphyAnimation = { url ->
                 cg.creamgod.boarderless.data.remote
                     .loadGiphyAnimation(url) { IosGifAnimation.decode(it) }

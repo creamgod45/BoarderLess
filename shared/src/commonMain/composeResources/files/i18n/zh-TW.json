@@ -476,6 +476,8 @@
     "queryHint": "按搜尋才送出，輸入時不請求。Beta 金鑰每小時 100 次 API 呼叫；保留 GIPHY 結果順序。",
     "keyHint": "輸入此平台的 GIPHY 金鑰，僅限本次面板使用，不儲存、不送往我們的後端。",
     "useKey": "使用金鑰",
+    "keyHintSaved": "輸入此平台的 GIPHY 金鑰。金鑰會存入本裝置受保護的金鑰庫，不送往我們的後端。",
+    "forgetKey": "忘記已儲存的金鑰",
     "search": "搜尋",
     "trending": "熱門",
     "cancel": "取消查詢",

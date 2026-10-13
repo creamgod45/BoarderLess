@@ -89,8 +89,10 @@ internal class MacKeychainVault(
 /** Linux libsecret via `secret-tool`; the secret is read from stdin. Unavailable without the tool. */
 internal class LibsecretVault(
     private val runner: ProcessRunner,
+    private val attributeValue: String = "boarderless-ai-token",
+    private val label: String = VAULT_SERVICE,
 ) : DesktopSecretVault {
-    private val attributes = listOf("service", "boarderless-ai-token")
+    private val attributes = listOf("service", attributeValue)
 
     override fun available() = runner.run(listOf("secret-tool", "--version"), null)?.exitCode?.let { true } ?: false
 
@@ -100,7 +102,7 @@ internal class LibsecretVault(
     }
 
     override fun write(secret: String): Boolean =
-        runner.run(listOf("secret-tool", "store", "--label=$VAULT_SERVICE") + attributes, secret)?.exitCode == 0
+        runner.run(listOf("secret-tool", "store", "--label=$label") + attributes, secret)?.exitCode == 0
 
     override fun delete(): Boolean = runner.run(listOf("secret-tool", "clear") + attributes, null)?.exitCode == 0
 }
@@ -187,13 +189,16 @@ internal fun desktopSecretVault(
     directory: Path,
     runner: ProcessRunner = SystemProcessRunner,
     osName: String = System.getProperty("os.name").orEmpty(),
+    service: String = VAULT_SERVICE,
+    linuxAttribute: String = "boarderless-ai-token",
+    windowsFileName: String = "ai-token.dpapi",
 ): DesktopSecretVault? {
     val name = osName.lowercase()
     val vault =
         when {
-            "mac" in name -> MacKeychainVault(runner)
-            "win" in name -> WindowsDpapiVault(runner, directory.resolve("ai-token.dpapi"))
-            else -> LibsecretVault(runner)
+            "mac" in name -> MacKeychainVault(runner, service)
+            "win" in name -> WindowsDpapiVault(runner, directory.resolve(windowsFileName))
+            else -> LibsecretVault(runner, linuxAttribute, service)
         }
     return vault.takeIf { it.available() }
 }

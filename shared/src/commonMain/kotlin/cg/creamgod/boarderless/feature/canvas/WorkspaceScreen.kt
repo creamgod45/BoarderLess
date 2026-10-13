@@ -1218,6 +1218,12 @@ fun WorkspaceScreen(
     var componentLibraryFocused by remember { mutableStateOf(false) }
     var giphyTextEditing by remember { mutableStateOf(false) }
     var externalGiphyKey by remember { mutableStateOf(mediaImportRuntime.giphyApiKey.orEmpty()) }
+    LaunchedEffect(mediaImportRuntime) {
+        if (externalGiphyKey.isBlank()) {
+            val stored = runCatching { mediaImportRuntime.giphyKeyStore?.load() }.getOrNull()
+            if (!stored.isNullOrBlank() && externalGiphyKey.isBlank()) externalGiphyKey = stored
+        }
+    }
     var giphyRetryAction by remember { mutableStateOf<((cg.creamgod.boarderless.domain.media.ExternalMediaReference) -> Unit)?>(null) }
     var editingId by remember { mutableStateOf<CanvasObjectId?>(null) }
     var pendingNewNode by remember { mutableStateOf<TextNode?>(null) }

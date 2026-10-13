@@ -296,6 +296,7 @@ class MainActivity : ComponentActivity() {
                                 selectSource = ::selectMediaSource,
                                 clearPreviewCache = previews::clear,
                                 loadGiphyAnimation = ::loadAndroidGiphyAnimation,
+                                giphyKeyStore = cg.creamgod.boarderless.data.AndroidGiphyKeyStore(applicationContext),
                                 loadGiphyStill = { url ->
                                     withContext(Dispatchers.IO) {
                                         loadGiphyStill(url, AndroidAssetPreviewLoader::decodeBytes)

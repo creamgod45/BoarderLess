@@ -448,6 +448,8 @@
     "queryHint": "Search on demand; no requests while typing. Beta keys allow 100 API calls/hour. Results remain in GIPHY order.",
     "keyHint": "Enter this platform's GIPHY key for this session only. It is not saved or sent to our backend.",
     "useKey": "Use key",
+    "keyHintSaved": "Enter this platform's GIPHY key. It is saved in this device's protected key vault and is not sent to our backend.",
+    "forgetKey": "Forget saved key",
     "search": "Search",
     "trending": "Trending",
     "cancel": "Cancel query",

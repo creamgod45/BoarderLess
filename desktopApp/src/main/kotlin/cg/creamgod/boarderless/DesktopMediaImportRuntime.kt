@@ -27,6 +27,7 @@ fun desktopMediaImportRuntime(
     return MediaImportRuntime(
         playbackActivity = playbackActivity,
         giphyApiKey = System.getenv("BOARDERLESS_GIPHY_API_KEY")?.takeIf { it.isNotBlank() },
+        giphyKeyStore = cg.creamgod.boarderless.data.desktopGiphyKeyStore(),
         loadGiphyStill = ::loadDesktopGiphyStill,
         loadGiphyAnimation = ::loadDesktopGiphyAnimation,
         clearPreviewCache = {

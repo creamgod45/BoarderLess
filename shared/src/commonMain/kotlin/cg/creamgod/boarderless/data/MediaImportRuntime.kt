@@ -30,6 +30,8 @@ class MediaImportRuntime(
     val loadGiphyStill: (suspend (String) -> ImageBitmap)? = null,
     /** Explicit, display-only GIF preview. The caller owns and releases the returned decoder. */
     val loadGiphyAnimation: (suspend (String) -> GifAnimation)? = null,
+    /** Protected persistence for a user-entered GIPHY key; null keeps the key in memory only. */
+    val giphyKeyStore: GiphyKeyStore? = null,
 ) {
     companion object {
         val Unavailable = MediaImportRuntime()

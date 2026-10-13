@@ -43,6 +43,15 @@ import kotlinx.coroutines.*
     val initialKey = sessionKey.ifBlank { runtime.giphyApiKey.orEmpty() }
     var keyDraft by remember { mutableStateOf(initialKey) }
     var activeKey by remember { mutableStateOf(initialKey) }
+    val keyStore = runtime.giphyKeyStore
+    val keyScope = rememberCoroutineScope()
+    // The screen may finish loading the protected key after this panel opened.
+    LaunchedEffect(sessionKey) {
+        if (activeKey.isBlank() && sessionKey.isNotBlank()) {
+            keyDraft = sessionKey
+            activeKey = sessionKey
+        }
+    }
     var query by remember { mutableStateOf("") }
     var issuedQuery by remember { mutableStateOf<String?>(null) }
     var pendingQuery by remember { mutableStateOf<String?>(null) }
@@ -159,7 +168,7 @@ import kotlinx.coroutines.*
     }
     BasicText(Strings.giphy.queryHint(), style = TextStyle(color = colors.contentMuted, fontSize = 11.sp))
     if (runtime.giphyApiKey.isNullOrBlank()) {
-        BasicText(Strings.giphy.keyHint(), style = TextStyle(color = colors.contentMuted, fontSize = 11.sp))
+        BasicText(if (keyStore != null) Strings.giphy.keyHintSaved() else Strings.giphy.keyHint(), style = TextStyle(color = colors.contentMuted, fontSize = 11.sp))
         BasicTextField(
             keyDraft,
             { keyDraft = it },
@@ -184,6 +193,10 @@ import kotlinx.coroutines.*
             previewMissing = false
             activeKey = keyDraft
             onKeyChange(activeKey)
+            if (keyStore != null) {
+                val saved = keyDraft
+                keyScope.launch { runCatching { keyStore.save(saved) } }
+            }
             items = emptyList()
             preview = null
             nextOffset = null
@@ -193,6 +206,23 @@ import kotlinx.coroutines.*
             pendingQuery = null
             queryCancelled = false
         })
+        if (keyStore != null && activeKey.isNotBlank()) {
+            ShellButton(label = Strings.giphy.forgetKey(), enabled = !busy, onClick = {
+                generation++
+                job?.cancel()
+                keyDraft = ""
+                activeKey = ""
+                onKeyChange("")
+                items = emptyList()
+                preview = null
+                nextOffset = null
+                error = null
+                hasResponse = false
+                issuedQuery = null
+                pendingQuery = null
+                keyScope.launch { runCatching { keyStore.clear() } }
+            })
+        }
     }
     BasicTextField(
         query,
