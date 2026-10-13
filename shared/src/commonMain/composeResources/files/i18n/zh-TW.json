@@ -98,6 +98,16 @@
     "retrySave": "重試保存這次貼上"
   },
   "sequence": {
+    "exportSource": "匯出編輯原始碼",
+    "importSource": "匯入原始碼（取代預覽）",
+    "sourceFileHint": "僅本機原始碼備份，不是已發布圖形或原交易恢復。引導編輯請先完成審閱再匯出；匯入取代尚未送出的預覽，仍需驗證、審閱與重新授權，不自動插入。畫布文字可能含私人資訊。",
+    "sourceFileWorking": "讀取或匯出本機編輯原始碼…",
+    "sourceFileSaved": "原始碼檔案已保存，畫布與交易歷史未改動。",
+    "sourceDownloadRequested": "已請求下載原始碼，下載完成由瀏覽器控制。",
+    "sourceFileLoaded": "已載入編輯原始碼；保存至畫布前仍須驗證、審閱與授權。",
+    "sourceFileStopped": "原始碼檔案操作已停止，未發布圖形。",
+    "sourceFileFailed": "原始碼檔案操作未確認或格式無效，未發布圖形；重試匯出前請核對已選目的地。",
+    "sourceTextLimit": "原始碼超過 64 KiB UTF-8 或含非法字元，保留原內容。",
     "unavailable": "此工作區尚未支援時序圖。",
     "historyChanged": "變更時序圖",
     "createTitle": "建立時序圖",

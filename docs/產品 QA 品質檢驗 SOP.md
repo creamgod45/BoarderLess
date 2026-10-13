@@ -1,5 +1,11 @@
 # BoarderLess 產品 QA 品質檢驗 SOP
 
+## 時序原始碼備份／匯入（最後集中驗收）
+
+四端在時序編輯視窗明確 export source，guided 先 review；backup 僅 schema／numeric version／source，不含 transaction 或原 receipt。目的地選取前不能把畫布內容交 adapter；native 新檔與取消 cleanup 沿原機制，Web 只說下載請求，不冒充完成。取消、scope 切換、內容改變禁止晚到檔案回覆套用。
+
+Import 只接受 boarderless.sequence-source.v1 exact keys，strict UTF-8／JSON（duplicate keys 拒）、64KiB source、512KiB envelope；錯誤保留原內容。合法 source 替換預覽、清原 consent／parsed／容量提示，不自動執行、stage 或插畫布，須重新 validate／審閱／授權。首次正式 commit attempt 後 export／import 不可用，pending 復原另走原交易。大模型 backend atomic capacity 尚缺，不以小圖／拆 transaction 替代。視覺／遮擋交使用者，尚未執行驗收。
+
 ## 素材匯入區塊收合（最後集中驗收）
 
 首次開 v2 素材視窗，「原匯入記錄」與「進階恢復步驟」預設展開。逐一收合後重開與重啟，應記原選擇；不同 panel／inspector 收合記憶不被覆蓋。preferences write 失敗須提示，不宣稱已保存，read 失敗回展開。

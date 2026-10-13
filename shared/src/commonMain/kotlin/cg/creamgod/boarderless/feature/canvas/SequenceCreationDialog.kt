@@ -23,6 +23,14 @@ import cg.creamgod.boarderless.domain.sequence.*
 import cg.creamgod.boarderless.i18n.Strings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import cg.creamgod.boarderless.data.DraftBackupRuntime
+import cg.creamgod.boarderless.data.DraftImportRuntime
+import cg.creamgod.boarderless.data.DraftBackupResult
+import cg.creamgod.boarderless.data.exportLocalJsonBackup
+import cg.creamgod.boarderless.data.selectWorkspaceDraftBackup
 
 /** Explicit source -> validation/preview -> confirmation. No operation exists until Insert. */
 @OptIn(ExperimentalLayoutApi::class)
@@ -37,6 +45,8 @@ import kotlinx.coroutines.launch
     commit: suspend (WorkspaceOperation, CanvasObjectId) -> Boolean,
     onDismiss: () -> Unit,
     onReviewOriginalSubmission: (() -> Unit)? = null,
+    sourceBackupRuntime: DraftBackupRuntime = DraftBackupRuntime.Unavailable,
+    sourceImportRuntime: DraftImportRuntime = DraftImportRuntime.Unavailable,
 ) {
     val colors = BoarderLessTheme.colors
     val scope = rememberCoroutineScope()
@@ -57,6 +67,28 @@ import kotlinx.coroutines.launch
     var guidedInitial by remember { mutableStateOf(editor?.initialDraft) }
     val latestRead by rememberUpdatedState(readLive)
     val latestCommit by rememberUpdatedState(commit)
+    var fileBusy by remember { mutableStateOf(false) }
+    var fileMessage by remember { mutableStateOf<String?>(null) }
+    var fileJob by remember { mutableStateOf<Job?>(null) }
+    var open by remember { mutableStateOf(true) }
+    fun fileScopeCurrent(): Boolean {
+        val live = latestRead()
+        val activeSession = live.session ?: return false
+        return open && !commitAttempted && live.ready && activeSession.userId == owner.userId &&
+            activeSession.clientId == owner.clientId && activeSession.workspace.id == owner.workspace.id &&
+            live.workspace.id == baseline.id
+    }
+    fun runFile(action: suspend () -> Unit) {
+        if (saving || commitAttempted || !fileScopeCurrent()) return
+        saving = true; fileBusy = true; fileMessage = Strings.sequence.sourceFileWorking()
+        fileJob = scope.launch {
+            try { action() }
+            catch (cancelled: CancellationException) { if (open) fileMessage = Strings.sequence.sourceFileStopped(); throw cancelled }
+            catch (_: Exception) { if (open) fileMessage = Strings.sequence.sourceFileFailed() }
+            finally { saving = false; fileBusy = false; fileJob = null }
+        }
+    }
+    DisposableEffect(owner) { onDispose { open = false; fileJob?.cancel() } }
     fun parseSource(): SequenceParseResult {
         return MermaidSequenceAdapter.parseKeepingUnchangedIdentity(source, guidedInitial)
     }
@@ -73,7 +105,37 @@ import kotlinx.coroutines.launch
                 BasicText(if (editor == null) Strings.sequence.createTitle() else Strings.sequence.editTitle(), style = TextStyle(color = colors.contentText, fontSize = 18.sp))
                 BasicText(Strings.sequence.authoringHint(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
                 if (editor != null) BasicText(Strings.sequence.editHint(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
-                if (saving) BasicText(Strings.status.savingChanges(1), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
+                if (saving && !fileBusy) BasicText(Strings.status.savingChanges(1), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
+                fileMessage?.let { BasicText(it, style = TextStyle(color = colors.contentMuted, fontSize = 12.sp)) }
+                if (!commitAttempted) {
+                    BasicText(Strings.sequence.sourceFileHint(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (sourceBackupRuntime.chooseDestination != null) ShellButton(Strings.sequence.exportSource(),
+                            enabled = !saving && !guided && source.isNotBlank(), onClick = { runFile {
+                                val snapshot = source
+                                val result = exportLocalJsonBackup(sourceBackupRuntime, "boarderless-sequence-source.json",
+                                    isCurrent = { fileScopeCurrent() && source == snapshot }) { SequenceSourceBackupCodec.encode(snapshot) }
+                                currentCoroutineContext().ensureActive(); check(fileScopeCurrent())
+                                fileMessage = when (result) {
+                                    DraftBackupResult.Saved -> Strings.sequence.sourceFileSaved()
+                                    DraftBackupResult.DownloadRequested -> Strings.sequence.sourceDownloadRequested()
+                                    DraftBackupResult.Cancelled -> Strings.sequence.sourceFileStopped()
+                                }
+                            } })
+                        if (sourceImportRuntime.selectJson != null) ShellButton(Strings.sequence.importSource(),
+                            enabled = !saving && !guided && prepared == null, onClick = { runFile {
+                                val original = source
+                                val raw = selectWorkspaceDraftBackup(sourceImportRuntime) { fileScopeCurrent() && source == original }
+                                if (raw == null) { fileMessage = Strings.sequence.sourceFileStopped(); return@runFile }
+                                val imported = SequenceSourceBackupCodec.decode(raw)
+                                currentCoroutineContext().ensureActive(); check(fileScopeCurrent() && source == original)
+                                source = imported; parsed = null; confirmed = false; problem = null
+                                plannedOperationCount = null; discard = false
+                                fileMessage = Strings.sequence.sourceFileLoaded()
+                            } })
+                        if (fileBusy) ShellButton(Strings.common.cancel(), onClick = { fileJob?.cancel() })
+                    }
+                }
                 problem?.let { BasicText(it, style = TextStyle(color = colors.danger)) }
                 if (commitAttempted && !saving) onReviewOriginalSubmission?.let { reviewOriginal ->
                     ShellButton(Strings.draftReview.originalTransactions(), onClick = { onDismiss(); reviewOriginal() })
@@ -98,11 +160,11 @@ import kotlinx.coroutines.launch
                         source,
                         enabled = !saving,
                         onValueChange = {
-                            if (it.length <= 65536) {
+                            if (SequenceSourceBackupCodec.acceptsSource(it)) {
                                 source = it
                                 problem = null
                                 discard = false
-                            }
+                            } else problem = Strings.sequence.sourceTextLimit()
                         },
                         modifier = Modifier.fillMaxWidth().heightIn(min = 160.dp, max = 320.dp),
                         textStyle = TextStyle(color = colors.contentText),

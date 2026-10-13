@@ -69,6 +69,16 @@
     "retrySave": "Retry saving this paste"
   },
   "sequence": {
+    "exportSource": "Export authoring source",
+    "importSource": "Import authoring source (replace preview)",
+    "sourceFileHint": "Local source backup only, not a published diagram or transaction recovery. Finish the guided review to export its source. Import replaces the unsent preview and needs validation and fresh consent; it never inserts automatically. Canvas text may be private.",
+    "sourceFileWorking": "Reading or exporting local authoring source…",
+    "sourceFileSaved": "Source file saved. The canvas and transaction history are unchanged.",
+    "sourceDownloadRequested": "Source download requested; completion is controlled by the browser.",
+    "sourceFileLoaded": "Authoring source loaded. Validate, review and approve before saving to the canvas.",
+    "sourceFileStopped": "Source file operation stopped; no diagram was published.",
+    "sourceFileFailed": "Source file operation is unconfirmed or invalid. No diagram was published; check any selected output before retrying export.",
+    "sourceTextLimit": "Source exceeds 64 KiB UTF-8 or contains invalid Unicode. Original source was retained.",
     "unavailable": "This workspace does not support sequence diagrams.",
     "historyChanged": "Changed sequence diagram",
     "createTitle": "Create sequence diagram",

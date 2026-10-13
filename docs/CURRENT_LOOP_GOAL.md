@@ -1,5 +1,11 @@
 # 當前 loop 剩餘目標
 
+## 2026-10-13：時序原始碼本機備份／載入（源碼已接、未驗證）
+
+- SequenceCreationDialog 接四平台既有 DraftBackupRuntime／DraftImportRuntime，明確 source export／import；backup schema boarderless.sequence-source.v1 僅 version／source，不含 operation、receipt 或已發布 authority。沿 parser 64KiB strict UTF-8 source 上限、512KiB envelope 上限、exact keys／numeric version 與 strict JSON，非法內容保留原 source。
+- 選目的地後才取 frozen source，scope／取消／內容未變檢查與 native destination lifecycle 沿共用 adapter。Web 僅 DownloadRequested。Import 明示替換未送出 preview，清 parsed／consent／問題／容量預檢結果，再手動 validate；不 stage／insert／HTTP，不恢復原 pending IDs。guided 先 review 產生 source，首次 commit attempt 後檔案操作禁止。
+- 新 source field 拒非法 UTF-8／超 parser 上限並提示，未 compile／test／launch／picker／HTTP。大型32 participants／512 messages模型的 atomic capacity 提案仍未後端交付，不拆 transaction 或縮小模型宣告完成。六主線 active，最後集中驗收、效能最後。
+
 ## 2026-10-13：素材匯入分組與收合記憶（源碼已接、未驗證）
 
 - v2 dialog 分原匯入記錄（discover／active／archived／頁次／原 reservation）與進階恢復（原 prepare／封存／票券／PUT／complete），預設展開；UiPreferences 獨立 bounded token key 記 catalog／advanced，不覆蓋 inspector／其他 panel 的狀態。

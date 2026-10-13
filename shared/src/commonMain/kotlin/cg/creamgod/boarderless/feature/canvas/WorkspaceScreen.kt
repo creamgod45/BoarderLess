@@ -9204,6 +9204,8 @@ fun WorkspaceScreen(
                     ),
                 ),
                 editingContainerId = sequenceEditTarget,
+                sourceBackupRuntime = draftBackupRuntime,
+                sourceImportRuntime = draftImportRuntime,
                 maximumAtomicOperations = repository.maximumAtomicOperations,
                 submissionOperationCount = repository::submissionOperationCount,
                 readLive = {
