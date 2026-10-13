@@ -1,5 +1,11 @@
 # BoarderLess 產品 QA 品質檢驗 SOP
 
+## 素材匯入區塊收合（最後集中驗收）
+
+首次開 v2 素材視窗，「原匯入記錄」與「進階恢復步驟」預設展開。逐一收合後重開與重啟，應記原選擇；不同 panel／inspector 收合記憶不被覆蓋。preferences write 失敗須提示，不宣稱已保存，read 失敗回展開。
+
+收合只改 UI，不清原 requestId、source、ticket、durable record 或原 prepare／PUT／complete attempted 證據，不自動查詢／取消／重送。狀態、錯誤、source cleanup 與停止入口仍可見，原狀態查詢、processing watch 與 ready 插入不藏進進階區。busy 禁止折疊，恢復步驟展開後仍套用所有既有 guard。四端可讀性／遮擋由使用者判定，尚未執行。
+
 ## 共用樣式範圍與預覽重置（最後集中驗收）
 
 背景 picker 應區分文件 style version 與不支援時的 device-only preference：Server 文件 Apply 可共用並進 Undo／Redo，Local 文件可 Undo／Redo 但不冒充已送伺服器；visibility／snap／zoom 始終個人偏好。支持 style 卻缺 capture 必須重新審阅，不能默默轉 local preference。

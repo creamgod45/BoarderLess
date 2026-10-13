@@ -486,6 +486,9 @@
     "externalReferencePending": "畫布插入待外部引用支援；不會將 GIPHY 圖片上傳至工作區儲存。已顯示官方品牌標示，正式整合審核仍待完成。"
   },
   "media": {
+    "v2CatalogSection": "原匯入記錄",
+    "v2AdvancedSection": "進階恢復步驟",
+    "v2AdvancedHint": "中斷的原上傳請先核對目前狀態，再明確執行以下步驟。換票券會取代舊 lease；收合不清除或取消任何記錄。",
     "v2Watch": "持續查詢原素材處理狀態",
     "v2WatchHint": "同意最多 20 次伺服器狀態讀取，約每 3 秒一次，最長 60 秒即停止。已核對的 identity／lease 變更會保存至原本機記錄；不重傳、不再次 complete，也不插入 Node。可隨時取消；ready 後另行選擇插入。",
     "v2Watching": "查詢原素材處理狀態 · 第 {count}/20 次",

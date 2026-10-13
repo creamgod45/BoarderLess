@@ -42,6 +42,18 @@ import kotlinx.coroutines.*
     var busy by remember { mutableStateOf(false) }
     var job by remember { mutableStateOf<Job?>(null) }
     var message by remember { mutableStateOf("") }
+    val presentation = remember { cg.creamgod.boarderless.data.persistence.UiPreferences() }
+    var collapsedSections by remember {
+        mutableStateOf(runCatching { presentation.collapsedMediaImportSections }.getOrDefault(emptySet()))
+    }
+    fun toggleSection(token: String) {
+        val collapsed = token !in collapsedSections
+        collapsedSections = if (collapsed) collapsedSections + token else collapsedSections - token
+        runCatching {
+            val current = presentation.collapsedMediaImportSections
+            presentation.collapsedMediaImportSections = if (collapsed) current + token else current - token
+        }.onFailure { message = Strings.library.preferencesUnavailable() }
+    }
     suspend fun releaseSource(handle: AssetTransferSource): Boolean {
         if (pendingReleases.none { it === handle }) pendingReleases += handle
         val released = withContext(NonCancellable) {
@@ -129,6 +141,9 @@ import kotlinx.coroutines.*
                         } })
                     }
                     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        ShellButton(label = (if ("catalog" in collapsedSections) "▸ " else "▾ ") + Strings.media.v2CatalogSection(),
+                            icon = ShellIcon.History, enabled = !busy, onClick = { toggleSection("catalog") })
+                        if ("catalog" !in collapsedSections) {
                         ShellButton(label = Strings.media.v2Discover(), enabled = !busy, onClick = { run {
                             reservations = controller.discover(archivedView)
                             page = 0
@@ -164,6 +179,7 @@ import kotlinx.coroutines.*
                                     message = Strings.media.v2Recovered() + (if (needsLookup) "\n" + Strings.media.v2AttemptHint() else "") +
                                         (if (released) "" else "\n" + Strings.media.v2CleanupPending())
                                 } })
+                        }
                         }
                         if (selected != null) ShellButton(label = Strings.media.v2New(), enabled = !busy && cleanupPending == 0,
                             onClick = { run {
@@ -229,11 +245,6 @@ import kotlinx.coroutines.*
                                         else -> Strings.media.v2TerminalHint()
                                     } + if (released) "" else "\n" + Strings.media.v2CleanupPending()
                                 } })
-                            ShellButton(label = if (originalRetryAllowed) Strings.media.v2RetryOriginalPrepare() else Strings.media.v2Prepare(),
-                                enabled = !busy && status == null && !knownIdentity && (!needsLookup || originalRetryAllowed),
-                                onClick = { run(networkWrite = true) {
-                                    status = controller.prepare(ref); knownIdentity = true; message = Strings.media.v2StepDone()
-                                } })
                             ShellButton(label = Strings.media.reviewRecovery(), enabled = !busy,
                                 onClick = { run {
                                     status = null
@@ -257,6 +268,15 @@ import kotlinx.coroutines.*
                                         }
                                     } })
                             }
+                            ShellButton(label = (if ("advanced" in collapsedSections) "▸ " else "▾ ") + Strings.media.v2AdvancedSection(),
+                                enabled = !busy, onClick = { toggleSection("advanced") })
+                            if ("advanced" !in collapsedSections) {
+                            BasicText(Strings.media.v2AdvancedHint(), style = TextStyle(color = colors.contentMuted, fontSize = 12.sp))
+                            ShellButton(label = if (originalRetryAllowed) Strings.media.v2RetryOriginalPrepare() else Strings.media.v2Prepare(),
+                                enabled = !busy && status == null && !knownIdentity && (!needsLookup || originalRetryAllowed),
+                                onClick = { run(networkWrite = true) {
+                                    status = controller.prepare(ref); knownIdentity = true; message = Strings.media.v2StepDone()
+                                } })
                             if (selectedArchived) ShellButton(label = Strings.media.v2Unarchive(), enabled = !busy,
                                 onClick = { run(localVisibilityChange = true) {
                                     controller.unarchive(ref); selectedArchived = false
@@ -290,6 +310,7 @@ import kotlinx.coroutines.*
                                 } })
                             ShellButton(label = Strings.media.v2Complete(), enabled = !busy && !needsLookup && status?.phase == "prepared",
                                 onClick = { run(networkWrite = true) { status = controller.complete(ref); message = Strings.media.v2StepDone() } })
+                            }
                             status?.readyAsset?.let { asset ->
                                 ShellButton(label = Strings.media.v2UseReady(), enabled = !busy, onClick = { onReady(asset); onDismiss() })
                             }

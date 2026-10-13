@@ -72,6 +72,13 @@ class UiPreferences(
                     .joinToString(","),
             )
 
+    /** Import presentation only; never stores an upload identity or hides recovery evidence. */
+    var collapsedMediaImportSections: Set<String>
+        get() = settings.getStringOrNull("ui.media-import.collapsed-sections").orEmpty()
+            .split(',').filter { it in setOf("catalog", "advanced") }.toSet()
+        set(value) = settings.putString("ui.media-import.collapsed-sections",
+            value.filter { it in setOf("catalog", "advanced") }.sorted().joinToString(","))
+
     private companion object {
         const val WorkspaceStorageModeKey = "ui.workspace.storageMode"
         const val ReduceTransparencyKey = "ui.accessibility.reduceTransparency"

@@ -1,5 +1,11 @@
 # 當前 loop 剩餘目標
 
+## 2026-10-13：素材匯入分組與收合記憶（源碼已接、未驗證）
+
+- v2 dialog 分原匯入記錄（discover／active／archived／頁次／原 reservation）與進階恢復（原 prepare／封存／票券／PUT／complete），預設展開；UiPreferences 獨立 bounded token key 記 catalog／advanced，不覆蓋 inspector／其他 panel 的狀態。
+- 新選檔／新原上傳 flow、選取原 ID／來源／phase／rejection、needsLookup、原狀態查詢／processing watch／ready 插入留在分組外，收合不清 reservation／source／lease／intent、不讀網路或自動取消／重送；busy 禁止折疊。
+- preferences read 失敗預設展開，write 失敗保留當前 UI 並提示，不能宣稱跨重啟已保存。未 compile／test／launch／HTTP；六主線 active，完整業務後集中驗收、視覺與遮擋由使用者判定、效能最後。
+
 ## 2026-10-13：共用樣式範圍、版本與網格預覽重置（源碼已接、未驗證）
 
 - 背景 picker 固定 status 區分 document style／captured style version 與 backend 未啟用時的 device-only preference，明示 Undo／Redo 與 Server 共用範圍；缺 capture 但已支持 style 時提示重新審閱，不誤稱 local fallback。

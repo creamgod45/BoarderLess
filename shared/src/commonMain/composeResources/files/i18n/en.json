@@ -458,6 +458,9 @@
     "externalReferencePending": "Canvas insertion awaits external-reference support. GIPHY media is not uploaded to workspace storage. Official attribution is displayed; production integration approval remains pending."
   },
   "media": {
+    "v2CatalogSection": "Original import records",
+    "v2AdvancedSection": "Advanced recovery steps",
+    "v2AdvancedHint": "For an interrupted original upload, review its current status before these explicit steps. Replacing a ticket supersedes its old lease; collapsing this section does not clear or cancel any record.",
     "v2Watch": "Watch original processing status",
     "v2WatchHint": "Approve up to 20 server status reads, about 3 seconds apart, stopping after 60 seconds at most. Verified identity or lease changes are saved in the original local record. This does not reupload, complete again or insert a node. Cancel anytime; choose insertion separately when ready.",
     "v2Watching": "Reading original processing status · check {count}/20",
