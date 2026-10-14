@@ -11,18 +11,22 @@ import kotlinx.coroutines.withContext
 class AwaitedSubmissionRuntime internal constructor(internal val drafts: AwaitedWorkspaceDraftPersistence,
     internal val sequences: AwaitedClientSequenceAllocator, internal val safety: AwaitedRecoverySafetyPersistence,
     internal val requireActive: (PendingSubmissionScope) -> Unit,
-    internal val activationTarget: PendingSubmissionScope) {
+    /** Null for fresh storage, which has no legacy identity or single activation target. */
+    internal val activationTarget: PendingSubmissionScope?) {
+    internal val isFresh: Boolean get() = activationTarget == null
     /** Factories keep the original origin and identity. These checks never initialize a
      * client, adopt a new namespace, or change the selected workspace in Settings. */
     internal fun serverBaseUrl(): String {
-        requireActive(activationTarget)
-        require(activationTarget.apiBase.endsWith("/api/v1"))
-        return activationTarget.apiBase.removeSuffix("/api/v1").also { require(it.isNotBlank()) }
+        val target = activationTarget ?: return defaultBackendBaseUrl()
+        requireActive(target)
+        require(target.apiBase.endsWith("/api/v1"))
+        return target.apiBase.removeSuffix("/api/v1").also { require(it.isNotBlank()) }
     }
 
     internal fun originalPreferences(preferences: SessionPreferences = SessionPreferences()): SessionPreferences {
-        requireActive(activationTarget)
-        val selected = activationTarget.copy(workspaceId = requireNotNull(preferences.workspaceId) {
+        val target = activationTarget ?: return preferences
+        requireActive(target)
+        val selected = target.copy(workspaceId = requireNotNull(preferences.workspaceId) {
             "Original workspace selection is missing"
         })
         requireActive(selected)

@@ -7,6 +7,14 @@
 - 仍保留的發布前風險（不因空專案而消失）：Android／iOS／Web 的伺服器模式草稿與序號仍走 Settings 路徑，不是完整 durable queue。Desktop 已使用全新原生 `server-v1` 命名空間，無此問題。處理方向是替 Android／iOS／Web 建立全新（不經遷移）的 awaited 原生儲存，需設計動態 scope 註冊（現有 Awaited* 儲存的 `requireScope` 為同步，無法在其中做非同步註冊）。
 - 此段為範圍說明，不是完成宣告；六主線仍未完整交付。
 
+## 2026-10-14：Android／iOS／Web 全新 awaited 伺服器儲存（源碼已接、單元層已驗證）
+
+- 新增 `FreshAwaitedServerStorage`（commonMain）：不經舊資料遷移，直接以平台 awaited 紀錄儲存提供草稿、序號帳本與復原安全的耐久儲存。Android／iOS／Web 伺服器模式在「未提供 activation」時預設使用它（Android `noBackupFilesDir/server-fresh-v1`、iOS 私有目錄 `server-fresh-v1`、Web IndexedDB Documents 範圍）；已有 activation 的路徑不變。
+- 每個 workspace scope 於首次使用時延遲註冊：control 記錄先存 Preparing → 建立空草稿／安全記錄 →（同一 origin／user／client 的第一個 workspace 才）初始化序號帳本 → 耐久讀回驗證 → 升為 Ready。遺失 ACK 只會恢復同一個 Preparing；另一 workspace 不能越過。不採用未登錄的既有紀錄、不重設或降低帳本、Ready 的缺件視為硬錯誤、孤兒帳本拒絕。身分／伺服器不符或 writer 非 active 時在任何寫入前拒絕。
+- `AwaitedSubmissionRuntime.activationTarget` 改為可為 null（fresh 無舊身分）；`serverBaseUrl()`／`originalPreferences()` 對 fresh 回傳預設值，不動既有 activation 行為。
+- 驗證：11 個儲存單元測試（註冊／重啟驗證／共享帳本／獨立身分／孤兒帳本／既有紀錄／遺失 ACK 恢復／不得越過 Preparing／缺件硬失敗／身分與 writer 拒絕／並行首次呼叫只註冊一次）與 3 個以真實 `BackendWorkspaceRepository` 為主體的整合測試（草稿重啟保留且 ACK 後只剩尾端、遺失回應後原 wire 重送且序號不變、非法身分拒絕）；JVM 1197、JS 1124、Wasm 1124、iOS 模擬器 1108 全過，Desktop 與 Android APK 通過。
+- 仍未驗證：真實後端雙端流程、App 重啟／斷電／崩潰下的實機耐久性、實際 Android Keystore／IDB 交易中斷、以及舊 Settings 草稿路徑對這三個平台已不再使用的最終確認（空專案、無舊資料）。clientId 仍由 Settings 保存；若 Settings 被清除，舊 clientId 的 scope 會成為孤兒資料而不被讀取。
+
 ## 2026-10-14：鋼筆編輯器雙指縮放／平移（已實作、已在 iOS 模擬器驗證）
 
 - 鋼筆編輯器新增雙指手勢：中點下的編輯座標在手勢中保持不動，指距比例決定縮放（沿 MIN/MAX_ZOOM），雙指一起移動即平移。只改編輯器相機，不改路徑座標或編輯歷程；進行中的單指編輯被第二指取消，不產生歷程步驟。純函式 `pinchFrom` 有 4 個單元測試（JVM 通過）。

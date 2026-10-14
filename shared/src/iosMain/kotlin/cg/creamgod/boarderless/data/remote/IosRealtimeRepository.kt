@@ -12,10 +12,15 @@ internal fun iosRealtimeBackendRepository(submission: AwaitedSubmissionRuntime? 
     lease.requireActive()
     val owner = ServerRepositoryWriterCoordinator.candidate()
     val operations = owner.operations()
+    // No activation supplied: use fresh, migration-free durable storage for drafts, sequences and recovery safety.
+    val effective = submission ?: FreshAwaitedServerStorage(
+        IosAtomicLocalRecordStore(iosPrivateRecordRoot("server-fresh-v1")).backgroundAwaited().withWriterOperations(operations),
+        "${baseUrl.trimEnd('/')}/api/v1",
+    ) { lease.requireActive(); owner.requireActive() }.runtime
     return BackendWorkspaceRepository(
         baseUrl = baseUrl,
         preferences = preferences,
-        awaitedSubmissionRuntime = submission,
+        awaitedSubmissionRuntime = effective,
         prepareServerWriter = { lease.requireActive(); owner.claimAfterDrain(); lease.requireActive() },
         requireServerWriterActive = { lease.requireActive(); owner.requireActive() },
         releaseServerWriter = { owner.close() },

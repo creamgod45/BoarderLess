@@ -29,10 +29,15 @@ private fun browserServerRepository(submission: cg.creamgod.boarderless.data.rem
             val lease = cg.creamgod.boarderless.data.remote.BrowserServerWriterLease()
             val owner = cg.creamgod.boarderless.data.remote.ServerRepositoryWriterCoordinator.candidate()
             val operations = owner.operations()
+            // No activation supplied: use fresh, migration-free durable storage for drafts, sequences and recovery safety.
+            val effective = submission ?: cg.creamgod.boarderless.data.remote.FreshAwaitedServerStorage(
+                BrowserDurableLocalRecordStore(BrowserRecordScope.Documents, operations),
+                "${baseUrl.trimEnd('/')}/api/v1",
+            ) { lease.requireActive(); owner.requireActive() }.runtime
             return cg.creamgod.boarderless.data.remote.BackendWorkspaceRepository(
             baseUrl = baseUrl,
             preferences = preferences,
-            awaitedSubmissionRuntime = submission,
+            awaitedSubmissionRuntime = effective,
             prepareServerWriter = { lease.acquire(); owner.claimAfterDrain(); lease.requireActive() },
             requireServerWriterActive = { lease.requireActive(); owner.requireActive() },
             releaseServerWriter = { owner.close(lease::close) },
