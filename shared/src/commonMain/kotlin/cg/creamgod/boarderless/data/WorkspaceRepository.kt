@@ -137,6 +137,8 @@ interface WorkspaceRepository {
     val supportsSequenceDiagrams: Boolean get() = false
     val supportsVectorPaths: Boolean get() = false
     val supportsTextPlacement: Boolean get() = false
+    /** Fixed shapes this repository can store. Local storage has no backend schema, so everything is allowed. */
+    val supportedNodeShapes: Set<cg.creamgod.boarderless.domain.model.NodeShape> get() = cg.creamgod.boarderless.domain.model.NodeShape.entries.toSet()
     val cloudQuickSchemeServer: cg.creamgod.boarderless.data.persistence.CloudSchemeServer? get() = null
 
     /** Local storage capability only; false must not be treated as permission for multi-key writes. */

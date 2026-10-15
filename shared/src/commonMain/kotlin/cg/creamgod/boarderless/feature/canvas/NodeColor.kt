@@ -92,9 +92,63 @@ internal fun nodeShapeText(shape: NodeShape): LocalizedText =
         NodeShape.DoubleArrow -> Strings.objects.doubleArrow
         NodeShape.Star -> Strings.objects.star
         NodeShape.ManualInput -> Strings.objects.manualInput
+        NodeShape.Semicircle -> Strings.objects.semicircle
+        NodeShape.Ring -> Strings.objects.ring
+        NodeShape.Heptagon -> Strings.objects.heptagon
+        NodeShape.Heart -> Strings.objects.heart
+        NodeShape.Lightning -> Strings.objects.lightning
+        NodeShape.Crescent -> Strings.objects.crescent
+        NodeShape.PredefinedProcess -> Strings.objects.predefinedProcess
+        NodeShape.InternalStorage -> Strings.objects.internalStorage
+        NodeShape.Delay -> Strings.objects.delay
+        NodeShape.OrJunction -> Strings.objects.orJunction
+        NodeShape.SummingJunction -> Strings.objects.summingJunction
+        NodeShape.OffPageConnector -> Strings.objects.offPageConnector
+        NodeShape.Display -> Strings.objects.display
+        NodeShape.MultiDocument -> Strings.objects.multiDocument
+        NodeShape.CalloutRound -> Strings.objects.calloutRound
+        NodeShape.CalloutRect -> Strings.objects.calloutRect
+        NodeShape.Note -> Strings.objects.note
+        NodeShape.BraceLeft -> Strings.objects.braceLeft
+        NodeShape.BraceRight -> Strings.objects.braceRight
+        NodeShape.Folder -> Strings.objects.folder
+        NodeShape.Window -> Strings.objects.window
+        NodeShape.Cloud -> Strings.objects.cloud
+        NodeShape.Server -> Strings.objects.server
+        NodeShape.Person -> Strings.objects.person
     }
 
 internal fun nodeShapeLabel(shape: NodeShape): String = nodeShapeText(shape)()
+
+/** Localized search keywords for the expansion shapes; empty for the original ones. */
+internal fun nodeShapeKeywords(shape: NodeShape): String =
+    when (shape) {
+        NodeShape.Semicircle -> Strings.shapeKeywords.semicircle()
+        NodeShape.Ring -> Strings.shapeKeywords.ring()
+        NodeShape.Heptagon -> Strings.shapeKeywords.heptagon()
+        NodeShape.Heart -> Strings.shapeKeywords.heart()
+        NodeShape.Lightning -> Strings.shapeKeywords.lightning()
+        NodeShape.Crescent -> Strings.shapeKeywords.crescent()
+        NodeShape.PredefinedProcess -> Strings.shapeKeywords.predefinedProcess()
+        NodeShape.InternalStorage -> Strings.shapeKeywords.internalStorage()
+        NodeShape.Delay -> Strings.shapeKeywords.delay()
+        NodeShape.OrJunction -> Strings.shapeKeywords.orJunction()
+        NodeShape.SummingJunction -> Strings.shapeKeywords.summingJunction()
+        NodeShape.OffPageConnector -> Strings.shapeKeywords.offPageConnector()
+        NodeShape.Display -> Strings.shapeKeywords.display()
+        NodeShape.MultiDocument -> Strings.shapeKeywords.multiDocument()
+        NodeShape.CalloutRound -> Strings.shapeKeywords.calloutRound()
+        NodeShape.CalloutRect -> Strings.shapeKeywords.calloutRect()
+        NodeShape.Note -> Strings.shapeKeywords.note()
+        NodeShape.BraceLeft -> Strings.shapeKeywords.braceLeft()
+        NodeShape.BraceRight -> Strings.shapeKeywords.braceRight()
+        NodeShape.Folder -> Strings.shapeKeywords.folder()
+        NodeShape.Window -> Strings.shapeKeywords.window()
+        NodeShape.Cloud -> Strings.shapeKeywords.cloud()
+        NodeShape.Server -> Strings.shapeKeywords.server()
+        NodeShape.Person -> Strings.shapeKeywords.person()
+        else -> ""
+    }
 
 private val DarkInk = RgbColor.fromArgb(0xFF242421)
 private val LightInk = RgbColor.fromArgb(0xFFF7F6F2)

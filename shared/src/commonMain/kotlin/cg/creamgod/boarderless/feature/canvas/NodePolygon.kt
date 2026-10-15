@@ -6,6 +6,7 @@ import kotlin.math.abs
 
 /** One owned normalized outline for rendering, selection and relation endpoints. */
 internal fun NodeShape.polygonVertices(): List<Vec2>? {
+    art()?.let { return it.body }
     fun points(vararg xy: Float) = xy.toList().chunked(2).map { Vec2(it[0], it[1]) }
     val arrow = points(0f, .25f, .65f, .25f, .65f, 0f, 1f, .5f, .65f, 1f, .65f, .75f, 0f, .75f)
     return when (this) {

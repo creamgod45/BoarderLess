@@ -491,6 +491,23 @@ private fun workspaceRoleLabel(role: String): String =
         else -> role
     }
 
+/** The 24 shapes of docs/SHAPE_LIBRARY_SPEC.md with their default sizes (dp times density). */
+private fun expansionShapes(density: Float): List<Pair<NodeShape, Pair<Float, Float>>> {
+    fun size(width: Float, height: Float) = width * density to height * density
+    val standard = size(160f, 100f)
+    return listOf(
+        NodeShape.Semicircle to standard, NodeShape.Ring to size(120f, 120f), NodeShape.Heptagon to standard,
+        NodeShape.Heart to size(120f, 120f), NodeShape.Lightning to standard, NodeShape.Crescent to size(120f, 120f),
+        NodeShape.PredefinedProcess to standard, NodeShape.InternalStorage to standard, NodeShape.Delay to standard,
+        NodeShape.OrJunction to size(72f, 72f), NodeShape.SummingJunction to size(72f, 72f),
+        NodeShape.OffPageConnector to standard, NodeShape.Display to standard, NodeShape.MultiDocument to standard,
+        NodeShape.CalloutRound to standard, NodeShape.CalloutRect to standard, NodeShape.Note to standard,
+        NodeShape.BraceLeft to size(40f, 160f), NodeShape.BraceRight to size(40f, 160f),
+        NodeShape.Folder to standard, NodeShape.Window to standard, NodeShape.Cloud to standard,
+        NodeShape.Server to standard, NodeShape.Person to size(72f, 72f),
+    )
+}
+
 private fun builtInComponents(density: Float): List<BuiltInComponent> {
     val nodeWidth = 240f * density
     val nodeHeight = 116f * density
@@ -540,6 +557,8 @@ private fun builtInComponents(density: Float): List<BuiltInComponent> {
         text: String,
         color: String,
         shape: NodeShape,
+        width: Float = nodeWidth,
+        height: Float = nodeHeight,
     ) = BuiltInComponent(
         entry =
             ComponentLibraryEntry(
@@ -551,7 +570,7 @@ private fun builtInComponents(density: Float): List<BuiltInComponent> {
             ),
         payload =
             ClipboardPayload(
-                nodes = listOf(node(id, 0f, 0f, text, color, shape)),
+                nodes = listOf(node(id, 0f, 0f, text, color, shape, width = width, height = height)),
             ),
     )
     return listOf(
@@ -1060,6 +1079,17 @@ private fun builtInComponents(density: Float): List<BuiltInComponent> {
                 "paper",
                 shape,
             )
+        } + expansionShapes(density).map { (shape, size) ->
+            shapeComponent(
+                "${shape.token}-node",
+                nodeShapeLabel(shape),
+                "${Strings.library.geometryDescription()} ${nodeShapeKeywords(shape)}",
+                if (shape.art()?.textRect == null) "" else nodeShapeLabel(shape),
+                "paper",
+                shape,
+                size.first,
+                size.second,
+            )
         } + vectorShapePresets().map { preset ->
             val payload = ClipboardPayload(nodes = listOf(
                 node(preset.id, 0f, 0f, preset.title, shape = NodeShape.Rectangle,
@@ -1429,6 +1459,8 @@ fun WorkspaceScreen(
         }
     }
     val libraryComponents = remember(density, Localization.language) { builtInComponents(density) }
+    // Shapes the connected backend did not announce are hidden, so they can never be inserted or staged offline.
+    val visibleLibraryEntries = libraryComponents.map(BuiltInComponent::entry).filter { it.shape in repository.supportedNodeShapes }
     val compactLayout = usesCompactCanvasLayout(canvasSize.width, canvasSize.height, density)
     val inspectorWidth =
         if (compactLayout && canvasSize.width > 0) {
@@ -4048,7 +4080,7 @@ fun WorkspaceScreen(
                 mediaImportBusy,
                 mediaImportLabel,
                 workspaceChangeAllowed,
-                libraryComponents.map(BuiltInComponent::entry),
+                visibleLibraryEntries,
                 areaSelectionMode,
                 history.canUndo,
                 history.canRedo,
@@ -7123,7 +7155,7 @@ fun WorkspaceScreen(
 
         if (showComponentLibrary) {
             ComponentLibrary(
-                entries = libraryComponents.map(BuiltInComponent::entry),
+                entries = visibleLibraryEntries,
                 favorites = libraryFavorites,
                 recent = libraryRecent,
                 category = libraryCategory,
@@ -10712,7 +10744,7 @@ internal fun TextNodeCard(
     val horizontalContentPadding = node.shape.horizontalContentPadding(screenWidth)
     val verticalContentPadding = node.shape.verticalContentPadding(screenHeight)
     val customPath = node.vectorPath
-    val plainText = node.shape == NodeShape.PlainText || customPath != null
+    val plainText = !node.shape.drawsFilledOutline || customPath != null
     val centeredContent = node.shape != NodeShape.RoundedRectangle && !plainText
     val textColors = nodeTextColors(node.colorToken, colors, node.shape)
     var draft by remember(node.id, node.text) { mutableStateOf(node.text) }
@@ -10857,7 +10889,7 @@ internal fun TextNodeCard(
                                 }
 
                                 !selectionOnly && tapSelectedToEdit && currentlySelected && !additiveSelection && !node.locked &&
-                                    mutationEnabled -> {
+                                    mutationEnabled && node.shape.offersTextEditing -> {
                                     currentStartEditing()
                                 }
 
@@ -10874,6 +10906,16 @@ internal fun TextNodeCard(
                 withTransform({ scale(size.width / customPath.viewBox.width, size.height / customPath.viewBox.height, Offset.Zero) }) {
                     drawVectorPath(customPath) { token -> if (token == "ink") colors.contentText else nodeFillColor(token, colors) }
                 }
+            }
+        }
+        val shapeArt = if (customPath == null) node.shape.art() else null
+        if (shapeArt != null) {
+            Canvas(Modifier.fillMaxSize()) {
+                val ink = if (shapeArt.strokeOnly) colors.contentText else if (selected) colors.selection else colors.contentBorder
+                drawNodeShapeDecor(
+                    shapeArt, ink, (if (shapeArt.strokeOnly) 2.dp else if (selected) 2.dp else 1.dp).toPx(),
+                    densityScale = this.density * viewport.zoom,
+                )
             }
         }
         if (customPath == null && node.shape == NodeShape.Database) {

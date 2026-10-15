@@ -5,6 +5,7 @@ import { REALTIME_PROTOCOL_VERSION, REALTIME_SUBPROTOCOL } from '../realtime/mes
 import type { CapabilitiesSchema } from '../schemas/capabilities.schema.ts'
 import { RELATION_GEOMETRY_SCHEMA, SELECTION_SCHEMA_VERSIONS, SEQUENCE_CANVAS_SCHEMA } from '../domain/selection.ts'
 import { MAX_SEQUENCE_DIAGRAMS } from '../domain/sequence-diagrams.ts'
+import { NODE_SHAPES } from '../domain/node-shapes.ts'
 import { VECTOR_PATH_LIMITS } from '../domain/vector-path.ts'
 import { CANVAS_STYLE_SCHEMA_VERSIONS, DEFAULT_CANVAS_STYLE } from '../domain/canvas-style.ts'
 import { SNAPSHOT_SCHEMA_VERSION } from '../services/snapshot.service.ts'
@@ -69,6 +70,7 @@ export class CapabilitiesController {
       commandTypes: ['move', 'line', 'quadratic', 'cubic', 'close'],
       limits: { ...VECTOR_PATH_LIMITS },
     },
+    nodeShapes: [...NODE_SHAPES],
     textPlacement: { supported: true as const, objectType: 'text', property: 'textPlacement' },
     sequenceDiagrams: {
       supported: true as const,

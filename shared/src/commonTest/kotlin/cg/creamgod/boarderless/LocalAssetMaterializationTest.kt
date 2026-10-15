@@ -66,7 +66,7 @@ class LocalAssetMaterializationTest {
         val mapping = newLocalAssetMaterialization(reviewed, asset, "00112233-4455-6677-8899-aabbccddeeff", "2026-10-11T01:00:00Z")
         assertFails { MaterializationSourceDescriptor.fromAsset(asset.copy(status = AssetStatus.Pending)) }
         assertFails { MaterializationSourceDescriptor.fromAsset(asset.copy(checksum = "invalid")) }
-        assertFails { MaterializationSourceDescriptor.fromAsset(asset.copy(createdAt = "\uD800")) }
+        assertFails { MaterializationSourceDescriptor.fromAsset(asset.copy(createdAt = loneSurrogate())) }
         assertFails { mapping.copy(source = mapping.source.copy(workspaceId = WorkspaceId("other"))) }
         assertFails { repo.stageSyncMaterialization(reviewed.local.copy(role = WorkspaceMemberRole.Viewer), reviewed.checkpoint!!, mapping) }
         assertFails { repo.stageSyncMaterialization(reviewed.local, reviewed.checkpoint!!, mapping.copy(userId = "other")) }

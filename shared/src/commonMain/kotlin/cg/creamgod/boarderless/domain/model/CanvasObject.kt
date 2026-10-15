@@ -50,10 +50,39 @@ enum class NodeShape(
     DoubleArrow("double-arrow"),
     Star("star"),
     ManualInput("manual-input"),
+
+    // Expansion v1 (docs/SHAPE_LIBRARY_SPEC.md). The backend NODE_SHAPES list must change in the same commit.
+    Semicircle("semicircle"),
+    Ring("ring"),
+    Heptagon("heptagon"),
+    Heart("heart"),
+    Lightning("lightning"),
+    Crescent("crescent"),
+    PredefinedProcess("predefined-process"),
+    InternalStorage("internal-storage"),
+    Delay("delay"),
+    OrJunction("or-junction"),
+    SummingJunction("summing-junction"),
+    OffPageConnector("off-page-connector"),
+    Display("display"),
+    MultiDocument("multi-document"),
+    CalloutRound("callout-round"),
+    CalloutRect("callout-rect"),
+    Note("note"),
+    BraceLeft("brace-left"),
+    BraceRight("brace-right"),
+    Folder("folder"),
+    Window("window"),
+    Cloud("cloud"),
+    Server("server"),
+    Person("person"),
     ;
 
     companion object {
         fun fromToken(token: String): NodeShape? = entries.firstOrNull { it.token == token }
+
+        /** The 25 shapes every backend has accepted since before the expansion; the default when no list is announced. */
+        val original: Set<NodeShape> by lazy { entries.take(25).toSet() }
     }
 }
 

@@ -41,7 +41,7 @@ class LocalSyncEvidenceExportTest {
         assertEquals(reviewed, local.readSyncSnapshot(owner)); assertEquals(1, destination.closes)
         val text = reviewed.copy(local = owner.copy(workspace = owner.workspace.copy(title = "私密🙂\n</script>")))
         assertEquals(text.local.workspace, LocalSyncEvidenceJson.decodeFromString(LocalSyncEvidenceBackup.serializer(), text.toEvidenceJson()).workspace)
-        assertFails { text.copy(local = text.local.copy(workspace = text.local.workspace.copy(title = "\uD800"))).toEvidenceJson() }
+        assertFails { text.copy(local = text.local.copy(workspace = text.local.workspace.copy(title = loneSurrogate()))).toEvidenceJson() }
     }
     @Test fun cancelledPickerChangedSnapshotAndExpiredWriteGuardNeverExport() = runTest {
         val records = Records(); val local = AwaitedLocalWorkspaceRepository(records) { "2026-10-10" }

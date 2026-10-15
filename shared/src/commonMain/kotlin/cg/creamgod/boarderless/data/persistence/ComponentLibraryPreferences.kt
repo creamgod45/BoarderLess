@@ -59,6 +59,6 @@ class ComponentLibraryPreferences(
         const val RecentKey = "ui.componentLibrary.recent.v1"
         const val CategoryKey = "ui.componentLibrary.category.v1"
         const val CategoriesExpandedKey = "ui.componentLibrary.categoriesExpanded.v1"
-        val CategoryTokens = setOf("all", "geometry", "flow", "arrows", "text", "containers", "diagrams")
+        val CategoryTokens = setOf("all", "geometry", "flow", "arrows", "text", "containers", "diagrams", "annotations")
     }
 }

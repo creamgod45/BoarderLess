@@ -27,6 +27,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -66,6 +67,7 @@ internal enum class ComponentLibraryCategory(
     Text("text"),
     Containers("containers"),
     Diagrams("diagrams"),
+    Annotations("annotations"),
     ;
 
     companion object {
@@ -94,6 +96,20 @@ private fun componentCategories(
     }
     if (id in setOf("thought", "highlight") || shape == NodeShape.PlainText) return setOf(ComponentLibraryCategory.Text)
     return when (shape) {
+        NodeShape.PredefinedProcess, NodeShape.InternalStorage, NodeShape.Delay, NodeShape.OrJunction,
+        NodeShape.SummingJunction, NodeShape.OffPageConnector, NodeShape.Display, NodeShape.MultiDocument,
+        -> {
+            setOf(ComponentLibraryCategory.Geometry, ComponentLibraryCategory.Flow)
+        }
+
+        NodeShape.CalloutRound, NodeShape.CalloutRect, NodeShape.Note, NodeShape.BraceLeft, NodeShape.BraceRight -> {
+            setOf(ComponentLibraryCategory.Geometry, ComponentLibraryCategory.Annotations)
+        }
+
+        NodeShape.Folder, NodeShape.Window, NodeShape.Cloud, NodeShape.Server, NodeShape.Person -> {
+            setOf(ComponentLibraryCategory.Geometry, ComponentLibraryCategory.Containers, ComponentLibraryCategory.Diagrams)
+        }
+
         NodeShape.ArrowRight, NodeShape.ArrowLeft, NodeShape.ArrowUp, NodeShape.ArrowDown,
         NodeShape.Chevron, NodeShape.DoubleArrow,
         -> {
@@ -121,6 +137,7 @@ private fun categoryLabel(category: ComponentLibraryCategory): String =
         ComponentLibraryCategory.Text -> Strings.library.categoryText()
         ComponentLibraryCategory.Containers -> Strings.library.categoryContainers()
         ComponentLibraryCategory.Diagrams -> Strings.library.categoryDiagrams()
+        ComponentLibraryCategory.Annotations -> Strings.library.categoryAnnotations()
     }
 
 internal enum class ComponentLibraryView { All, Favorites, Recent }
@@ -352,7 +369,7 @@ internal fun ComponentLibrary(
                                         .clip(entry.shape.composeShape())
                                         .background(
                                             color =
-                                                if (entry.shape == NodeShape.PlainText) {
+                                                if (!entry.shape.drawsFilledOutline) {
                                                     Color.Transparent
                                                 } else {
                                                     when (entry.colorToken) {
@@ -365,15 +382,20 @@ internal fun ComponentLibrary(
                                             shape = entry.shape.composeShape(),
                                         ).border(
                                             1.dp,
-                                            if (entry.shape ==
-                                                NodeShape.PlainText
-                                            ) {
+                                            if (!entry.shape.drawsFilledOutline) {
                                                 Color.Transparent
                                             } else {
                                                 colors.contentBorder
                                             },
                                             entry.shape.composeShape(),
-                                        ).onGloballyPositioned { layoutCoordinates = it }
+                                        ).drawBehind {
+                                            entry.shape.art()?.let { art ->
+                                                drawNodeShapeDecor(
+                                                    art, if (art.strokeOnly) colors.contentText else colors.contentBorder,
+                                                    (if (art.strokeOnly) 2.dp else 1.dp).toPx(), densityScale = density,
+                                                )
+                                            }
+                                        }.onGloballyPositioned { layoutCoordinates = it }
                                         .pointerInput(entry.id) {
                                             var rootPosition = Vec2.Zero
                                             detectDragGestures(

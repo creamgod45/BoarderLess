@@ -15,8 +15,26 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import cg.creamgod.boarderless.domain.model.NodeShape
 
+/** Outline with holes for the expansion shapes; stroke-only shapes have an empty (unfilled) outline. */
+private fun artComposeShape(art: NodeShapeArt): Shape =
+    // A stroke-only outline has no area; an empty Generic outline would crash Compose's border cache,
+    // so it uses a plain rectangle and callers draw neither fill nor border for it (see drawsFilledOutline).
+    if (art.strokeOnly) RoundedCornerShape(0.dp) else GenericShape { size, _ ->
+        fillType = androidx.compose.ui.graphics.PathFillType.NonZero
+        fun add(points: List<cg.creamgod.boarderless.domain.model.Vec2>, clockwise: Boolean) {
+            if (points.size < 3) return
+            val ordered = if (signedAreaIsClockwise(points) == clockwise) points else points.reversed()
+            ordered.forEachIndexed { index, point ->
+                if (index == 0) moveTo(point.x * size.width, point.y * size.height) else lineTo(point.x * size.width, point.y * size.height)
+            }
+            close()
+        }
+        art.body?.let { add(it, clockwise = true) }
+        art.holes.forEach { add(it, clockwise = false) }
+    }
+
 internal fun NodeShape.composeShape(): Shape =
-    when (this) {
+    art()?.let { return artComposeShape(it) } ?: when (this) {
         NodeShape.RoundedRectangle -> {
             RoundedCornerShape(16.dp)
         }
@@ -123,7 +141,7 @@ internal fun NodeShape.composeShape(): Shape =
     }
 
 internal fun NodeShape.horizontalContentPadding(width: Dp): Dp =
-    when (this) {
+    art()?.let { art -> art.textRect?.let { width * maxOf(it.left, 1f - it.right) } ?: (width * .25f) } ?: when (this) {
         NodeShape.Diamond -> width * 0.24f
         NodeShape.Ellipse -> width * 0.15f
         NodeShape.Parallelogram, NodeShape.Hexagon -> width * 0.18f
@@ -137,7 +155,7 @@ internal fun NodeShape.horizontalContentPadding(width: Dp): Dp =
     }
 
 internal fun NodeShape.verticalContentPadding(height: Dp): Dp =
-    when (this) {
+    art()?.let { art -> art.textRect?.let { height * maxOf(it.top, 1f - it.bottom) } ?: (height * .25f) } ?: when (this) {
         NodeShape.Diamond -> height * 0.18f
         NodeShape.Ellipse, NodeShape.Pill -> height * 0.12f
         NodeShape.Document, NodeShape.Database -> height * 0.16f
@@ -193,6 +211,7 @@ internal fun DrawScope.drawNodePreviewShape(
             drawPath(path, borderColor, style = Stroke(borderWidth))
         }
     }
+    shape.art()?.let { drawNodeShapeDecor(it, borderColor, borderWidth, topLeft, size, densityScale = 1f) }
     if (shape == NodeShape.Database) {
         drawArc(
             color = borderColor,
@@ -272,6 +291,53 @@ private fun previewPath(
                     if (index == 0) moveTo(x(point.x), y(point.y)) else lineTo(x(point.x), y(point.y))
                 }
                 close()
+                shape.art()?.holes?.forEach { hole ->
+                    hole.reversed().forEachIndexed { index, point ->
+                        if (index == 0) moveTo(x(point.x), y(point.y)) else lineTo(x(point.x), y(point.y))
+                    }
+                    close()
+                }
             }
         }
     }
+
+
+/** False for text-only and stroke-only shapes, which draw neither a fill nor a border around their box. */
+internal val NodeShape.drawsFilledOutline: Boolean get() = this != NodeShape.PlainText && art()?.strokeOnly != true
+
+/** Whether the shape offers a text area to edit; existing text is still rendered either way. */
+internal val NodeShape.offersTextEditing: Boolean get() = art()?.let { it.textRect != null } ?: true
+
+/**
+ * Lines, dots and shaded parts of the expansion shapes, drawn over the node fill with the node border
+ * colour. Normalized art coordinates are scaled to [size]; dot offsets and radii are in dp.
+ */
+internal fun DrawScope.drawNodeShapeDecor(
+    art: NodeShapeArt,
+    borderColor: Color,
+    borderWidth: Float,
+    topLeft: Offset = Offset.Zero,
+    size: Size = this.size,
+    densityScale: Float = 1f,
+) {
+    fun point(p: cg.creamgod.boarderless.domain.model.Vec2) = Offset(topLeft.x + p.x * size.width, topLeft.y + p.y * size.height)
+    art.shaded.forEach { polygon ->
+        if (polygon.size >= 3) {
+            val path = Path().apply {
+                polygon.forEachIndexed { index, p -> point(p).let { if (index == 0) moveTo(it.x, it.y) else lineTo(it.x, it.y) } }
+                close()
+            }
+            drawPath(path, borderColor.copy(alpha = .16f))
+        }
+    }
+    art.lines.forEach { line ->
+        val path = Path().apply {
+            line.forEachIndexed { index, p -> point(p).let { if (index == 0) moveTo(it.x, it.y) else lineTo(it.x, it.y) } }
+        }
+        drawPath(path, borderColor, style = Stroke(borderWidth))
+    }
+    art.dots.forEach { dot ->
+        val center = Offset(topLeft.x + dot.anchorX * size.width + dot.offsetXDp * densityScale, topLeft.y + dot.anchorY * size.height + dot.offsetYDp * densityScale)
+        drawCircle(borderColor, radius = dot.radiusDp * densityScale, center = center)
+    }
+}

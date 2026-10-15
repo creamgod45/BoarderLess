@@ -73,7 +73,9 @@ class NodeShapeGeometryTest {
 
     @Test fun ownedPolygonBoundariesRemainOnVisibleSilhouetteAfterRotation() {
         NodeShape.entries.filter { it.polygonVertices() != null }.forEach { shape ->
-            assertTrue(shape.containsLocalPoint(Vec2.Zero, 100f, 50f), shape.token)
+            // The ring's centre is its hole and the crescent's centre is carved out, by design; relations use
+            // the outer circle / the crescent's own visible origin instead.
+            if (shape != NodeShape.Ring && shape != NodeShape.Crescent) assertTrue(shape.containsLocalPoint(Vec2.Zero, 100f, 50f), shape.token)
             shape.polygonVertices()!!.forEach { point ->
                 assertTrue(shape.containsLocalPoint(Vec2((point.x - .5f) * 200f, (point.y - .5f) * 100f), 100f, 50f), shape.token)
             }

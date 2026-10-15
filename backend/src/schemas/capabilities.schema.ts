@@ -47,6 +47,8 @@ export const CapabilitiesSchema = Type.Object({
     commandTypes: Type.Array(Type.String()),
     limits: Type.Record(Type.String(), Type.Number()),
   }),
+  /** 後端接受的固定形狀代號（NODE_SHAPES，依序）；APP 缺此欄位時只能使用原有 25 種 */
+  nodeShapes: Type.Array(Type.String()),
   textPlacement: Type.Object({ supported: Type.Literal(true), objectType: Type.String(), property: Type.String() }),
   sequenceDiagrams: Type.Object({
     supported: Type.Literal(true),

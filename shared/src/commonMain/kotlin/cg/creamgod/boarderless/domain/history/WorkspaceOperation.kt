@@ -973,3 +973,12 @@ data class TransactionOperation(
  * before publication. This lets the reversed inverse restore metadata before restoring labels. */
 internal fun WorkspaceOperation.applyInTransaction(workspace: Workspace): OperationResult =
     if (this is UpdateSequenceDiagramsOperation) applyMetadata(workspace, false) else applyTo(workspace)
+
+
+/** Shapes a leaf operation would write; used to gate drafts against backend capabilities. */
+fun WorkspaceOperation.nodeShapes(): List<NodeShape> =
+    when (this) {
+        is CreateObjectsOperation -> objects.filterIsInstance<cg.creamgod.boarderless.domain.model.TextNode>().map { it.shape }
+        is UpdateTextNodeAttributesOperation -> changes.map { it.after.shape }
+        else -> emptyList()
+    }

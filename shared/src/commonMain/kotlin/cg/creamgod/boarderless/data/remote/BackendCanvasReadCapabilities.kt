@@ -14,6 +14,8 @@ internal data class BackendCanvasReadCapabilities(
     val canWriteCanvas: Boolean = false,
     val sequenceWrite: Boolean = false,
     val mediaReferenceRestore: Boolean = false,
+    /** Shape tokens the backend accepts. Missing or empty means only the original 25 may be written. */
+    val nodeShapes: Set<String> = emptySet(),
 )
 
 internal fun readCanvasCapabilities(raw: JsonObject): BackendCanvasReadCapabilities {
@@ -52,5 +54,8 @@ internal fun readCanvasCapabilities(raw: JsonObject): BackendCanvasReadCapabilit
                 (value as? JsonPrimitive)?.takeIf { token -> token.isString }?.content == "restore_media_references"
             } == true
     } ?: false
-    return BackendCanvasReadCapabilities(style, geometry, vector, placement, sequence, styleWrite, canWrite, sequenceWrite, referenceRestore)
+    val shapes = (raw["nodeShapes"] as? JsonArray)?.map {
+        (it as? JsonPrimitive)?.takeIf { value -> value.isString }?.content ?: throw BackendContractException("Invalid node shape capability")
+    }?.toSet().orEmpty()
+    return BackendCanvasReadCapabilities(style, geometry, vector, placement, sequence, styleWrite, canWrite, sequenceWrite, referenceRestore, shapes)
 }

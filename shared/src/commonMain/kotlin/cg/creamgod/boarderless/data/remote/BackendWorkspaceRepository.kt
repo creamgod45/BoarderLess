@@ -39,6 +39,7 @@ import cg.creamgod.boarderless.domain.model.CanvasTransform
 import cg.creamgod.boarderless.domain.model.GroupFrame
 import cg.creamgod.boarderless.domain.model.MediaKind
 import cg.creamgod.boarderless.domain.model.MediaNode
+import cg.creamgod.boarderless.domain.history.nodeShapes
 import cg.creamgod.boarderless.domain.model.NodeShape
 import cg.creamgod.boarderless.domain.model.Relation
 import cg.creamgod.boarderless.domain.model.RelationDirection
@@ -203,6 +204,8 @@ class BackendWorkspaceRepository(
     override val supportsRelationGeometry: Boolean get() = canvasReadCapabilities.geometry && canvasReadCapabilities.canWriteCanvas
     override val supportsVectorPaths: Boolean get() = canvasReadCapabilities.vectorPath && canvasReadCapabilities.canWriteCanvas
     override val supportsTextPlacement: Boolean get() = canvasReadCapabilities.textPlacement && canvasReadCapabilities.canWriteCanvas
+    override val supportedNodeShapes: Set<NodeShape>
+        get() = canvasReadCapabilities.nodeShapes.mapNotNull(NodeShape::fromToken).toSet().takeIf { it.isNotEmpty() } ?: NodeShape.original
     override val supportsSequenceDiagrams: Boolean get() = canvasReadCapabilities.sequenceWrite
     private val replayJson = Json { ignoreUnknownKeys = true }
 
@@ -600,6 +603,7 @@ class BackendWorkspaceRepository(
         check(supportsSequenceDiagrams || session.workspace.sequenceDiagrams.isEmpty()) { "Backend sequence diagram capability is unavailable" }
         check(session.clientId == preferences.clientId) { "Submission belongs to another client" }
         check(session.canEditContent) { "Preparation requires edit permission" }
+        requireSupportedShapes(operation)
         check(supportsCanvasStyle || operation.flatten().none { it is cg.creamgod.boarderless.domain.history.UpdateCanvasStyleOperation }) {
             "Backend canvas style capability is unavailable"
         }
@@ -736,6 +740,15 @@ class BackendWorkspaceRepository(
             "Backend canvas style capability is unavailable"
         }
         operation.requireLegacyRelationContract(canvasReadCapabilities)
+        requireSupportedShapes(operation)
+    }
+
+    /** Never stage or send a shape the backend did not announce: an offline draft would only fail on upload. */
+    private fun requireSupportedShapes(operation: WorkspaceOperation) {
+        val allowed = supportedNodeShapes
+        check(operation.flatten().all { part -> part.nodeShapes().all { it in allowed } }) {
+            "Backend does not support one of the requested node shapes"
+        }
     }
 
     override suspend fun retainHistoryDraftAwaited(session: WorkspaceSession, before: Workspace,

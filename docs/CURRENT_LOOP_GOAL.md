@@ -7,6 +7,13 @@
 - 仍保留的發布前風險（不因空專案而消失）：Android／iOS／Web 的伺服器模式草稿與序號仍走 Settings 路徑，不是完整 durable queue。Desktop 已使用全新原生 `server-v1` 命名空間，無此問題。處理方向是替 Android／iOS／Web 建立全新（不經遷移）的 awaited 原生儲存，需設計動態 scope 註冊（現有 Awaited* 儲存的 `requireScope` 為同步，無法在其中做非同步註冊）。
 - 此段為範圍說明，不是完成宣告；六主線仍未完整交付。
 
+## 2026-10-15：固定形狀擴充 25 → 49（APP＋後端同次提交，單元層已驗證）
+
+- 依 `SHAPE_LIBRARY_SPEC.md` v1.2 新增 24 種固定形狀（基本 6、流程 8、標註 5、容器／架構 5）；後端 `NODE_SHAPES` 追加同樣代號、capabilities 新增 `nodeShapes`、新增契約 fixture 並更新三份 capabilities fixture。
+- APP：`NodeShapeArt` 為單一幾何來源；物件庫新增「標註」分類與 24 個項目；未宣告的形狀不顯示、不可暫存或送出。
+- 驗證：後端單元 325／整合抽測通過、`tsc` 無錯誤；APP JVM 1209、JS 1135、Wasm 1135、iOS 模擬器 1119 全過。順帶修正兩處 JS 測試對「孤立代理字元」字面量的脆弱性（bundler 可能把它改寫為 U+FFFD）。
+- 未驗證：除標註類外的形狀未逐一目視；真機與完整編輯流程；舊版 App 對新形狀的實機行為。
+
 ## 2026-10-14：Android／iOS／Web 全新 awaited 伺服器儲存（源碼已接、單元層已驗證）
 
 - 新增 `FreshAwaitedServerStorage`（commonMain）：不經舊資料遷移，直接以平台 awaited 紀錄儲存提供草稿、序號帳本與復原安全的耐久儲存。Android／iOS／Web 伺服器模式在「未提供 activation」時預設使用它（Android `noBackupFilesDir/server-fresh-v1`、iOS 私有目錄 `server-fresh-v1`、Web IndexedDB Documents 範圍）；已有 activation 的路徑不變。
