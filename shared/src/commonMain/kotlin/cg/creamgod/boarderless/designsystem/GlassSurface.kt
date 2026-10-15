@@ -84,6 +84,9 @@ fun ShellButton(
 ) {
     val colors = BoarderLessTheme.colors
     val shape = RoundedCornerShape(if (compact) 8.dp else 12.dp)
+    // Icon-only and compact buttons are terse by design, so they always explain themselves: hover (pointer)
+    // or long press (touch) shows the explicit hint, or the full label when none was given.
+    val hint = hint ?: label.takeIf { (!showLabel || compact) && it.isNotBlank() }
     var focused by remember { mutableStateOf(false) }
     var hovered by remember { mutableStateOf(false) }
     var pressedHint by remember { mutableStateOf(false) }
@@ -141,8 +144,11 @@ fun ShellButton(
                     onClick = onClick,
                     onLongClick = if (hint == null) null else ({ pressedHint = true }),
                 )
-                .then(if (compact) Modifier.size(28.dp) else Modifier)
+                // A fixed square is only right for icon-only buttons; a labelled compact chip must grow to
+                // fit its text (a 28dp square used to clip every chip to its first character).
+                .then(if (compact && !showLabel) Modifier.size(28.dp) else Modifier)
                 .heightIn(min = if (compact) 28.dp else 44.dp)
+                .then(if (compact && showLabel) Modifier.widthIn(min = 28.dp) else Modifier)
                 .padding(horizontal = if (compact) 6.dp else 14.dp, vertical = if (compact) 6.dp else 9.dp),
     ) {
         Row(
