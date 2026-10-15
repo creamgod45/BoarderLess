@@ -5992,6 +5992,8 @@ fun WorkspaceScreen(
                             .padding(8.dp),
                     verticalArrangement = Arrangement.spacedBy(ButtonGap),
                 ) {
+                    // The menu panel is 70% of the screen, so its buttons must match that width, not the shared inspector width.
+                    val inspectorWidth = (canvasSize.width / density * 0.7f).dp
                     BasicText(
                         text = Strings.toolbar.canvasMenu(),
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
@@ -6010,6 +6012,7 @@ fun WorkspaceScreen(
                             showCompactMenu = false
                             showAiUnderstanding = true
                         },
+                        modifier = Modifier.fillMaxWidth(),
                     )
                     ShellButton(
                         label = if (multiSelectionMode) Strings.common.multiSelectOn() else Strings.common.multiSelectMode(),
@@ -6056,7 +6059,7 @@ fun WorkspaceScreen(
                                         showCompactMenu = false
                                         groupSelection()
                                         canvasFocusRequester.requestFocus()
-                                    },
+                                    }, modifier = Modifier.weight(1f),
                                 )
                             }
                             if (selectedIds != rootSelectionIds) {
@@ -6070,7 +6073,7 @@ fun WorkspaceScreen(
                                         statusMessage = Strings.common.selectedObjects(selectedIds.size)
                                         showCompactMenu = false
                                         canvasFocusRequester.requestFocus()
-                                    },
+                                    }, modifier = Modifier.weight(1f),
                                 )
                             }
                             if (selectedIds.isNotEmpty()) {
@@ -6082,7 +6085,7 @@ fun WorkspaceScreen(
                                         editingId = null
                                         showCompactMenu = false
                                         canvasFocusRequester.requestFocus()
-                                    },
+                                    }, modifier = Modifier.weight(1f),
                                 )
                             }
                         }
@@ -6109,7 +6112,7 @@ fun WorkspaceScreen(
                                 onClick = {
                                     showCompactMenu = false
                                     if (connectionFailed) connectionAttempt += 1 else addTextNodeAtCenter()
-                                },
+                                }, modifier = Modifier.weight(1f),
                             )
                             ShellButton(
                                 label = Strings.inspector.paste(),
@@ -6119,20 +6122,20 @@ fun WorkspaceScreen(
                                     showCompactMenu = false
                                     pasteFromClipboard()
                                     canvasFocusRequester.requestFocus()
-                                },
+                                }, modifier = Modifier.weight(1f),
                             )
                             if (mediaImportRuntime.selectSource != null) {
                                 ShellButton(
                                     label = if (mediaImportBusy) mediaImportLabel else Strings.media.importMedia(),
                                     icon = ShellIcon.Library,
                                     enabled = !inputBlocked && workspaceChangeAllowed,
-                                    onClick = ::startMediaImport,
+                                    onClick = ::startMediaImport, modifier = Modifier.weight(1f),
                                 )
                                 if (mediaImportBusy) {
                                     ShellButton(
                                         label = Strings.media.cancelImport(),
                                         icon = ShellIcon.Close,
-                                        onClick = { mediaImportJob?.cancel() },
+                                        onClick = { mediaImportJob?.cancel() }, modifier = Modifier.weight(1f),
                                     )
                                 }
                             }
@@ -6195,13 +6198,13 @@ fun WorkspaceScreen(
                                 label = Strings.palette.undo(),
                                 icon = ShellIcon.Undo,
                                 enabled = !inputBlocked && history.canUndo,
-                                onClick = ::undo,
+                                onClick = ::undo, modifier = Modifier.weight(1f),
                             )
                             ShellButton(
                                 label = Strings.palette.redo(),
                                 icon = ShellIcon.Redo,
                                 enabled = !inputBlocked && history.canRedo,
-                                onClick = ::redo,
+                                onClick = ::redo, modifier = Modifier.weight(1f),
                             )
                         }
                     }
@@ -6222,26 +6225,26 @@ fun WorkspaceScreen(
                                 icon = ShellIcon.ZoomOut,
                                 showLabel = false,
                                 enabled = viewport.zoom > 0.2f,
-                                onClick = { zoomCanvas(1f / 1.2f) },
+                                onClick = { zoomCanvas(1f / 1.2f) }, modifier = Modifier.weight(1f),
                             )
                             ShellButton(
                                 label = "${(viewport.zoom * 100).roundToInt()}%",
                                 icon = null,
                                 enabled = viewport.zoom != 1f,
-                                onClick = ::resetCanvasZoom,
+                                onClick = ::resetCanvasZoom, modifier = Modifier.weight(1f),
                             )
                             ShellButton(
                                 label = Strings.palette.zoomIn(),
                                 icon = ShellIcon.ZoomIn,
                                 showLabel = false,
                                 enabled = viewport.zoom < 4f,
-                                onClick = { zoomCanvas(1.2f) },
+                                onClick = { zoomCanvas(1.2f) }, modifier = Modifier.weight(1f),
                             )
                             ShellButton(
                                 label = Strings.palette.fitContent(),
                                 icon = ShellIcon.Fit,
                                 showLabel = false,
-                                onClick = ::fitContent,
+                                onClick = ::fitContent, modifier = Modifier.weight(1f),
                             )
                         }
                         ShellButton(
@@ -7539,6 +7542,8 @@ fun WorkspaceScreen(
                                 ).padding(8.dp),
                         verticalArrangement = Arrangement.spacedBy(ButtonGap),
                     ) {
+                        // Bottom sheets span the compact sheet width; their controls must fill it.
+                        val inspectorWidth = if (compactLayout) compactBottomSheetWidth else 284.dp
                         val relationTitle = relation.intent?.let(::relationIntentLabel) ?: Strings.objects.connection()
                         if (compactLayout) {
                             CompactBottomSheetHeader(
@@ -7594,7 +7599,7 @@ fun WorkspaceScreen(
                                         label = label,
                                         enabled = !inputBlocked,
                                         accent = relation.intent == intent,
-                                        onClick = { updateSelectedRelation { it.copy(intent = intent) } },
+                                        onClick = { updateSelectedRelation { it.copy(intent = intent) } }, modifier = Modifier.weight(1f),
                                     )
                                 }
                             }
@@ -7612,7 +7617,7 @@ fun WorkspaceScreen(
                                         label = label,
                                         enabled = !inputBlocked,
                                         accent = relation.direction == direction,
-                                        onClick = { updateSelectedRelation { it.copy(direction = direction) } },
+                                        onClick = { updateSelectedRelation { it.copy(direction = direction) } }, modifier = Modifier.weight(1f),
                                     )
                                 }
                             }
@@ -7646,7 +7651,7 @@ fun WorkspaceScreen(
                                 onClick = {
                                     val nextLabel = labelDraft.trim().ifBlank { null }
                                     updateSelectedRelation { it.copy(label = nextLabel) }
-                                },
+                                }, modifier = Modifier.fillMaxWidth(),
                             )
                         }
                         CollapsibleSectionHeader(
@@ -7678,13 +7683,13 @@ fun WorkspaceScreen(
                                     relationInsertion =
                                         runCatching { RelationInsertionDraft(history.workspace, relation.id) }.getOrNull()
                                     if (relationInsertion == null) statusMessage = Strings.relationInsert.failed()
-                                },
+                                }, modifier = Modifier.fillMaxWidth(),
                             )
                             ShellButton(
                                 label = Strings.inspector.deleteConnection(),
                                 icon = ShellIcon.Delete,
                                 enabled = !inputBlocked,
-                                onClick = ::deleteSelection,
+                                onClick = ::deleteSelection, modifier = Modifier.fillMaxWidth(),
                             )
                         }
                         if (compactLayout) {
@@ -7844,6 +7849,7 @@ fun WorkspaceScreen(
                             ).padding(8.dp),
                     verticalArrangement = Arrangement.spacedBy(ButtonGap),
                 ) {
+                    val inspectorWidth = if (compactLayout) compactBottomSheetWidth else 284.dp
                     val inspectorTitle =
                         when {
                             selectedGroups.size == 1 -> selectedGroups.single().title
@@ -7901,7 +7907,7 @@ fun WorkspaceScreen(
                                 if (it.id in history.workspace.sequenceDiagrams) ShellButton(
                                     Strings.sequence.editTitle(), enabled = repository.supportsSequenceDiagrams && !inputBlocked &&
                                         !mediaImportBusy && !syncInProgress && submissionQueue.isEmpty,
-                                    onClick = { sequenceEditTarget = it.id; showSequenceCreation = true },
+                                    onClick = { sequenceEditTarget = it.id; showSequenceCreation = true }, modifier = Modifier.fillMaxWidth(),
                                 )
                                 BasicTextField(
                                     value = groupTitleDraft,
@@ -7931,7 +7937,7 @@ fun WorkspaceScreen(
                                     enabled =
                                         !inputBlocked && groupTitleDraft.trim().isNotEmpty() &&
                                             groupTitleDraft.trim() != it.title,
-                                    onClick = ::submitGroupTitle,
+                                    onClick = ::submitGroupTitle, modifier = Modifier.fillMaxWidth(),
                                 )
                             }
                             ShellButton(
@@ -7947,27 +7953,27 @@ fun WorkspaceScreen(
                                     updateSelectedGroups("lock-group") { group, _ ->
                                         GroupFrameAttributes(group.zIndex, !allGroupsLocked, group.colorToken, group.title)
                                     }
-                                },
+                                }, modifier = Modifier.fillMaxWidth(),
                             )
                             ShellButton(
                                 label = Strings.inspector.bringGroupForward(),
                                 enabled = !inputBlocked && !anyGroupLocked && canMoveGroups(LayerMove.Forward),
-                                onClick = { reorderSelectedGroupLayers(LayerMove.Forward) },
+                                onClick = { reorderSelectedGroupLayers(LayerMove.Forward) }, modifier = Modifier.fillMaxWidth(),
                             )
                             ShellButton(
                                 label = Strings.inspector.sendGroupBackward(),
                                 enabled = !inputBlocked && !anyGroupLocked && canMoveGroups(LayerMove.Backward),
-                                onClick = { reorderSelectedGroupLayers(LayerMove.Backward) },
+                                onClick = { reorderSelectedGroupLayers(LayerMove.Backward) }, modifier = Modifier.fillMaxWidth(),
                             )
                             ShellButton(
                                 label = Strings.inspector.bringGroupToFront(),
                                 enabled = !inputBlocked && !anyGroupLocked && canMoveGroups(LayerMove.Front),
-                                onClick = { reorderSelectedGroupLayers(LayerMove.Front) },
+                                onClick = { reorderSelectedGroupLayers(LayerMove.Front) }, modifier = Modifier.fillMaxWidth(),
                             )
                             ShellButton(
                                 label = Strings.inspector.sendGroupToBack(),
                                 enabled = !inputBlocked && !anyGroupLocked && canMoveGroups(LayerMove.Back),
-                                onClick = { reorderSelectedGroupLayers(LayerMove.Back) },
+                                onClick = { reorderSelectedGroupLayers(LayerMove.Back) }, modifier = Modifier.fillMaxWidth(),
                             )
                             listOf(
                                 "group" to Strings.inspector.groupDefault(),
@@ -7983,7 +7989,7 @@ fun WorkspaceScreen(
                                         updateSelectedGroups("color-group") { group, _ ->
                                             GroupFrameAttributes(group.zIndex, group.locked, token, group.title)
                                         }
-                                    },
+                                    }, modifier = Modifier.fillMaxWidth(),
                                 )
                             }
                         }
@@ -8014,7 +8020,7 @@ fun WorkspaceScreen(
                                     ShellButton(
                                         label = Strings.giphy.refreshPreview(),
                                         enabled = !inputBlocked && giphyRetryAction != null,
-                                        onClick = { giphyRetryAction?.invoke(media.reference) },
+                                        onClick = { giphyRetryAction?.invoke(media.reference) }, modifier = Modifier.fillMaxWidth(),
                                     )
                                 }
                                 BasicTextField(
@@ -8034,7 +8040,7 @@ fun WorkspaceScreen(
                                 ShellButton(
                                     label = Strings.media.saveAlternativeText(),
                                     enabled = !inputBlocked && mediaAltTextDraft.trim() != media.mediaAltText,
-                                    onClick = ::submitMediaAltText,
+                                    onClick = ::submitMediaAltText, modifier = Modifier.fillMaxWidth(),
                                 )
                             }
                             ShellButton(
@@ -8049,7 +8055,7 @@ fun WorkspaceScreen(
                                             media.mediaAltText,
                                         )
                                     }
-                                },
+                                }, modifier = Modifier.fillMaxWidth(),
                             )
                             if (anyMediaLocked && !allMediaLocked) {
                                 BasicText(
@@ -8077,7 +8083,7 @@ fun WorkspaceScreen(
                                 ShellButton(
                                     label = Strings.common.editText(),
                                     enabled = !inputBlocked && !node.locked,
-                                    onClick = ::startEditingSelectedNode,
+                                    onClick = ::startEditingSelectedNode, modifier = Modifier.fillMaxWidth(),
                                 )
                             }
                             ShellButton(
@@ -8093,7 +8099,7 @@ fun WorkspaceScreen(
                                     updateSelectedNodes("lock") { node, _ ->
                                         TextNodeAttributes(node.zIndex, !allLocked, node.colorToken, node.shape, node.vectorPath, node.textPlacement)
                                     }
-                                },
+                                }, modifier = Modifier.fillMaxWidth(),
                             )
                         }
                         CollapsibleSectionHeader(
@@ -8175,23 +8181,23 @@ fun WorkspaceScreen(
                                 label = Strings.layers.bringForward(),
                                 icon = ShellIcon.Forward,
                                 enabled = !inputBlocked && !anyLocked && canMoveNodes(LayerMove.Forward),
-                                onClick = { reorderSelectedNodeLayers(LayerMove.Forward) },
+                                onClick = { reorderSelectedNodeLayers(LayerMove.Forward) }, modifier = Modifier.fillMaxWidth(),
                             )
                             ShellButton(
                                 label = Strings.layers.sendBackward(),
                                 icon = ShellIcon.Back,
                                 enabled = !inputBlocked && !anyLocked && canMoveNodes(LayerMove.Backward),
-                                onClick = { reorderSelectedNodeLayers(LayerMove.Backward) },
+                                onClick = { reorderSelectedNodeLayers(LayerMove.Backward) }, modifier = Modifier.fillMaxWidth(),
                             )
                             ShellButton(
                                 label = Strings.layers.bringToFront(),
                                 enabled = !inputBlocked && !anyLocked && canMoveNodes(LayerMove.Front),
-                                onClick = { reorderSelectedNodeLayers(LayerMove.Front) },
+                                onClick = { reorderSelectedNodeLayers(LayerMove.Front) }, modifier = Modifier.fillMaxWidth(),
                             )
                             ShellButton(
                                 label = Strings.layers.sendToBack(),
                                 enabled = !inputBlocked && !anyLocked && canMoveNodes(LayerMove.Back),
-                                onClick = { reorderSelectedNodeLayers(LayerMove.Back) },
+                                onClick = { reorderSelectedNodeLayers(LayerMove.Back) }, modifier = Modifier.fillMaxWidth(),
                             )
                             ShellButton(
                                 label = Strings.inspector.rotatePlus15Degrees(),
@@ -8201,7 +8207,7 @@ fun WorkspaceScreen(
                                     transformSelectedNodesAsSelection("rotate-selection") { transforms ->
                                         rotateSelectionTransforms(transforms, 15f)
                                     }
-                                },
+                                }, modifier = Modifier.fillMaxWidth(),
                             )
                             ShellButton(
                                 label = Strings.inspector.larger(),
@@ -8214,7 +8220,7 @@ fun WorkspaceScreen(
                                             minimumSize = CanvasSize(120f * density, 72f * density),
                                         )
                                     }
-                                },
+                                }, modifier = Modifier.fillMaxWidth(),
                             )
                             ShellButton(
                                 label = Strings.inspector.smaller(),
@@ -8227,7 +8233,7 @@ fun WorkspaceScreen(
                                             minimumSize = CanvasSize(120f * density, 72f * density),
                                         )
                                     }
-                                },
+                                }, modifier = Modifier.fillMaxWidth(),
                             )
                             BasicText(
                                 text = Strings.objects.shape(),
@@ -8254,7 +8260,7 @@ fun WorkspaceScreen(
                                                     textPlacement = node.textPlacement,
                                                 )
                                             }
-                                        },
+                                        }, modifier = Modifier.weight(1f),
                                     )
                                 }
                             }
@@ -8273,37 +8279,37 @@ fun WorkspaceScreen(
                                         label = Strings.layout.horizontalFlow(),
                                         icon = ShellIcon.Forward,
                                         enabled = canAutoLayoutSelection(),
-                                        onClick = { autoLayoutSelection(DiagramLayoutMode.HorizontalFlow) },
+                                        onClick = { autoLayoutSelection(DiagramLayoutMode.HorizontalFlow) }, modifier = Modifier.weight(1f),
                                     )
                                     ShellButton(
                                         label = Strings.layout.treeHierarchy(),
                                         icon = ShellIcon.Layers,
                                         enabled = canAutoLayoutSelection(),
-                                        onClick = { autoLayoutSelection(DiagramLayoutMode.VerticalTree) },
+                                        onClick = { autoLayoutSelection(DiagramLayoutMode.VerticalTree) }, modifier = Modifier.weight(1f),
                                     )
                                     ShellButton(
                                         label = Strings.layout.radialMap(),
                                         icon = ShellIcon.Radial,
                                         enabled = canAutoLayoutSelection(),
-                                        onClick = { autoLayoutSelection(DiagramLayoutMode.RadialRelationship) },
+                                        onClick = { autoLayoutSelection(DiagramLayoutMode.RadialRelationship) }, modifier = Modifier.weight(1f),
                                     )
                                     ShellButton(
                                         label = Strings.layout.gridLayout(),
                                         icon = ShellIcon.Grid,
                                         enabled = canAutoLayoutSelection(),
-                                        onClick = { autoLayoutSelection(DiagramLayoutMode.Grid) },
+                                        onClick = { autoLayoutSelection(DiagramLayoutMode.Grid) }, modifier = Modifier.weight(1f),
                                     )
                                     ShellButton(
                                         label = Strings.layout.distributeHorizontally(),
                                         icon = ShellIcon.DistributeHorizontal,
                                         enabled = canDistributeSelection(),
-                                        onClick = { distributeSelection(DistributionAxis.Horizontal) },
+                                        onClick = { distributeSelection(DistributionAxis.Horizontal) }, modifier = Modifier.weight(1f),
                                     )
                                     ShellButton(
                                         label = Strings.layout.distributeVertically(),
                                         icon = ShellIcon.DistributeVertical,
                                         enabled = canDistributeSelection(),
-                                        onClick = { distributeSelection(DistributionAxis.Vertical) },
+                                        onClick = { distributeSelection(DistributionAxis.Vertical) }, modifier = Modifier.weight(1f),
                                     )
                                 }
                                 BasicText(
@@ -8336,7 +8342,7 @@ fun WorkspaceScreen(
                                                     SelectionAlignment.Bottom -> ShellIcon.AlignBottom
                                                 },
                                             enabled = canAutoLayoutSelection(),
-                                            onClick = { alignSelection(alignment) },
+                                            onClick = { alignSelection(alignment) }, modifier = Modifier.weight(1f),
                                         )
                                     }
                                 }
@@ -8400,17 +8406,17 @@ fun WorkspaceScreen(
                                 ShellButton(
                                     label = Strings.inspector.relate(),
                                     enabled = !inputBlocked,
-                                    onClick = { connectSelected("relates", RelationDirection.Forward) },
+                                    onClick = { connectSelected("relates", RelationDirection.Forward) }, modifier = Modifier.fillMaxWidth(),
                                 )
                                 ShellButton(
                                     label = Strings.inspector.supports(),
                                     enabled = !inputBlocked,
-                                    onClick = { connectSelected("supports", RelationDirection.Forward) },
+                                    onClick = { connectSelected("supports", RelationDirection.Forward) }, modifier = Modifier.fillMaxWidth(),
                                 )
                                 ShellButton(
                                     label = Strings.inspector.conflicts(),
                                     enabled = !inputBlocked,
-                                    onClick = { connectSelected("conflicts", RelationDirection.Both) },
+                                    onClick = { connectSelected("conflicts", RelationDirection.Both) }, modifier = Modifier.fillMaxWidth(),
                                 )
                             }
                         }
@@ -8419,17 +8425,17 @@ fun WorkspaceScreen(
                         ShellButton(
                             label = Strings.inspector.relate(),
                             enabled = !inputBlocked,
-                            onClick = { connectSelected("relates", RelationDirection.Forward) },
+                            onClick = { connectSelected("relates", RelationDirection.Forward) }, modifier = Modifier.fillMaxWidth(),
                         )
                         ShellButton(
                             label = Strings.inspector.supports(),
                             enabled = !inputBlocked,
-                            onClick = { connectSelected("supports", RelationDirection.Forward) },
+                            onClick = { connectSelected("supports", RelationDirection.Forward) }, modifier = Modifier.fillMaxWidth(),
                         )
                         ShellButton(
                             label = Strings.inspector.conflicts(),
                             enabled = !inputBlocked,
-                            onClick = { connectSelected("conflicts", RelationDirection.Both) },
+                            onClick = { connectSelected("conflicts", RelationDirection.Both) }, modifier = Modifier.fillMaxWidth(),
                         )
                     }
                     CollapsibleSectionHeader(
@@ -8445,12 +8451,12 @@ fun WorkspaceScreen(
                                 enabled =
                                     !inputBlocked && !group.locked && group.id !in history.workspace.sequenceDiagrams &&
                                         descendantObjectIds(history.workspace, setOf(group.id)).isNotEmpty(),
-                                onClick = { fitGroupToContents(group) },
+                                onClick = { fitGroupToContents(group) }, modifier = Modifier.fillMaxWidth(),
                             )
                             ShellButton(
                                 label = Strings.palette.ungroup(),
                                 enabled = !inputBlocked && !group.locked && group.id !in history.workspace.sequenceDiagrams,
-                                onClick = { ungroup(group) },
+                                onClick = { ungroup(group) }, modifier = Modifier.fillMaxWidth(),
                             )
                         }
                         if (selectedNodes.size + selectedGroups.size + selectedMedia.size >= 2) {
@@ -8458,7 +8464,7 @@ fun WorkspaceScreen(
                                 label = Strings.palette.groupSelection(),
                                 icon = ShellIcon.Group,
                                 enabled = !inputBlocked,
-                                onClick = ::groupSelection,
+                                onClick = ::groupSelection, modifier = Modifier.fillMaxWidth(),
                             )
                         }
                         WorkspaceReuseActions(
