@@ -175,6 +175,8 @@ class DesktopLegacyMigrationCoordinatorTest {
 
     @Test fun partialIntentRejectsAdvancedTombstonedCorruptAndUninventoriedFilesBeforeFurtherWrites() {
         for (mode in listOf("advanced", "tombstone", "corrupt", "bad-catalog", "symlink")) {
+            // Windows needs a privilege to create symlinks; without it the symlink case cannot be set up.
+            if (mode == "symlink" && !canCreateSymbolicLinks()) continue
             temporary { root ->
                 val (_, capture) = source()
                 var publications = 0
@@ -273,7 +275,7 @@ class DesktopLegacyMigrationCoordinatorTest {
                         assertTrue(process.waitFor(8, TimeUnit.SECONDS))
                         val files = DesktopAtomicDraftStore(root)
                         val coordinator = DesktopLegacyMigrationCoordinator(files) {}
-                        val complete = coordinator.publish(scope) { captured }
+                        val complete = untilKilledProcessReleasesLocks { coordinator.publish(scope) { captured } }
                         assertEquals(DesktopMigrationPhase.Published, complete.receipt.phase)
                         assertEquals(2L, complete.generation)
                         assertEquals(pending, DesktopDraftScopeBundleStore(files).read(scope)!!.bundle!!.pending)
@@ -319,6 +321,30 @@ class DesktopLegacyMigrationCoordinatorTest {
                 assertEquals(before, files.recordKeys().associateWith { files.read(it)!!.generation })
             }
         }
+}
+
+/** Windows needs a privilege to create symlinks; cases that need one are skipped without it. */
+private fun canCreateSymbolicLinks(): Boolean {
+    val directory = Files.createTempDirectory("boarderless-symlink-probe-")
+    return try {
+        runCatching { Files.createSymbolicLink(directory.resolve("link"), directory) }.isSuccess
+    } finally {
+        Files.deleteIfExists(directory.resolve("link"))
+        Files.deleteIfExists(directory)
+    }
+}
+
+/** A killed process's file locks are released by the OS, on Windows a moment after waitFor returns. */
+private fun <T> untilKilledProcessReleasesLocks(action: () -> T): T {
+    val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+    while (true) {
+        try {
+            return action()
+        } catch (busy: AtomicDraftBusyException) {
+            if (System.nanoTime() > deadline) throw busy
+            Thread.sleep(50)
+        }
+    }
 }
 
 private fun migrationProcessCapture(pending: PendingWorkspaceSubmission) =

@@ -14,14 +14,17 @@ class DesktopAiToolTraceTest {
         val file = dir.resolve("ai-trace.jsonl")
         val text = Files.readString(file)
         assertTrue(text.contains("\"tool\":\"create_nodes\"") && text.endsWith("\n"))
-        assertEquals(PosixFilePermissions.fromString("rw-------"), Files.getPosixFilePermissions(file))
+        if (Files.getFileStore(file).supportsFileAttributeView("posix")) {
+            assertEquals(PosixFilePermissions.fromString("rw-------"), Files.getPosixFilePermissions(file))
+        }
         repeat(40) { trace.record("tool", "req", it, mapOf("arguments" to "x".repeat(200))) }
         assertTrue(Files.exists(dir.resolve("ai-trace.jsonl.1")))
         assertTrue(Files.size(file) <= 2048)
 
         val target = Files.createTempFile("victim", ".txt")
         Files.delete(file)
-        Files.createSymbolicLink(file, target)
+        // Windows needs a privilege to create symlinks; without it the no-follow half cannot be set up.
+        if (runCatching { Files.createSymbolicLink(file, target) }.isFailure) return
         trace.record("tool", "req", 1, mapOf("arguments" to "secret"))
         assertEquals("", Files.readString(target), "a symlinked trace file must never be written through")
     }

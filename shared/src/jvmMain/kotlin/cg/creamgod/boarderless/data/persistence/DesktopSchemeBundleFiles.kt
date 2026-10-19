@@ -1,5 +1,6 @@
 package cg.creamgod.boarderless.data.persistence
 
+import cg.creamgod.boarderless.data.PrivateFileSystem
 import cg.creamgod.boarderless.feature.canvas.QuickSchemeBundleCodec
 import cg.creamgod.boarderless.feature.canvas.SchemeBundleDestination
 import cg.creamgod.boarderless.feature.canvas.SchemeBundleSource
@@ -14,7 +15,6 @@ import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
 import java.nio.file.attribute.BasicFileAttributes
-import java.nio.file.attribute.PosixFilePermissions
 
 /** Private immutable picker snapshot. Neither the selected path nor the snapshot path leaves JVM. */
 internal class DesktopSchemeBundleSource private constructor(
@@ -55,12 +55,12 @@ internal class DesktopSchemeBundleSource private constructor(
             check(canRead())
             val before = Files.readAttributes(selected, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
             require(before.isRegularFile && !before.isSymbolicLink && before.size() in 45..QuickSchemeBundleCodec.MaximumBundleBytes)
-            val directory = Files.createTempDirectory("boarderless-scheme-bundle-", PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")))
+            val directory = Files.createTempDirectory("boarderless-scheme-bundle-", *PrivateFileSystem.directoryAttributes(Path.of(System.getProperty("java.io.tmpdir"))))
             val path = directory.resolve("snapshot.bundle")
             try {
                 FileChannel.open(selected, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS).use { input ->
                     FileChannel.open(path, setOf(StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE),
-                        PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------"))).use { output ->
+                        *PrivateFileSystem.fileAttributes(directory)).use { output ->
                         val buffer = ByteBuffer.allocate(QuickSchemeBundleCodec.ChunkBytes)
                         var copied = 0L
                         while (copied < before.size()) {
@@ -113,7 +113,7 @@ internal class DesktopSchemeBundleDestination(
         if (partial == null) {
             require(target.isAbsolute && Files.isDirectory(target.parent))
             check(!Files.exists(target, LinkOption.NOFOLLOW_LINKS))
-            partial = Files.createTempFile(target.parent, ".boarderless-bundle-", ".part", PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")))
+            partial = Files.createTempFile(target.parent, ".boarderless-bundle-", ".part", *PrivateFileSystem.fileAttributes(target.parent))
             channel = FileChannel.open(partial, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)
         }
         val buffer = ByteBuffer.wrap(bytes)
@@ -138,7 +138,7 @@ internal class DesktopSchemeBundleDestination(
         published = true
         Files.delete(file)
         partial = null
-        FileChannel.open(target.parent, StandardOpenOption.READ).use { it.force(true) }
+        PrivateFileSystem.forceDirectory(target.parent)
         finished = true
     }
 

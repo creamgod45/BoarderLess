@@ -13,7 +13,6 @@ import kotlinx.serialization.json.Json
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.file.*
-import java.nio.file.attribute.PosixFilePermissions
 import java.security.MessageDigest
 import java.time.Instant
 import java.util.UUID
@@ -78,9 +77,8 @@ class DesktopFileAssetGateway(
 
     private fun privateRoot() {
         require(root.isAbsolute)
-        if (!Files.exists(root, LinkOption.NOFOLLOW_LINKS)) Files.createDirectory(root, DirectoryPermissions)
-        check(!Files.isSymbolicLink(root) && Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS))
-        check(Files.getPosixFilePermissions(root, LinkOption.NOFOLLOW_LINKS) == PosixFilePermissions.fromString("rwx------"))
+        if (!Files.exists(root, LinkOption.NOFOLLOW_LINKS)) Files.createDirectory(root, *PrivateFileSystem.directoryAttributes(root))
+        PrivateFileSystem.requirePrivateDirectory(root)
     }
 
     private fun key(id: String): String {
@@ -192,7 +190,7 @@ class DesktopFileAssetGateway(
         )
         val target = blob(ticket.asset.id)
         check(!Files.exists(target, LinkOption.NOFOLLOW_LINKS))
-        val temporary = Files.createTempFile(root, ".import-", ".part", FilePermissions)
+        val temporary = Files.createTempFile(root, ".import-", ".part", *PrivateFileSystem.fileAttributes(root))
         try {
             val digest = MessageDigest.getInstance("SHA-256")
             FileChannel.open(temporary, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS).use { channel ->
@@ -315,14 +313,9 @@ class DesktopFileAssetGateway(
         check(("sha256:" + hex(digest.digest())).equals(asset.checksum, ignoreCase = true))
     }
 
-    private fun forceDirectory() {
-        FileChannel.open(root, StandardOpenOption.READ).use { it.force(true) }
-    }
+    private fun forceDirectory() = PrivateFileSystem.forceDirectory(root)
 
     private companion object {
-        val DirectoryPermissions = PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------"))
-        val FilePermissions = PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------"))
-
         fun hex(bytes: ByteArray) = bytes.joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
     }
 }

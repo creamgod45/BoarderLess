@@ -1,11 +1,11 @@
 package cg.creamgod.boarderless.data.remote
 
+import cg.creamgod.boarderless.data.PrivateFileSystem
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.channels.OverlappingFileLockException
 import java.nio.file.*
-import java.nio.file.attribute.PosixFilePermissions
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.locks.ReentrantLock
@@ -41,7 +41,7 @@ internal class DesktopAtomicDraftStore(
         val requested = rootPath.normalize()
         if (!Files.exists(requested, LinkOption.NOFOLLOW_LINKS)) {
             try {
-                Files.createDirectory(requested, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")))
+                Files.createDirectory(requested, *PrivateFileSystem.directoryAttributes(requested))
             } catch (
                 _: FileAlreadyExistsException,
             ) {
@@ -50,7 +50,7 @@ internal class DesktopAtomicDraftStore(
         }
         checkPrivateRoot(requested)
         root = requested.toRealPath()
-        FileChannel.open(requireNotNull(root.parent), StandardOpenOption.READ).use { it.force(true) }
+        PrivateFileSystem.forceDirectory(requireNotNull(root.parent))
     }
 
     /** Read-only published-record catalog. Caller must hold a lifetime exclusion covering ALL
@@ -100,7 +100,7 @@ internal class DesktopAtomicDraftStore(
                     .putInt(snapshot?.size ?: -1)
                     .array()
             val hash = checksum(header, snapshot)
-            val staging = Files.createTempFile(root, "staging-", ".tmp", PrivateFileAttribute)
+            val staging = Files.createTempFile(root, "staging-", ".tmp", *PrivateFileSystem.fileAttributes(root))
             var publicationAttempted = false
             try {
                 FileChannel.open(staging, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS).use { channel ->
@@ -113,7 +113,7 @@ internal class DesktopAtomicDraftStore(
                 publicationAttempted = true
                 Files.move(staging, recordPath(scopeHash), StandardCopyOption.ATOMIC_MOVE)
                 checkpoint(AtomicDraftStage.Published)
-                FileChannel.open(root, StandardOpenOption.READ).use { it.force(true) }
+                PrivateFileSystem.forceDirectory(root)
                 checkpoint(AtomicDraftStage.DirectoryForced)
             } catch (failure: Exception) {
                 // An exception during/after publication is not evidence that the old record won.
@@ -138,7 +138,7 @@ internal class DesktopAtomicDraftStore(
             try {
                 FileChannel.open(recordPath(scopeHash), StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS).use { it.force(true) }
                 checkpoint(AtomicDraftStage.DataForced)
-                FileChannel.open(root, StandardOpenOption.READ).use { it.force(true) }
+                PrivateFileSystem.forceDirectory(root)
                 checkpoint(AtomicDraftStage.DirectoryForced)
             } catch (failure: Exception) {
                 throw AtomicDraftCommitUnknownException(failure)
@@ -182,7 +182,7 @@ internal class DesktopAtomicDraftStore(
                 .open(
                     lockPath,
                     setOf<OpenOption>(StandardOpenOption.CREATE, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS),
-                    PrivateFileAttribute,
+                    *PrivateFileSystem.fileAttributes(root),
                 ).use { channel ->
                     val lock =
                         try {
@@ -218,13 +218,9 @@ internal class DesktopAtomicDraftStore(
         const val RecordOverhead = 84
         const val MaximumPayloadBytes = 6 * 1024 * 1024
         const val MaxGeneration = 9_007_199_254_740_991L
-        val PrivateFileAttribute = PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------"))
         val ProcessLocks = ConcurrentHashMap<String, ReentrantLock>()
 
-        fun checkPrivateRoot(path: Path) {
-            check(!Files.isSymbolicLink(path) && Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS))
-            check(Files.getPosixFilePermissions(path, LinkOption.NOFOLLOW_LINKS) == PosixFilePermissions.fromString("rwx------"))
-        }
+        fun checkPrivateRoot(path: Path) = PrivateFileSystem.requirePrivateDirectory(path)
 
         fun writeFully(
             channel: FileChannel,

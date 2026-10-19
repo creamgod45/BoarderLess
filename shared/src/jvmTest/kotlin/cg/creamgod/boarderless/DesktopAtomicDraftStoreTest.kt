@@ -70,6 +70,9 @@ class DesktopAtomicDraftStoreTest {
 
     @Test fun corruptRecordAndUnsafePathStopWithoutReplacement(): Unit =
         fixture { root ->
+            // Windows needs a privilege to create symlinks; without it the unsafe-path half cannot be set up.
+            val canLink = runCatching { Files.delete(Files.createSymbolicLink(root.resolve("probe"), root)) }.isSuccess
+            if (!canLink) return@fixture
             val store = DesktopAtomicDraftStore(root)
             assertFailsWith<IllegalArgumentException> { store.read("../outside") }
             assertFailsWith<IllegalArgumentException> { store.compareAndSet(scope, null, ByteArray(6 * 1024 * 1024 + 1)) }
