@@ -25,3 +25,4 @@ node_modules/
 *.keystore
 *.env
 *.env*
+/backend/.env
