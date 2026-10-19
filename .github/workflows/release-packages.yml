@@ -267,48 +267,49 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  package-ios:
-    name: 打包 iOS
-    needs: resolve-version
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: zulu
-          java-version: '21'
-      # Gradle 會設定共用 Android 模組；不要使用 action 預設的舊版 tools 套件。
-      - name: 設定 Android SDK（共用 Gradle 設定需要）
-        uses: android-actions/setup-android@v3
-        with:
-          packages: 'platform-tools'
-          log-accepted-android-sdk-licenses: 'false'
-      - uses: gradle/actions/setup-gradle@v4
-      - name: 封存 iOS、模擬器包與選用 IPA
-        shell: bash
-        env:
-          APP_VERSION: ${{ needs.resolve-version.outputs.version }}
-          APP_BUILD_NUMBER: ${{ needs.resolve-version.outputs.build_number }}
-          IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
-          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
-          IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
-          IOS_TEAM_ID: ${{ vars.IOS_TEAM_ID }}
-          IOS_BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID }}
-          IOS_EXPORT_METHOD: ${{ vars.IOS_EXPORT_METHOD }}
-          IOS_BACKEND_SCHEME: ${{ vars.IOS_BACKEND_SCHEME }}
-          IOS_BACKEND_HOST: ${{ vars.IOS_BACKEND_HOST }}
-          IOS_BACKEND_PORT: ${{ vars.IOS_BACKEND_PORT }}
-        run: ./scripts/package-ios.sh
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ios
-          path: artifacts/*
-          if-no-files-found: error
-          retention-days: 7
+  # iOS 打包暫時停用；恢復時取消註解，並把 package-ios 加回 release 的 needs。
+  # package-ios:
+  #   name: 打包 iOS
+  #   needs: resolve-version
+  #   runs-on: macos-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-java@v4
+  #       with:
+  #         distribution: zulu
+  #         java-version: '21'
+  #     # Gradle 會設定共用 Android 模組；不要使用 action 預設的舊版 tools 套件。
+  #     - name: 設定 Android SDK（共用 Gradle 設定需要）
+  #       uses: android-actions/setup-android@v3
+  #       with:
+  #         packages: 'platform-tools'
+  #         log-accepted-android-sdk-licenses: 'false'
+  #     - uses: gradle/actions/setup-gradle@v4
+  #     - name: 封存 iOS、模擬器包與選用 IPA
+  #       shell: bash
+  #       env:
+  #         APP_VERSION: ${{ needs.resolve-version.outputs.version }}
+  #         APP_BUILD_NUMBER: ${{ needs.resolve-version.outputs.build_number }}
+  #         IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
+  #         IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+  #         IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+  #         IOS_TEAM_ID: ${{ vars.IOS_TEAM_ID }}
+  #         IOS_BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID }}
+  #         IOS_EXPORT_METHOD: ${{ vars.IOS_EXPORT_METHOD }}
+  #         IOS_BACKEND_SCHEME: ${{ vars.IOS_BACKEND_SCHEME }}
+  #         IOS_BACKEND_HOST: ${{ vars.IOS_BACKEND_HOST }}
+  #         IOS_BACKEND_PORT: ${{ vars.IOS_BACKEND_PORT }}
+  #       run: ./scripts/package-ios.sh
+  #     - uses: actions/upload-artifact@v4
+  #       with:
+  #         name: ios
+  #         path: artifacts/*
+  #         if-no-files-found: error
+  #         retention-days: 7
 
   release:
     name: 建立 Release
-    needs: [resolve-version, package, package-android, package-ios]
+    needs: [resolve-version, package, package-android]
     runs-on: ubuntu-latest
     permissions:
       contents: write
