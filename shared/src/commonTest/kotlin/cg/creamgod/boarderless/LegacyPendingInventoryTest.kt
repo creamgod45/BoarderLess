@@ -8,13 +8,29 @@ import kotlin.test.*
 class LegacyPendingInventoryTest {
     private val first = PendingSubmissionScope("https://qa.invalid/api/v1", "user", "client", "first")
     private val second = first.copy(workspaceId = "second")
-    private fun entry(scope: PendingSubmissionScope, sequence: Long) = PendingWorkspaceSubmission(
-        scope, "local-${scope.workspaceId}", SubmitOperationsRequest(
-            clientId = scope.clientId, transactionId = "tx-${scope.workspaceId}", baseVersion = 0,
-            operations = listOf(OperationDto("wire-${scope.workspaceId}", sequence, "create_object",
-                payload = buildJsonObject { put("text", "素材🙂") })),
+
+    private fun entry(
+        scope: PendingSubmissionScope,
+        sequence: Long,
+    ) = PendingWorkspaceSubmission(
+        scope,
+        "local-${scope.workspaceId}",
+        SubmitOperationsRequest(
+            clientId = scope.clientId,
+            transactionId = "tx-${scope.workspaceId}",
+            baseVersion = 0,
+            operations =
+                listOf(
+                    OperationDto(
+                        "wire-${scope.workspaceId}",
+                        sequence,
+                        "create_object",
+                        payload = buildJsonObject { put("text", "素材🙂") },
+                    ),
+                ),
         ),
     )
+
     private fun snapshot(memory: InMemorySettings) = memory.keys.associateWith { memory.getStringOrNull(it) }
 
     @Test fun capturesEveryPublishedWorkspaceWithoutChangingWireOrPreferences() {
@@ -33,7 +49,8 @@ class LegacyPendingInventoryTest {
     @Test fun incompleteOrDuplicateCatalogNeverSilentlyLowersTheFloor() {
         val memory = InMemorySettings()
         val store = PendingWorkspaceSubmissionStore(memory)
-        store.save(entry(first, 10)); store.save(entry(second, 91))
+        store.save(entry(first, 10))
+        store.save(entry(second, 91))
         val before = snapshot(memory)
         for (catalog in listOf(emptyList(), listOf(first), listOf(first, second, first))) {
             assertFailsWith<BackendContractException> { store.inventoryForMigration(catalog) }
@@ -51,8 +68,11 @@ class LegacyPendingInventoryTest {
             val memory = InMemorySettings()
             val store = PendingWorkspaceSubmissionStore(memory)
             store.save(entry(first, 10))
-            if (damageManifest) memory.putString(memory.keys.single { it.startsWith("wsp1.") }, "invalid")
-            else memory.remove(memory.keys.single { it.startsWith("wsc1.") })
+            if (damageManifest) {
+                memory.putString(memory.keys.single { it.startsWith("wsp1.") }, "invalid")
+            } else {
+                memory.remove(memory.keys.single { it.startsWith("wsc1.") })
+            }
             val before = snapshot(memory)
             assertFailsWith<BackendContractException> { store.inventoryForMigration(listOf(first)) }
             assertEquals(before, snapshot(memory))
@@ -70,12 +90,13 @@ class LegacyPendingInventoryTest {
         }
         val before = snapshot(memory)
         var chunks = 0
-        val counted = object : Settings by memory {
-            override fun getStringOrNull(key: String): String? {
-                if (key.startsWith("wsc1.")) chunks++
-                return memory.getStringOrNull(key)
+        val counted =
+            object : Settings by memory {
+                override fun getStringOrNull(key: String): String? {
+                    if (key.startsWith("wsc1.")) chunks++
+                    return memory.getStringOrNull(key)
+                }
             }
-        }
         assertFailsWith<BackendContractException> { PendingWorkspaceSubmissionStore(counted).inventoryForMigration(scopes) }
         assertEquals(0, chunks)
         assertEquals(before, snapshot(memory))

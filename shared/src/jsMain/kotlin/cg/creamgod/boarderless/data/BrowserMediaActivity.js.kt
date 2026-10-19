@@ -1,7 +1,12 @@
 package cg.creamgod.boarderless.data
 
-internal actual fun browserBindMediaActivity(ownerId: String, onChange: (Boolean) -> Unit) {
-    val bind = js("""(function(id, changed) {
+internal actual fun browserBindMediaActivity(
+    ownerId: String,
+    onChange: (Boolean) -> Unit,
+) {
+    val bind =
+        js(
+            """(function(id, changed) {
         const owners = globalThis.boarderlessMediaActivityOwners || (globalThis.boarderlessMediaActivityOwners = new Map());
         if (owners.has(id)) throw new Error('Activity owner already bound');
         let hiddenByPage = false, frozen = false;
@@ -23,15 +28,19 @@ internal actual fun browserBindMediaActivity(ownerId: String, onChange: (Boolean
             window.removeEventListener('pageshow', show);
         });
         refresh();
-    })""")
+    })""",
+        )
     bind(ownerId, onChange)
 }
 
 internal actual fun browserUnbindMediaActivity(ownerId: String) {
-    val unbind = js("""(function(id) {
+    val unbind =
+        js(
+            """(function(id) {
         const owners = globalThis.boarderlessMediaActivityOwners;
         const dispose = owners && owners.get(id);
         if (dispose) { owners.delete(id); dispose(); }
-    })""")
+    })""",
+        )
     unbind(ownerId)
 }

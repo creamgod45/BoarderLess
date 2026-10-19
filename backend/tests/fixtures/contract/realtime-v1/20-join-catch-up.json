@@ -1,0 +1,195 @@
+{
+  "description": "lastSeen=0：依完整 transaction 送 catch_up_transaction（單 op、兩個 op 同一 transaction），再 live_ready",
+  "transport": "websocket",
+  "subprotocol": "boarderless.v1",
+  "exchange": [
+    {
+      "direction": "client",
+      "frame": {
+        "type": "join_workspace",
+        "protocolVersion": 1,
+        "schemaVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "clientId": "00000000-0000-4000-8000-000000000018",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000019",
+        "lastSeenServerSeq": 0,
+        "metadataRevision": 1,
+        "ticket": "fixture-only-not-a-real-ticket"
+      }
+    },
+    {
+      "direction": "server",
+      "frame": {
+        "type": "join_accepted",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000019",
+        "connectionId": "00000000-0000-4000-8000-000000000020",
+        "userId": "11111111-1111-4111-8111-111111111111",
+        "role": "owner",
+        "barrierServerSeq": 3,
+        "workspaceVersion": 2,
+        "metadataRevision": 3
+      }
+    },
+    {
+      "direction": "server",
+      "frame": {
+        "type": "catch_up_transaction",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000019",
+        "transactionId": "00000000-0000-4000-8000-000000000021",
+        "fromServerSeq": 1,
+        "toServerSeq": 1,
+        "workspaceVersion": 1,
+        "operations": [
+          {
+            "serverSeq": 1,
+            "operationId": "00000000-0000-4000-8000-000000000022",
+            "transactionId": "00000000-0000-4000-8000-000000000021",
+            "actorId": "11111111-1111-4111-8111-111111111111",
+            "clientId": "00000000-0000-4000-8000-000000000023",
+            "clientSeq": 1,
+            "baseVersion": 0,
+            "workspaceVersion": 1,
+            "operationType": "create_object",
+            "payload": {
+              "objectId": "00000000-0000-4000-8000-000000000024",
+              "transform": {
+                "x": 0,
+                "y": 0,
+                "width": 260,
+                "height": 132,
+                "rotationDegrees": 0
+              },
+              "objectType": "text",
+              "properties": {
+                "text": "Idea"
+              }
+            },
+            "schemaVersion": 1,
+            "committedAt": "2026-10-02T00:00:00.000Z"
+          }
+        ]
+      }
+    },
+    {
+      "direction": "server",
+      "frame": {
+        "type": "catch_up_transaction",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000019",
+        "transactionId": "00000000-0000-4000-8000-000000000025",
+        "fromServerSeq": 2,
+        "toServerSeq": 3,
+        "workspaceVersion": 2,
+        "operations": [
+          {
+            "serverSeq": 2,
+            "operationId": "00000000-0000-4000-8000-000000000026",
+            "transactionId": "00000000-0000-4000-8000-000000000025",
+            "actorId": "11111111-1111-4111-8111-111111111111",
+            "clientId": "00000000-0000-4000-8000-000000000027",
+            "clientSeq": 1,
+            "baseVersion": 1,
+            "workspaceVersion": 2,
+            "operationType": "create_object",
+            "payload": {
+              "objectId": "00000000-0000-4000-8000-000000000028",
+              "transform": {
+                "x": 0,
+                "y": 0,
+                "width": 260,
+                "height": 132,
+                "rotationDegrees": 0
+              },
+              "objectType": "text",
+              "properties": {
+                "text": "Idea"
+              }
+            },
+            "schemaVersion": 1,
+            "committedAt": "2026-10-02T00:00:00.000Z"
+          },
+          {
+            "serverSeq": 3,
+            "operationId": "00000000-0000-4000-8000-000000000029",
+            "transactionId": "00000000-0000-4000-8000-000000000025",
+            "actorId": "11111111-1111-4111-8111-111111111111",
+            "clientId": "00000000-0000-4000-8000-000000000027",
+            "clientSeq": 2,
+            "baseVersion": 1,
+            "workspaceVersion": 2,
+            "operationType": "create_object",
+            "payload": {
+              "objectId": "00000000-0000-4000-8000-000000000030",
+              "transform": {
+                "x": 0,
+                "y": 0,
+                "width": 260,
+                "height": 132,
+                "rotationDegrees": 0
+              },
+              "objectType": "text",
+              "properties": {
+                "text": "Idea"
+              }
+            },
+            "schemaVersion": 1,
+            "committedAt": "2026-10-02T00:00:00.000Z"
+          }
+        ]
+      }
+    },
+    {
+      "direction": "client",
+      "frame": {
+        "type": "catch_up_applied",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000019",
+        "appliedServerSeq": 3,
+        "workspaceVersion": 0,
+        "metadataRevision": 1
+      }
+    },
+    {
+      "direction": "server",
+      "frame": {
+        "type": "live_ready",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000019",
+        "throughServerSeq": 3,
+        "workspaceVersion": 2,
+        "metadataRevision": 3,
+        "connectionId": "00000000-0000-4000-8000-000000000020"
+      }
+    },
+    {
+      "direction": "server",
+      "frame": {
+        "type": "presence_snapshot",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000019",
+        "roomEpoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "roomRevision": 3,
+        "peers": [
+          {
+            "connectionId": "00000000-0000-4000-8000-000000000020",
+            "userId": "11111111-1111-4111-8111-111111111111",
+            "clientId": "00000000-0000-4000-8000-000000000018",
+            "displayName": "Owner",
+            "role": "owner",
+            "cursor": null,
+            "selectedObjectIds": [],
+            "presenceSeq": 0
+          }
+        ]
+      }
+    }
+  ]
+}

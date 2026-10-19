@@ -1,4 +1,5 @@
 @file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+
 package cg.creamgod.boarderless
 
 import cg.creamgod.boarderless.data.*
@@ -18,11 +19,14 @@ class IosDraftImportTest {
             assertEquals("{\"text\":\"中文🙂\"}", readIosDraftJson(source) { true })
             assertEquals("{\"text\":\"中文🙂\"}", readIosDraftJson(source) { true })
             assertTrue(NSFileManager.defaultManager.fileExistsAtPath(source))
-        } finally { NSFileManager.defaultManager.removeItemAtPath(source, null) }
+        } finally {
+            NSFileManager.defaultManager.removeItemAtPath(source, null)
+        }
     }
 
     @Test fun rejectsOversizeSymlinkAndExpiredScopeWithoutDeletingSource() {
-        val source = path(); val link = path()
+        val source = path()
+        val link = path()
         try {
             writeIosDraftBackupNewFile(source, "private") { true }
             assertEquals(0, symlink(source, link))
@@ -41,32 +45,38 @@ class IosDraftImportTest {
         }
     }
 
-    @Test fun realFoundationReadCoordinatorChecksScopeBeforeAndInsideAccessor() = runBlocking {
-        withContext(Dispatchers.Default) {
-            val source = path()
-            try {
-                writeIosDraftBackupNewFile(source, "{\"text\":\"中文🙂\"}") { true }
-                val url = checkNotNull(NSURL.fileURLWithPath(source))
-                assertEquals("{\"text\":\"中文🙂\"}", coordinateIosDraftRead(url) { true })
-                assertFails { coordinateIosDraftRead(url) { false } }
-                var checks = 0
-                assertFails { coordinateIosDraftRead(url) { ++checks < 2 } }
-                assertEquals(2, checks)
-                assertTrue(NSFileManager.defaultManager.fileExistsAtPath(source))
-            } finally { NSFileManager.defaultManager.removeItemAtPath(source, null) }
+    @Test fun realFoundationReadCoordinatorChecksScopeBeforeAndInsideAccessor() =
+        runBlocking {
+            withContext(Dispatchers.Default) {
+                val source = path()
+                try {
+                    writeIosDraftBackupNewFile(source, "{\"text\":\"中文🙂\"}") { true }
+                    val url = checkNotNull(NSURL.fileURLWithPath(source))
+                    assertEquals("{\"text\":\"中文🙂\"}", coordinateIosDraftRead(url) { true })
+                    assertFails { coordinateIosDraftRead(url) { false } }
+                    var checks = 0
+                    assertFails { coordinateIosDraftRead(url) { ++checks < 2 } }
+                    assertEquals(2, checks)
+                    assertTrue(NSFileManager.defaultManager.fileExistsAtPath(source))
+                } finally {
+                    NSFileManager.defaultManager.removeItemAtPath(source, null)
+                }
+            }
         }
-    }
 
-    @Test fun ownContainerNeedsNoExternalGrantAndNeighborPrefixDoesNotAuthorize() = runBlocking {
-        val source = NSHomeDirectory() + "/boarderless-owned-${NSUUID().UUIDString}.json"
-        try {
-            writeIosDraftBackupNewFile(source, "{}") { true }
-            val url = NSURL.fileURLWithPath(source)
-            assertTrue(isOwnSandboxDraftUrl(url))
-            assertFalse(isOwnSandboxDraftUrl(NSURL.fileURLWithPath(NSHomeDirectory() + "-other/backup.json")))
-            assertEquals("{}", readIosExternalDraftJson(url) { true })
-            assertFails { readIosExternalDraftJson(url) { false } }
-            assertTrue(NSFileManager.defaultManager.fileExistsAtPath(source))
-        } finally { NSFileManager.defaultManager.removeItemAtPath(source, null) }
-    }
+    @Test fun ownContainerNeedsNoExternalGrantAndNeighborPrefixDoesNotAuthorize() =
+        runBlocking {
+            val source = NSHomeDirectory() + "/boarderless-owned-${NSUUID().UUIDString}.json"
+            try {
+                writeIosDraftBackupNewFile(source, "{}") { true }
+                val url = NSURL.fileURLWithPath(source)
+                assertTrue(isOwnSandboxDraftUrl(url))
+                assertFalse(isOwnSandboxDraftUrl(NSURL.fileURLWithPath(NSHomeDirectory() + "-other/backup.json")))
+                assertEquals("{}", readIosExternalDraftJson(url) { true })
+                assertFails { readIosExternalDraftJson(url) { false } }
+                assertTrue(NSFileManager.defaultManager.fileExistsAtPath(source))
+            } finally {
+                NSFileManager.defaultManager.removeItemAtPath(source, null)
+            }
+        }
 }

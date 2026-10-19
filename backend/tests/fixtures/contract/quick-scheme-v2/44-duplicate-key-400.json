@@ -1,0 +1,28 @@
+{
+  "description": "嚴格 JSON：重複 key 拒絕",
+  "request": {
+    "method": "PUT",
+    "path": "/api/v1/users/me/quick-schemes/00000000-0000-4000-8000-000000000044",
+    "headers": {
+      "if-none-match": "*",
+      "idempotency-key": "00000000-0000-4000-8000-000000000045"
+    },
+    "body": "<raw: {\"resourceVersion\":2,\"resourceVersion\":2}>"
+  },
+  "response": {
+    "status": 400,
+    "headers": {
+      "cache-control": "private, no-store"
+    },
+    "body": {
+      "error": {
+        "code": "invalid_json",
+        "message": "Request body is not strict JSON",
+        "details": {
+          "reason": "duplicate_key"
+        }
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

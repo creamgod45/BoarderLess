@@ -1,0 +1,17 @@
+{
+  "description": "首頁 If-None-Match = collection ETag：304",
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/users/me/quick-schemes?limit=2",
+    "headers": {
+      "if-none-match": "\"fixture-etag-17\""
+    }
+  },
+  "response": {
+    "status": 304,
+    "headers": {
+      "etag": "\"fixture-etag-17\"",
+      "cache-control": "private, no-store"
+    }
+  }
+}

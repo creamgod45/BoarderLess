@@ -1,11 +1,11 @@
 package cg.creamgod.boarderless
 
 import cg.creamgod.boarderless.domain.model.*
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.*
 
@@ -15,17 +15,38 @@ class PenPathDraftTest {
     private val end = PenAnchor(Vec2(180f, 80f))
 
     @Test fun serializesOpenStrokeAndClosedFilledCommandsWithoutMarkup() {
-        val draft = PenPathDraft(size).append(start).append(end).append(PenAnchor(Vec2(10f, 80f)))
-            .copy(closed = true, style = VectorPathStyle(fillColorToken = "#abcdef", fillRule = VectorFillRule.EvenOdd))
+        val draft =
+            PenPathDraft(size)
+                .append(start)
+                .append(end)
+                .append(PenAnchor(Vec2(10f, 80f)))
+                .copy(closed = true, style = VectorPathStyle(fillColorToken = "#abcdef", fillRule = VectorFillRule.EvenOdd))
         assertEquals(draft, Json.decodeFromString<PenPathDraft>(Json.encodeToString(draft)))
         val path = draft.toVectorPath()
         assertEquals(path, Json.decodeFromString<VectorPath>(Json.encodeToString(path)))
         assertIs<VectorPathCommand.Close>(path.commands.last())
         assertEquals(VectorFillRule.EvenOdd, path.style.fillRule)
-        val encoded = Json.parseToJsonElement(Json.encodeToString(path)).jsonObject.getValue("commands").jsonArray
-        assertEquals(listOf("move", "line", "line", "line", "close"),
-            encoded.map { it.jsonObject.getValue("type").jsonPrimitive.content })
-        assertNull(PenPathDraft(size).append(start).append(end).toVectorPath().style.fillColorToken)
+        val encoded =
+            Json
+                .parseToJsonElement(Json.encodeToString(path))
+                .jsonObject
+                .getValue("commands")
+                .jsonArray
+        assertEquals(
+            listOf("move", "line", "line", "line", "close"),
+            encoded.map {
+                it.jsonObject
+                    .getValue("type")
+                    .jsonPrimitive.content
+            },
+        )
+        assertNull(
+            PenPathDraft(size)
+                .append(start)
+                .append(end)
+                .toVectorPath()
+                .style.fillColorToken,
+        )
     }
 
     @Test fun usesLineQuadraticAndCubicAndClosingHandles() {
@@ -36,8 +57,12 @@ class PenPathDraftTest {
         assertEquals(VectorPathCommand.Cubic(first.outgoing!!, second.incoming!!, second.point), path.commands[1])
         assertIs<VectorPathCommand.Line>(path.commands[2])
         assertEquals(VectorPathCommand.Cubic(third.outgoing!!, first.incoming!!, first.point), path.commands[3])
-        assertIs<VectorPathCommand.Quadratic>(PenPathDraft(size, listOf(start.copy(outgoing = Vec2(50f, 20f)), end)).toVectorPath().commands[1])
-        assertIs<VectorPathCommand.Quadratic>(PenPathDraft(size, listOf(start, end.copy(incoming = Vec2(160f, 10f)))).toVectorPath().commands[1])
+        assertIs<VectorPathCommand.Quadratic>(
+            PenPathDraft(size, listOf(start.copy(outgoing = Vec2(50f, 20f)), end)).toVectorPath().commands[1],
+        )
+        assertIs<VectorPathCommand.Quadratic>(
+            PenPathDraft(size, listOf(start, end.copy(incoming = Vec2(160f, 10f)))).toVectorPath().commands[1],
+        )
     }
 
     @Test fun movingAnchorTranslatesHandlesAndUndoRedoRestoresEveryProperty() {
@@ -47,8 +72,22 @@ class PenPathDraftTest {
         assertEquals(Vec2(50f, 55f), moved.anchors[0].outgoing)
         val history = PenPathHistory(initial).edit(moved).edit(moved.copy(style = VectorPathStyle(strokeWidth = 8f)))
         assertEquals(initial, history.undo().undo().draft)
-        assertEquals(history.draft, history.undo().undo().redo().redo().draft)
-        assertTrue(history.undo().edit(initial).redoStack.isEmpty())
+        assertEquals(
+            history.draft,
+            history
+                .undo()
+                .undo()
+                .redo()
+                .redo()
+                .draft,
+        )
+        assertTrue(
+            history
+                .undo()
+                .edit(initial)
+                .redoStack
+                .isEmpty(),
+        )
     }
 
     @Test fun deletingAnchorReopensTooSmallContourAndClosedDraftCannotAppend() {
@@ -66,8 +105,13 @@ class PenPathDraftTest {
     @Test fun rejectsMalformedSubpathsFutureSchemaAndUnboundedInput() {
         val move = VectorPathCommand.Move(start.point)
         val line = VectorPathCommand.Line(end.point)
-        listOf(listOf(line, move), listOf(move, move), listOf(move, VectorPathCommand.Close),
-            listOf(move, line, VectorPathCommand.Close, line), listOf(move, line, move)).forEach {
+        listOf(
+            listOf(line, move),
+            listOf(move, move),
+            listOf(move, VectorPathCommand.Close),
+            listOf(move, line, VectorPathCommand.Close, line),
+            listOf(move, line, move),
+        ).forEach {
             assertFails { VectorPath(size, it) }
         }
         assertFails { VectorPath(size, listOf(move, line), schemaVersion = 2) }
@@ -87,7 +131,11 @@ class PenPathDraftTest {
         assertFails { VectorPathStyle(strokeWidth = 0f) }
         assertFails { VectorPathStyle(strokeWidth = 129f) }
         assertFails { Vec2(Float.POSITIVE_INFINITY, 0f) }
-        assertFails { Json.decodeFromString<VectorPath>("{\"viewBox\":{\"width\":200,\"height\":100},\"commands\":[{\"type\":\"script\",\"point\":{\"x\":0,\"y\":0}}]}") }
+        assertFails {
+            Json.decodeFromString<VectorPath>(
+                "{\"viewBox\":{\"width\":200,\"height\":100},\"commands\":[{\"type\":\"script\",\"point\":{\"x\":0,\"y\":0}}]}",
+            )
+        }
     }
 
     @Test fun historyIsBoundedAndNoOpDoesNotClearRedo() {

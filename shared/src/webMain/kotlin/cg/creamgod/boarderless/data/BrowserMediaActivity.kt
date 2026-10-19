@@ -6,10 +6,10 @@ import androidx.compose.runtime.remember
 import cg.creamgod.boarderless.data.remote.randomUuid
 
 @Composable
-fun rememberBrowserMediaImportRuntime(): MediaImportRuntime {
+fun rememberBrowserMediaImportRuntime(localGateway: AssetDownloadGateway? = null): MediaImportRuntime {
     val tracker = remember { MediaActivityTracker() }
     val ownerId = remember { randomUuid() }
-    val runtime = remember(tracker) { browserMediaImportRuntime(tracker.activity) }
+    val runtime = remember(tracker, localGateway) { browserMediaImportRuntime(tracker.activity, localGateway) }
     DisposableEffect(tracker, ownerId) {
         browserBindMediaActivity(ownerId, tracker::setAvailable)
         onDispose {
@@ -20,5 +20,9 @@ fun rememberBrowserMediaImportRuntime(): MediaImportRuntime {
     return runtime
 }
 
-internal expect fun browserBindMediaActivity(ownerId: String, onChange: (Boolean) -> Unit)
+internal expect fun browserBindMediaActivity(
+    ownerId: String,
+    onChange: (Boolean) -> Unit,
+)
+
 internal expect fun browserUnbindMediaActivity(ownerId: String)

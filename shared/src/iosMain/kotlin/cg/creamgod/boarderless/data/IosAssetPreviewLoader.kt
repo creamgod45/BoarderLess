@@ -20,30 +20,45 @@ class IosAssetPreviewLoader(
     private val gateway: AssetDownloadGateway,
     private val cache: AuthorizedAssetPreviewCache<ImageBitmap> = bitmapPreviewCache(),
 ) {
-    suspend fun load(session: WorkspaceSession, assetId: String): ImageBitmap {
-        return cache.load(gateway, session, assetId) { ticket -> loadAuthorized(session, assetId, ticket) }
-    }
+    suspend fun load(
+        session: WorkspaceSession,
+        assetId: String,
+    ): ImageBitmap = cache.load(gateway, session, assetId) { ticket -> loadAuthorized(session, assetId, ticket) }
 
-    private suspend fun loadAuthorized(session: WorkspaceSession, assetId: String, ticket: AssetDownloadTicket): ImageBitmap {
+    private suspend fun loadAuthorized(
+        session: WorkspaceSession,
+        assetId: String,
+        ticket: AssetDownloadTicket,
+    ): ImageBitmap {
         var sink: IosFileAssetDownloadSink? = null
         try {
             return withContext(Dispatchers.Default) {
                 val destination = IosFileAssetDownloadSink.create(ticket.asset.mediaType).also { sink = it }
-                val authorizedGateway = object : AssetDownloadGateway {
-                    override suspend fun authorize(session: WorkspaceSession, assetId: String) = ticket
-                    override suspend fun download(ticket: AssetDownloadTicket, onChunk: suspend (ByteArray) -> Unit) =
-                        gateway.download(ticket, onChunk)
-                }
+                val authorizedGateway =
+                    object : AssetDownloadGateway {
+                        override suspend fun authorize(
+                            session: WorkspaceSession,
+                            assetId: String,
+                        ) = ticket
+
+                        override suspend fun download(
+                            ticket: AssetDownloadTicket,
+                            onChunk: suspend (ByteArray) -> Unit,
+                        ) = gateway.download(ticket, onChunk)
+                    }
                 val local = AssetDownloadCoordinator(authorizedGateway).download(session, assetId, destination)
                 coroutineContext.ensureActive()
                 val input = NSFileHandle.fileHandleForReadingAtPath(local.token) ?: error("Verified preview is unavailable")
-                val bytes = try {
-                    val data = input.readDataOfLength(ticket.asset.byteSize.toULong())
-                    check(data.length.toLong() == ticket.asset.byteSize)
-                    ByteArray(data.length.toInt()).also { bytes ->
-                        bytes.usePinned { memcpy(it.addressOf(0), data.bytes, data.length) }
+                val bytes =
+                    try {
+                        val data = input.readDataOfLength(ticket.asset.byteSize.toULong())
+                        check(data.length.toLong() == ticket.asset.byteSize)
+                        ByteArray(data.length.toInt()).also { bytes ->
+                            bytes.usePinned { memcpy(it.addressOf(0), data.bytes, data.length) }
+                        }
+                    } finally {
+                        input.closeFile()
                     }
-                } finally { input.closeFile() }
                 decodePreview(bytes).also { coroutineContext.ensureActive() }
             }
         } finally {
@@ -60,10 +75,17 @@ class IosAssetPreviewLoader(
                 try {
                     AssetPreviewPolicy.validateDimensions(codec.size.x, codec.size.y)
                     val bitmap = codec.readPixels()
-                    try { return Image.makeFromBitmap(bitmap).toComposeImageBitmap() }
-                    finally { bitmap.close() }
-                } finally { codec.close() }
-            } finally { data.close() }
+                    try {
+                        return Image.makeFromBitmap(bitmap).toComposeImageBitmap()
+                    } finally {
+                        bitmap.close()
+                    }
+                } finally {
+                    codec.close()
+                }
+            } finally {
+                data.close()
+            }
         }
     }
 }

@@ -1,0 +1,35 @@
+{
+  "description": "realtime-capabilities：需 read membership；不含 ticket",
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/realtime-capabilities"
+  },
+  "response": {
+    "status": 200,
+    "headers": {},
+    "body": {
+      "protocolVersions": [
+        1
+      ],
+      "schemaVersions": [
+        1
+      ],
+      "webSocketUrl": "wss://qa.example.invalid/api/v1/realtime",
+      "subprotocol": "boarderless.v1",
+      "operationFanOut": true,
+      "presence": true,
+      "metadataRevision": 3,
+      "maxMessageBytes": 1048576,
+      "maxPendingTransactions": 128,
+      "maxCatchUpOperations": 1000,
+      "maxOperationsPerTransaction": 200,
+      "heartbeatIntervalMs": 15000,
+      "presenceTtlMs": 45000,
+      "ticketTtlSeconds": 60,
+      "authTimeoutMs": 1000,
+      "maxSelectionIds": 128,
+      "cursorUpdatesPerSecond": 10,
+      "selectionUpdatesPerSecond": 4
+    }
+  }
+}

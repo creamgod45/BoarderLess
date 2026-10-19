@@ -1,0 +1,54 @@
+{
+  "description": "explicit null 不是重設（重設用完整 auto）；同交易的其他 operation 不提交",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "00000000-0000-4000-8000-000000000066",
+      "transactionId": "00000000-0000-4000-8000-000000000067",
+      "baseVersion": 9,
+      "operations": [
+        {
+          "operationId": "00000000-0000-4000-8000-000000000068",
+          "clientSeq": 1,
+          "kind": "create_object",
+          "payload": {
+            "objectId": "00000000-0000-4000-8000-000000000069",
+            "objectType": "text"
+          }
+        },
+        {
+          "operationId": "00000000-0000-4000-8000-000000000070",
+          "clientSeq": 2,
+          "kind": "create_relation",
+          "payload": {
+            "relationId": "00000000-0000-4000-8000-000000000071",
+            "sourceObjectId": "66666666-6666-4666-8666-666666666666",
+            "targetObjectId": "88888888-8888-4888-8888-888888888888",
+            "direction": "forward",
+            "style": {
+              "geometry": null
+            }
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 422,
+    "body": {
+      "error": {
+        "code": "invalid_relation_geometry",
+        "message": "style.geometry does not match the geometry schema",
+        "details": [
+          {
+            "path": "/style/geometry",
+            "message": "must be object"
+          }
+        ]
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

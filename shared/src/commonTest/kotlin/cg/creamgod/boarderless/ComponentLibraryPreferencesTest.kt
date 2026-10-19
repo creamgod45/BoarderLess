@@ -1,8 +1,8 @@
 package cg.creamgod.boarderless
 
 import cg.creamgod.boarderless.data.persistence.ComponentLibraryPreferences
-import cg.creamgod.boarderless.feature.canvas.*
 import cg.creamgod.boarderless.domain.model.NodeShape
+import cg.creamgod.boarderless.feature.canvas.*
 import kotlin.test.*
 
 class ComponentLibraryPreferencesTest {
@@ -31,16 +31,26 @@ class ComponentLibraryPreferencesTest {
     }
 
     @Test fun categoriesComposeWithSearchFavoritesAndOrderedRecentWithoutDuplicates() {
-        val entries = listOf(ComponentLibraryEntry("thought", "Thought", "Idea", "paper"),
-            ComponentLibraryEntry("flowchart-starter", "Flowchart", "Starter diagram", "paper"),
-            ComponentLibraryEntry("tree-starter", "Tree", "Starter diagram", "paper"),
-            ComponentLibraryEntry("swimlane-starter", "Swimlane", "Starter diagram", "paper"),
-            ComponentLibraryEntry("arrow", "Arrow", "Direction", "paper", NodeShape.ArrowRight))
+        val entries =
+            listOf(
+                ComponentLibraryEntry("thought", "Thought", "Idea", "paper"),
+                ComponentLibraryEntry("flowchart-starter", "Flowchart", "Starter diagram", "paper"),
+                ComponentLibraryEntry("tree-starter", "Tree", "Starter diagram", "paper"),
+                ComponentLibraryEntry("swimlane-starter", "Swimlane", "Starter diagram", "paper"),
+                ComponentLibraryEntry("arrow", "Arrow", "Direction", "paper", NodeShape.ArrowRight),
+            )
         val favorites = setOf("tree-starter", "arrow")
         val recent = listOf("swimlane-starter", "tree-starter", "arrow", "tree-starter", "removed")
-        fun view(mode: ComponentLibraryView, category: ComponentLibraryCategory, query: String = "") =
-            componentLibraryEntriesForView(entries, query, mode, favorites, recent, category).map { it.id }
-        assertEquals(listOf("swimlane-starter", "tree-starter"), view(ComponentLibraryView.Recent, ComponentLibraryCategory.Diagrams, "STARTER diagram"))
+
+        fun view(
+            mode: ComponentLibraryView,
+            category: ComponentLibraryCategory,
+            query: String = "",
+        ) = componentLibraryEntriesForView(entries, query, mode, favorites, recent, category).map { it.id }
+        assertEquals(
+            listOf("swimlane-starter", "tree-starter"),
+            view(ComponentLibraryView.Recent, ComponentLibraryCategory.Diagrams, "STARTER diagram"),
+        )
         assertEquals(listOf("tree-starter"), view(ComponentLibraryView.Favorites, ComponentLibraryCategory.Diagrams))
         assertEquals(listOf("arrow"), view(ComponentLibraryView.Favorites, ComponentLibraryCategory.Arrows))
         assertEquals(listOf("swimlane-starter"), view(ComponentLibraryView.All, ComponentLibraryCategory.Containers))
@@ -58,9 +68,12 @@ class ComponentLibraryPreferencesTest {
         }
         val decision = ComponentLibraryEntry("decision-node", "Decision", "Flow", "paper", NodeShape.Diamond)
         assertEquals(setOf(ComponentLibraryCategory.Geometry, ComponentLibraryCategory.Flow), decision.categories)
-        assertEquals(setOf(ComponentLibraryCategory.Text),
-            ComponentLibraryEntry("text", "Text", "No border", "paper", NodeShape.PlainText).categories)
+        assertEquals(
+            setOf(ComponentLibraryCategory.Text),
+            ComponentLibraryEntry("text", "Text", "No border", "paper", NodeShape.PlainText).categories,
+        )
     }
+
     @Test fun favoritesAndInsertionOrderPersistWithoutDuplicates() {
         val settings = InMemorySettings()
         val store = ComponentLibraryPreferences(settings)
@@ -93,15 +106,19 @@ class ComponentLibraryPreferencesTest {
     }
 
     @Test fun viewsFilterCurrentCatalogAndSearchPreservesRecentOrder() {
-        val entries = listOf(
-            ComponentLibraryEntry("thought", "Thought", "Idea", "paper"),
-            ComponentLibraryEntry("process-node", "Process", "Flow action", "paper"),
-            ComponentLibraryEntry("decision-node", "Decision", "Flow branch", "paper"),
-        )
+        val entries =
+            listOf(
+                ComponentLibraryEntry("thought", "Thought", "Idea", "paper"),
+                ComponentLibraryEntry("process-node", "Process", "Flow action", "paper"),
+                ComponentLibraryEntry("decision-node", "Decision", "Flow branch", "paper"),
+            )
         val favorites = setOf("process-node", "removed-entry")
         val recent = listOf("decision-node", "removed-entry", "process-node", "decision-node")
-        fun view(mode: ComponentLibraryView, query: String = "") =
-            componentLibraryEntriesForView(entries, query, mode, favorites, recent).map { it.id }
+
+        fun view(
+            mode: ComponentLibraryView,
+            query: String = "",
+        ) = componentLibraryEntriesForView(entries, query, mode, favorites, recent).map { it.id }
         assertEquals(entries.map { it.id }, view(ComponentLibraryView.All))
         assertEquals(listOf("process-node"), view(ComponentLibraryView.Favorites))
         assertEquals(listOf("decision-node", "process-node"), view(ComponentLibraryView.Recent, "FLOW"))

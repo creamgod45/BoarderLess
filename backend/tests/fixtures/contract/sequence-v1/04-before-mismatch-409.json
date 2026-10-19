@@ -1,0 +1,144 @@
+{
+  "description": "before 與目前不完全一致：409",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "00000000-0000-4000-8000-000000000025",
+      "transactionId": "00000000-0000-4000-8000-000000000026",
+      "baseVersion": 1,
+      "operations": [
+        {
+          "operationId": "00000000-0000-4000-8000-000000000027",
+          "clientSeq": 1,
+          "kind": "update_sequence_diagrams",
+          "payload": {
+            "expectedSequenceDiagramsVersion": 1,
+            "before": [],
+            "after": []
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 409,
+    "body": {
+      "status": "conflict",
+      "conflicts": [],
+      "workspaceVersion": 1,
+      "lastServerSeq": 8,
+      "missingOperations": [],
+      "code": "sequence_diagrams_conflict",
+      "sequenceDiagrams": {
+        "expectedVersion": 1,
+        "actualVersion": 1,
+        "diagrams": [
+          {
+            "containerId": {
+              "value": "66666666-6666-4666-8666-666666666666"
+            },
+            "participants": [
+              {
+                "participant": {
+                  "id": "client",
+                  "label": "Client",
+                  "role": "Actor"
+                },
+                "objectId": {
+                  "value": "77777777-7777-4777-8777-777777777777"
+                }
+              },
+              {
+                "participant": {
+                  "id": "server",
+                  "label": "Server",
+                  "role": "Participant"
+                },
+                "objectId": {
+                  "value": "88888888-8888-4888-8888-888888888888"
+                }
+              }
+            ],
+            "messages": [
+              {
+                "message": {
+                  "id": "m1",
+                  "sourceId": "client",
+                  "targetId": "server",
+                  "text": "request",
+                  "kind": "Call",
+                  "dashed": false
+                },
+                "relationId": {
+                  "value": "99999999-9999-4999-8999-999999999999"
+                },
+                "position": {
+                  "blockId": null,
+                  "branchIndex": 0,
+                  "order": 0
+                }
+              },
+              {
+                "message": {
+                  "id": "m2",
+                  "sourceId": "server",
+                  "targetId": "client",
+                  "text": "response",
+                  "kind": "Return",
+                  "dashed": true
+                },
+                "relationId": {
+                  "value": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+                },
+                "position": {
+                  "blockId": null,
+                  "branchIndex": 0,
+                  "order": 1
+                }
+              },
+              {
+                "message": {
+                  "id": "m3",
+                  "sourceId": "client",
+                  "targetId": "client",
+                  "text": "retry",
+                  "kind": "Async",
+                  "dashed": false
+                },
+                "relationId": {
+                  "value": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+                },
+                "position": {
+                  "blockId": "retryLoop",
+                  "branchIndex": 0,
+                  "order": 0
+                }
+              }
+            ],
+            "blocks": [
+              {
+                "id": "retryLoop",
+                "kind": "Loop",
+                "branchLabels": [
+                  "until ok"
+                ],
+                "objectId": {
+                  "value": "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+                },
+                "position": {
+                  "blockId": null,
+                  "branchIndex": 0,
+                  "order": 2
+                }
+              }
+            ],
+            "schema": "boarderless.sequence-canvas.v1"
+          }
+        ],
+        "sequenceDiagramsVersion": 1
+      }
+    }
+  }
+}

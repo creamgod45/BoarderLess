@@ -3,6 +3,7 @@ const ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;'
 /** 已跳脫、可安全嵌入的 HTML 片段 */
 export class SafeHtml {
   constructor(readonly value: string) {}
+  /** @public 由 template literal 的字串轉換隱式呼叫 */
   toString() {
     return this.value
   }

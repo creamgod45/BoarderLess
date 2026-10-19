@@ -1,0 +1,139 @@
+{
+  "description": "selection v9：201，payload 原樣保存（不降版、不丟欄位）",
+  "request": {
+    "method": "PUT",
+    "path": "/api/v1/users/me/quick-schemes/00000000-0000-4000-8000-000000000015",
+    "headers": {
+      "if-none-match": "*",
+      "idempotency-key": "00000000-0000-4000-8000-000000000016"
+    },
+    "body": {
+      "resourceVersion": 2,
+      "name": "Selection v9",
+      "schemaVersion": 9,
+      "payload": {
+        "format": "boarderless/selection",
+        "version": 9,
+        "nodes": [
+          {
+            "originalId": "n1",
+            "x": 0,
+            "y": 0,
+            "width": 240,
+            "height": 120,
+            "rotationDegrees": 0,
+            "text": "Plan",
+            "colorToken": "paper",
+            "shapeToken": "rounded",
+            "parentOriginalId": null,
+            "locked": false,
+            "zOffset": 0,
+            "vectorPath": null
+          }
+        ],
+        "groups": [],
+        "media": [],
+        "relations": [
+          {
+            "sourceId": "n1",
+            "targetId": "gif1",
+            "direction": "Forward",
+            "intent": null,
+            "label": null,
+            "geometry": null
+          }
+        ],
+        "externalMedia": [
+          {
+            "originalId": "gif1",
+            "x": 300,
+            "y": 0,
+            "width": 200,
+            "height": 200,
+            "rotationDegrees": 0,
+            "reference": {
+              "provider": "giphy",
+              "id": "xT9IgDEI1iZyb2wqo8"
+            },
+            "altText": "cat",
+            "parentOriginalId": null,
+            "locked": false,
+            "zOffset": 1
+          }
+        ]
+      },
+      "assetBindings": []
+    }
+  },
+  "response": {
+    "status": 201,
+    "headers": {
+      "etag": "\"fixture-etag-8\"",
+      "cache-control": "private, no-store"
+    },
+    "body": {
+      "id": "00000000-0000-4000-8000-000000000015",
+      "ownerId": "11111111-1111-4111-8111-111111111111",
+      "resourceVersion": 2,
+      "name": "Selection v9",
+      "schemaVersion": 9,
+      "payload": {
+        "media": [],
+        "nodes": [
+          {
+            "x": 0,
+            "y": 0,
+            "text": "Plan",
+            "width": 240,
+            "height": 120,
+            "locked": false,
+            "zOffset": 0,
+            "colorToken": "paper",
+            "originalId": "n1",
+            "shapeToken": "rounded",
+            "vectorPath": null,
+            "rotationDegrees": 0,
+            "parentOriginalId": null
+          }
+        ],
+        "format": "boarderless/selection",
+        "groups": [],
+        "version": 9,
+        "relations": [
+          {
+            "label": null,
+            "intent": null,
+            "geometry": null,
+            "sourceId": "n1",
+            "targetId": "gif1",
+            "direction": "Forward"
+          }
+        ],
+        "externalMedia": [
+          {
+            "x": 300,
+            "y": 0,
+            "width": 200,
+            "height": 200,
+            "locked": false,
+            "altText": "cat",
+            "zOffset": 1,
+            "reference": {
+              "id": "xT9IgDEI1iZyb2wqo8",
+              "provider": "giphy"
+            },
+            "originalId": "gif1",
+            "rotationDegrees": 0,
+            "parentOriginalId": null
+          }
+        ]
+      },
+      "assetBindings": [],
+      "revision": 1,
+      "createdAt": "2026-10-02T00:00:00.000Z",
+      "updatedAt": "2026-10-02T00:00:00.000Z",
+      "etag": "\"fixture-etag-8\"",
+      "assetAvailability": []
+    }
+  }
+}

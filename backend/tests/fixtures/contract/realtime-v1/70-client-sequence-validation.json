@@ -1,0 +1,512 @@
+{
+  "description": "APP 以 applied checkpoint 驗證 transaction 序列：重複可忽略；gap / 亂序 → 暫停並 resync；同 ID 不同內容 → protocol error",
+  "checkpointBefore": 0,
+  "cases": [
+    {
+      "name": "in_order",
+      "frames": [
+        {
+          "type": "catch_up_transaction",
+          "protocolVersion": 1,
+          "workspaceId": "7ee7f67f-45af-49b8-a78e-a0a742fa353e",
+          "connectionEpoch": "e9d36489-eb1a-45a6-973a-1d4a3b53b1a3",
+          "transactionId": "75e91dac-4e81-4b08-a7c6-e411fc95c624",
+          "fromServerSeq": 1,
+          "toServerSeq": 1,
+          "workspaceVersion": 1,
+          "operations": [
+            {
+              "serverSeq": 1,
+              "operationId": "1970e31b-d92f-475d-8518-d5ce7446a98b",
+              "transactionId": "75e91dac-4e81-4b08-a7c6-e411fc95c624",
+              "actorId": "d010812c-310f-4d81-942c-60749d6d9ae1",
+              "clientId": "0230d67b-3e8a-49f0-8fb8-f4353380a153",
+              "clientSeq": 1,
+              "baseVersion": 0,
+              "workspaceVersion": 1,
+              "operationType": "create_object",
+              "payload": {
+                "objectId": "3a66fb47-010d-4606-9019-08585e29ee74",
+                "transform": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 260,
+                  "height": 132,
+                  "rotationDegrees": 0
+                },
+                "objectType": "text",
+                "properties": {
+                  "text": "Idea"
+                }
+              },
+              "schemaVersion": 1,
+              "committedAt": "2026-10-11T16:28:59.470Z"
+            }
+          ]
+        },
+        {
+          "type": "catch_up_transaction",
+          "protocolVersion": 1,
+          "workspaceId": "7ee7f67f-45af-49b8-a78e-a0a742fa353e",
+          "connectionEpoch": "e9d36489-eb1a-45a6-973a-1d4a3b53b1a3",
+          "transactionId": "0cb8ba99-990c-4e7c-b558-27600cf6e856",
+          "fromServerSeq": 2,
+          "toServerSeq": 3,
+          "workspaceVersion": 2,
+          "operations": [
+            {
+              "serverSeq": 2,
+              "operationId": "70cd7bfe-0410-43d5-8d9b-c90a37fd2f16",
+              "transactionId": "0cb8ba99-990c-4e7c-b558-27600cf6e856",
+              "actorId": "d010812c-310f-4d81-942c-60749d6d9ae1",
+              "clientId": "17ad2efc-c206-46b4-abc0-6b15947899d7",
+              "clientSeq": 1,
+              "baseVersion": 1,
+              "workspaceVersion": 2,
+              "operationType": "create_object",
+              "payload": {
+                "objectId": "c4b2a0c1-f98a-45fd-893b-ad9ce736da1b",
+                "transform": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 260,
+                  "height": 132,
+                  "rotationDegrees": 0
+                },
+                "objectType": "text",
+                "properties": {
+                  "text": "Idea"
+                }
+              },
+              "schemaVersion": 1,
+              "committedAt": "2026-10-11T16:28:59.484Z"
+            },
+            {
+              "serverSeq": 3,
+              "operationId": "4807effe-c9a5-458b-9799-58a6896fe8bf",
+              "transactionId": "0cb8ba99-990c-4e7c-b558-27600cf6e856",
+              "actorId": "d010812c-310f-4d81-942c-60749d6d9ae1",
+              "clientId": "17ad2efc-c206-46b4-abc0-6b15947899d7",
+              "clientSeq": 2,
+              "baseVersion": 1,
+              "workspaceVersion": 2,
+              "operationType": "create_object",
+              "payload": {
+                "objectId": "6fb41490-131f-4952-8867-8d63efbc47f8",
+                "transform": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 260,
+                  "height": 132,
+                  "rotationDegrees": 0
+                },
+                "objectType": "text",
+                "properties": {
+                  "text": "Idea"
+                }
+              },
+              "schemaVersion": 1,
+              "committedAt": "2026-10-11T16:28:59.484Z"
+            }
+          ]
+        }
+      ],
+      "expected": "apply",
+      "checkpointAfter": 3
+    },
+    {
+      "name": "duplicate_identical",
+      "frames": [
+        {
+          "type": "catch_up_transaction",
+          "protocolVersion": 1,
+          "workspaceId": "7ee7f67f-45af-49b8-a78e-a0a742fa353e",
+          "connectionEpoch": "e9d36489-eb1a-45a6-973a-1d4a3b53b1a3",
+          "transactionId": "75e91dac-4e81-4b08-a7c6-e411fc95c624",
+          "fromServerSeq": 1,
+          "toServerSeq": 1,
+          "workspaceVersion": 1,
+          "operations": [
+            {
+              "serverSeq": 1,
+              "operationId": "1970e31b-d92f-475d-8518-d5ce7446a98b",
+              "transactionId": "75e91dac-4e81-4b08-a7c6-e411fc95c624",
+              "actorId": "d010812c-310f-4d81-942c-60749d6d9ae1",
+              "clientId": "0230d67b-3e8a-49f0-8fb8-f4353380a153",
+              "clientSeq": 1,
+              "baseVersion": 0,
+              "workspaceVersion": 1,
+              "operationType": "create_object",
+              "payload": {
+                "objectId": "3a66fb47-010d-4606-9019-08585e29ee74",
+                "transform": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 260,
+                  "height": 132,
+                  "rotationDegrees": 0
+                },
+                "objectType": "text",
+                "properties": {
+                  "text": "Idea"
+                }
+              },
+              "schemaVersion": 1,
+              "committedAt": "2026-10-11T16:28:59.470Z"
+            }
+          ]
+        },
+        {
+          "type": "catch_up_transaction",
+          "protocolVersion": 1,
+          "workspaceId": "7ee7f67f-45af-49b8-a78e-a0a742fa353e",
+          "connectionEpoch": "e9d36489-eb1a-45a6-973a-1d4a3b53b1a3",
+          "transactionId": "75e91dac-4e81-4b08-a7c6-e411fc95c624",
+          "fromServerSeq": 1,
+          "toServerSeq": 1,
+          "workspaceVersion": 1,
+          "operations": [
+            {
+              "serverSeq": 1,
+              "operationId": "1970e31b-d92f-475d-8518-d5ce7446a98b",
+              "transactionId": "75e91dac-4e81-4b08-a7c6-e411fc95c624",
+              "actorId": "d010812c-310f-4d81-942c-60749d6d9ae1",
+              "clientId": "0230d67b-3e8a-49f0-8fb8-f4353380a153",
+              "clientSeq": 1,
+              "baseVersion": 0,
+              "workspaceVersion": 1,
+              "operationType": "create_object",
+              "payload": {
+                "objectId": "3a66fb47-010d-4606-9019-08585e29ee74",
+                "transform": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 260,
+                  "height": 132,
+                  "rotationDegrees": 0
+                },
+                "objectType": "text",
+                "properties": {
+                  "text": "Idea"
+                }
+              },
+              "schemaVersion": 1,
+              "committedAt": "2026-10-11T16:28:59.470Z"
+            }
+          ]
+        }
+      ],
+      "expected": "apply_then_ignore_duplicate",
+      "checkpointAfter": 1
+    },
+    {
+      "name": "gap",
+      "frames": [
+        {
+          "type": "catch_up_transaction",
+          "protocolVersion": 1,
+          "workspaceId": "7ee7f67f-45af-49b8-a78e-a0a742fa353e",
+          "connectionEpoch": "e9d36489-eb1a-45a6-973a-1d4a3b53b1a3",
+          "transactionId": "75e91dac-4e81-4b08-a7c6-e411fc95c624",
+          "fromServerSeq": 1,
+          "toServerSeq": 1,
+          "workspaceVersion": 1,
+          "operations": [
+            {
+              "serverSeq": 1,
+              "operationId": "1970e31b-d92f-475d-8518-d5ce7446a98b",
+              "transactionId": "75e91dac-4e81-4b08-a7c6-e411fc95c624",
+              "actorId": "d010812c-310f-4d81-942c-60749d6d9ae1",
+              "clientId": "0230d67b-3e8a-49f0-8fb8-f4353380a153",
+              "clientSeq": 1,
+              "baseVersion": 0,
+              "workspaceVersion": 1,
+              "operationType": "create_object",
+              "payload": {
+                "objectId": "3a66fb47-010d-4606-9019-08585e29ee74",
+                "transform": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 260,
+                  "height": 132,
+                  "rotationDegrees": 0
+                },
+                "objectType": "text",
+                "properties": {
+                  "text": "Idea"
+                }
+              },
+              "schemaVersion": 1,
+              "committedAt": "2026-10-11T16:28:59.470Z"
+            }
+          ]
+        },
+        {
+          "type": "catch_up_transaction",
+          "protocolVersion": 1,
+          "workspaceId": "7ee7f67f-45af-49b8-a78e-a0a742fa353e",
+          "connectionEpoch": "e9d36489-eb1a-45a6-973a-1d4a3b53b1a3",
+          "transactionId": "0cb8ba99-990c-4e7c-b558-27600cf6e856",
+          "fromServerSeq": 7,
+          "toServerSeq": 8,
+          "workspaceVersion": 2,
+          "operations": [
+            {
+              "serverSeq": 7,
+              "operationId": "70cd7bfe-0410-43d5-8d9b-c90a37fd2f16",
+              "transactionId": "0cb8ba99-990c-4e7c-b558-27600cf6e856",
+              "actorId": "d010812c-310f-4d81-942c-60749d6d9ae1",
+              "clientId": "17ad2efc-c206-46b4-abc0-6b15947899d7",
+              "clientSeq": 1,
+              "baseVersion": 1,
+              "workspaceVersion": 2,
+              "operationType": "create_object",
+              "payload": {
+                "objectId": "c4b2a0c1-f98a-45fd-893b-ad9ce736da1b",
+                "transform": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 260,
+                  "height": 132,
+                  "rotationDegrees": 0
+                },
+                "objectType": "text",
+                "properties": {
+                  "text": "Idea"
+                }
+              },
+              "schemaVersion": 1,
+              "committedAt": "2026-10-11T16:28:59.484Z"
+            },
+            {
+              "serverSeq": 8,
+              "operationId": "4807effe-c9a5-458b-9799-58a6896fe8bf",
+              "transactionId": "0cb8ba99-990c-4e7c-b558-27600cf6e856",
+              "actorId": "d010812c-310f-4d81-942c-60749d6d9ae1",
+              "clientId": "17ad2efc-c206-46b4-abc0-6b15947899d7",
+              "clientSeq": 2,
+              "baseVersion": 1,
+              "workspaceVersion": 2,
+              "operationType": "create_object",
+              "payload": {
+                "objectId": "6fb41490-131f-4952-8867-8d63efbc47f8",
+                "transform": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 260,
+                  "height": 132,
+                  "rotationDegrees": 0
+                },
+                "objectType": "text",
+                "properties": {
+                  "text": "Idea"
+                }
+              },
+              "schemaVersion": 1,
+              "committedAt": "2026-10-11T16:28:59.484Z"
+            }
+          ]
+        }
+      ],
+      "expected": "resync",
+      "checkpointAfter": 1
+    },
+    {
+      "name": "out_of_order",
+      "frames": [
+        {
+          "type": "catch_up_transaction",
+          "protocolVersion": 1,
+          "workspaceId": "7ee7f67f-45af-49b8-a78e-a0a742fa353e",
+          "connectionEpoch": "e9d36489-eb1a-45a6-973a-1d4a3b53b1a3",
+          "transactionId": "0cb8ba99-990c-4e7c-b558-27600cf6e856",
+          "fromServerSeq": 2,
+          "toServerSeq": 3,
+          "workspaceVersion": 2,
+          "operations": [
+            {
+              "serverSeq": 2,
+              "operationId": "70cd7bfe-0410-43d5-8d9b-c90a37fd2f16",
+              "transactionId": "0cb8ba99-990c-4e7c-b558-27600cf6e856",
+              "actorId": "d010812c-310f-4d81-942c-60749d6d9ae1",
+              "clientId": "17ad2efc-c206-46b4-abc0-6b15947899d7",
+              "clientSeq": 1,
+              "baseVersion": 1,
+              "workspaceVersion": 2,
+              "operationType": "create_object",
+              "payload": {
+                "objectId": "c4b2a0c1-f98a-45fd-893b-ad9ce736da1b",
+                "transform": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 260,
+                  "height": 132,
+                  "rotationDegrees": 0
+                },
+                "objectType": "text",
+                "properties": {
+                  "text": "Idea"
+                }
+              },
+              "schemaVersion": 1,
+              "committedAt": "2026-10-11T16:28:59.484Z"
+            },
+            {
+              "serverSeq": 3,
+              "operationId": "4807effe-c9a5-458b-9799-58a6896fe8bf",
+              "transactionId": "0cb8ba99-990c-4e7c-b558-27600cf6e856",
+              "actorId": "d010812c-310f-4d81-942c-60749d6d9ae1",
+              "clientId": "17ad2efc-c206-46b4-abc0-6b15947899d7",
+              "clientSeq": 2,
+              "baseVersion": 1,
+              "workspaceVersion": 2,
+              "operationType": "create_object",
+              "payload": {
+                "objectId": "6fb41490-131f-4952-8867-8d63efbc47f8",
+                "transform": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 260,
+                  "height": 132,
+                  "rotationDegrees": 0
+                },
+                "objectType": "text",
+                "properties": {
+                  "text": "Idea"
+                }
+              },
+              "schemaVersion": 1,
+              "committedAt": "2026-10-11T16:28:59.484Z"
+            }
+          ]
+        },
+        {
+          "type": "catch_up_transaction",
+          "protocolVersion": 1,
+          "workspaceId": "7ee7f67f-45af-49b8-a78e-a0a742fa353e",
+          "connectionEpoch": "e9d36489-eb1a-45a6-973a-1d4a3b53b1a3",
+          "transactionId": "75e91dac-4e81-4b08-a7c6-e411fc95c624",
+          "fromServerSeq": 1,
+          "toServerSeq": 1,
+          "workspaceVersion": 1,
+          "operations": [
+            {
+              "serverSeq": 1,
+              "operationId": "1970e31b-d92f-475d-8518-d5ce7446a98b",
+              "transactionId": "75e91dac-4e81-4b08-a7c6-e411fc95c624",
+              "actorId": "d010812c-310f-4d81-942c-60749d6d9ae1",
+              "clientId": "0230d67b-3e8a-49f0-8fb8-f4353380a153",
+              "clientSeq": 1,
+              "baseVersion": 0,
+              "workspaceVersion": 1,
+              "operationType": "create_object",
+              "payload": {
+                "objectId": "3a66fb47-010d-4606-9019-08585e29ee74",
+                "transform": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 260,
+                  "height": 132,
+                  "rotationDegrees": 0
+                },
+                "objectType": "text",
+                "properties": {
+                  "text": "Idea"
+                }
+              },
+              "schemaVersion": 1,
+              "committedAt": "2026-10-11T16:28:59.470Z"
+            }
+          ]
+        }
+      ],
+      "expected": "resync",
+      "checkpointAfter": 0
+    },
+    {
+      "name": "same_id_different_content",
+      "frames": [
+        {
+          "type": "catch_up_transaction",
+          "protocolVersion": 1,
+          "workspaceId": "7ee7f67f-45af-49b8-a78e-a0a742fa353e",
+          "connectionEpoch": "e9d36489-eb1a-45a6-973a-1d4a3b53b1a3",
+          "transactionId": "75e91dac-4e81-4b08-a7c6-e411fc95c624",
+          "fromServerSeq": 1,
+          "toServerSeq": 1,
+          "workspaceVersion": 1,
+          "operations": [
+            {
+              "serverSeq": 1,
+              "operationId": "1970e31b-d92f-475d-8518-d5ce7446a98b",
+              "transactionId": "75e91dac-4e81-4b08-a7c6-e411fc95c624",
+              "actorId": "d010812c-310f-4d81-942c-60749d6d9ae1",
+              "clientId": "0230d67b-3e8a-49f0-8fb8-f4353380a153",
+              "clientSeq": 1,
+              "baseVersion": 0,
+              "workspaceVersion": 1,
+              "operationType": "create_object",
+              "payload": {
+                "objectId": "3a66fb47-010d-4606-9019-08585e29ee74",
+                "transform": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 260,
+                  "height": 132,
+                  "rotationDegrees": 0
+                },
+                "objectType": "text",
+                "properties": {
+                  "text": "Idea"
+                }
+              },
+              "schemaVersion": 1,
+              "committedAt": "2026-10-11T16:28:59.470Z"
+            }
+          ]
+        },
+        {
+          "type": "catch_up_transaction",
+          "protocolVersion": 1,
+          "workspaceId": "7ee7f67f-45af-49b8-a78e-a0a742fa353e",
+          "connectionEpoch": "e9d36489-eb1a-45a6-973a-1d4a3b53b1a3",
+          "transactionId": "75e91dac-4e81-4b08-a7c6-e411fc95c624",
+          "fromServerSeq": 1,
+          "toServerSeq": 1,
+          "workspaceVersion": 1,
+          "operations": [
+            {
+              "serverSeq": 1,
+              "operationId": "1970e31b-d92f-475d-8518-d5ce7446a98b",
+              "transactionId": "75e91dac-4e81-4b08-a7c6-e411fc95c624",
+              "actorId": "d010812c-310f-4d81-942c-60749d6d9ae1",
+              "clientId": "0230d67b-3e8a-49f0-8fb8-f4353380a153",
+              "clientSeq": 1,
+              "baseVersion": 0,
+              "workspaceVersion": 1,
+              "operationType": "create_object",
+              "payload": {
+                "objectId": "3a66fb47-010d-4606-9019-08585e29ee74",
+                "transform": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 260,
+                  "height": 132,
+                  "rotationDegrees": 0
+                },
+                "objectType": "text",
+                "properties": {
+                  "text": "tampered"
+                }
+              },
+              "schemaVersion": 1,
+              "committedAt": "2026-10-11T16:28:59.470Z"
+            }
+          ]
+        }
+      ],
+      "expected": "protocol_error",
+      "checkpointAfter": 1
+    }
+  ]
+}

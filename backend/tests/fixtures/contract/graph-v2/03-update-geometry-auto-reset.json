@@ -1,0 +1,72 @@
+{
+  "description": "geometry 整個子物件替換（重設 auto），不殘留舊 waypoints",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "00000000-0000-4000-8000-000000000020",
+      "transactionId": "00000000-0000-4000-8000-000000000021",
+      "baseVersion": 2,
+      "operations": [
+        {
+          "operationId": "00000000-0000-4000-8000-000000000022",
+          "clientSeq": 1,
+          "kind": "update_relation",
+          "payload": {
+            "relationId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+            "style": {
+              "geometry": {
+                "schema": "boarderless.relation-geometry.v1",
+                "route": {
+                  "mode": "auto"
+                },
+                "labelPlacement": {
+                  "mode": "auto"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "status": "accepted",
+      "fromServerSeq": 8,
+      "toServerSeq": 8,
+      "workspaceVersion": 3,
+      "operations": [
+        {
+          "serverSeq": 8,
+          "operationId": "00000000-0000-4000-8000-000000000022",
+          "transactionId": "00000000-0000-4000-8000-000000000021",
+          "actorId": "11111111-1111-4111-8111-111111111111",
+          "clientId": "00000000-0000-4000-8000-000000000020",
+          "clientSeq": 1,
+          "baseVersion": 2,
+          "workspaceVersion": 3,
+          "operationType": "update_relation",
+          "payload": {
+            "style": {
+              "geometry": {
+                "route": {
+                  "mode": "auto"
+                },
+                "schema": "boarderless.relation-geometry.v1",
+                "labelPlacement": {
+                  "mode": "auto"
+                }
+              }
+            },
+            "relationId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+          },
+          "schemaVersion": 1,
+          "committedAt": "2026-10-02T00:00:00.000Z"
+        }
+      ]
+    }
+  }
+}

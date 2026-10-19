@@ -17,8 +17,6 @@ export const ASSET_MEDIA_TYPES = {
 export type AssetMediaType = keyof typeof ASSET_MEDIA_TYPES
 
 export const MAX_ASSET_BYTES = 209_715_200 // 200 MiB
-export const CHECKSUM_PATTERN = /^sha256:[0-9a-f]{64}$/
-
 export function isAssetMediaType(value: string): value is AssetMediaType {
   return Object.hasOwn(ASSET_MEDIA_TYPES, value)
 }
@@ -53,6 +51,10 @@ export interface Asset {
   sourceAssetId: string | null
   derivativeType: string | null
   derivativeVersion: number | null
+  /** 1 = Media v1 prepare；2 = preparation v2（只能經 lease complete） */
+  preparationVersion: 1 | 2
+  /** v2：被 complete 接受的 upload lease */
+  uploadLeaseId: string | null
   createdAt: Date
   updatedAt: Date
   deletedAt: Date | null

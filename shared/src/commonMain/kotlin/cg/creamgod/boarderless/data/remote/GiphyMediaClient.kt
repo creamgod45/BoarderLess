@@ -9,28 +9,36 @@ import io.ktor.client.statement.bodyAsChannel
 import io.ktor.utils.io.readAvailable
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.yield
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
 
 /** Shared in-flight bound, not a reusable content cache. Queued cancellation never starts a download. */
-class GiphyPreviewGate(limit: Int = 3) {
+class GiphyPreviewGate(
+    limit: Int = 3,
+) {
     private val permits = Semaphore(limit)
-    suspend fun <T> load(block: suspend () -> T): T = permits.withPermit {
-        currentCoroutineContext().ensureActive()
-        block() // Resource-producing callers must check cancellation before transferring ownership.
-    }
+
+    suspend fun <T> load(block: suspend () -> T): T =
+        permits.withPermit {
+            currentCoroutineContext().ensureActive()
+            block() // Resource-producing callers must check cancellation before transferring ownership.
+        }
 }
+
 private val previewGate = GiphyPreviewGate()
 
 /** Display-only bytes; no application-managed media cache, files, proxy or workspace credentials. */
-class GiphyMediaClient(private val client: HttpClient = HttpClient {
-    followRedirects = false
-    install(HttpTimeout) { requestTimeoutMillis = 10_000 }
-}) {
+class GiphyMediaClient(
+    private val client: HttpClient =
+        HttpClient {
+            followRedirects = false
+            install(HttpTimeout) { requestTimeoutMillis = 10_000 }
+        },
+) {
     suspend fun downloadStill(url: String): ByteArray {
         require(isGiphyMediaUrl(url)) { "Unsupported provider media URL" }
         currentCoroutineContext().ensureActive()
@@ -39,11 +47,17 @@ class GiphyMediaClient(private val client: HttpClient = HttpClient {
                 currentCoroutineContext().ensureActive()
                 if (response.status.value != 200) throw GiphyException(GiphyIssue.Unavailable)
                 val declaredSize = response.headers["Content-Length"]?.toLongOrNull()
-                if (declaredSize != null && declaredSize !in 1..MaxStillBytes.toLong())
+                if (declaredSize != null && declaredSize !in 1..MaxStillBytes.toLong()) {
                     throw GiphyException(GiphyIssue.InvalidResponse)
-                val mime = response.headers["Content-Type"]?.substringBefore(';')?.trim()?.lowercase()
-                if (mime != null && mime !in setOf("image/gif", "image/png", "image/jpeg", "image/webp"))
+                }
+                val mime =
+                    response.headers["Content-Type"]
+                        ?.substringBefore(';')
+                        ?.trim()
+                        ?.lowercase()
+                if (mime != null && mime !in setOf("image/gif", "image/png", "image/jpeg", "image/webp")) {
                     throw GiphyException(GiphyIssue.InvalidResponse)
+                }
                 val chunks = mutableListOf<ByteArray>()
                 var size = 0
                 val buffer = ByteArray(16 * 1024)
@@ -53,7 +67,10 @@ class GiphyMediaClient(private val client: HttpClient = HttpClient {
                     val count = channel.readAvailable(buffer, 0, buffer.size)
                     if (count < 0) break
                     if (count > MaxStillBytes - size) throw GiphyException(GiphyIssue.InvalidResponse)
-                    if (count > 0) { chunks += buffer.copyOf(count); size += count }
+                    if (count > 0) {
+                        chunks += buffer.copyOf(count)
+                        size += count
+                    }
                     yield()
                 }
                 if (size == 0) throw GiphyException(GiphyIssue.InvalidResponse)
@@ -61,29 +78,49 @@ class GiphyMediaClient(private val client: HttpClient = HttpClient {
                 var offset = 0
                 chunks.forEach { chunk ->
                     currentCoroutineContext().ensureActive()
-                    chunk.copyInto(encoded, offset); offset += chunk.size
+                    chunk.copyInto(encoded, offset)
+                    offset += chunk.size
                     yield()
                 }
                 currentCoroutineContext().ensureActive()
                 encoded
             }
-        } catch (cancelled: CancellationException) { throw cancelled }
-        catch (failed: GiphyException) { throw failed }
-        catch (_: Exception) { currentCoroutineContext().ensureActive(); throw GiphyException(GiphyIssue.Unavailable) }
+        } catch (
+            cancelled: CancellationException,
+        ) {
+            throw cancelled
+        } catch (
+            failed: GiphyException,
+        ) {
+            throw failed
+        } catch (_: Exception) {
+            currentCoroutineContext().ensureActive()
+            throw GiphyException(GiphyIssue.Unavailable)
+        }
     }
+
     fun close() = client.close()
-    companion object { const val MaxStillBytes = 2 * 1024 * 1024 }
+
+    companion object {
+        const val MaxStillBytes = 2 * 1024 * 1024
+    }
 }
 
 /** Ownership lasts for this preview request only; decoded display resources are owned by the UI. */
-suspend fun loadGiphyStill(url: String, decode: suspend (ByteArray) -> ImageBitmap): ImageBitmap = previewGate.load {
-    val client = GiphyMediaClient()
-    try {
-        val bytes = client.downloadStill(url)
-        currentCoroutineContext().ensureActive()
-        decode(bytes).also { currentCoroutineContext().ensureActive() }
-    } finally { client.close() }
-}
+suspend fun loadGiphyStill(
+    url: String,
+    decode: suspend (ByteArray) -> ImageBitmap,
+): ImageBitmap =
+    previewGate.load {
+        val client = GiphyMediaClient()
+        try {
+            val bytes = client.downloadStill(url)
+            currentCoroutineContext().ensureActive()
+            decode(bytes).also { currentCoroutineContext().ensureActive() }
+        } finally {
+            client.close()
+        }
+    }
 
 /** Transfer decoder ownership only after cancellation checks; no intermediate file or reusable cache. */
 suspend fun loadGiphyAnimation(
@@ -106,5 +143,7 @@ suspend fun loadGiphyAnimation(
                 throw failed
             }
         }
-    } finally { client.close() }
+    } finally {
+        client.close()
+    }
 }

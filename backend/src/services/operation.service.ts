@@ -1,9 +1,13 @@
+import { createHash } from 'node:crypto'
 import { validateOperationPayload, type PayloadValidationError, type TypedOperation } from '../domain/operations.ts'
 import type { CommittedOperation } from '../models/operation.ts'
 import type { Database, Repositories } from '../repositories/index.ts'
 import { conflict, unprocessable } from '../utils/errors.ts'
+import { stableStringify } from '../utils/stable-json.ts'
 import { requireWorkspaceAccess } from './access.service.ts'
-import { applyOperation, checkExpectedVersions, VersionConflictSignal, type VersionConflict } from './canvas-mutations.ts'
+import type { CanvasStyle } from '../domain/canvas-style.ts'
+import type { SequenceDiagram } from '../domain/sequence-diagrams.ts'
+import { applyOperation, assertSequenceBindings, CanvasStyleConflictSignal, checkExpectedVersions, SequenceDiagramsConflictSignal, VersionConflictSignal, type VersionConflict } from './canvas-mutations.ts'
 
 export type { VersionConflict } from './canvas-mutations.ts'
 
@@ -43,6 +47,10 @@ export interface ConflictResult {
   lastServerSeq: number
   /** baseVersion 之後的正式 operations，供 client rebase */
   missingOperations: CommittedOperation[]
+  /** 只有 update_canvas_style 的 CAS 失敗才有；物件版本衝突維持原有形狀 */
+  code?: 'canvas_style_version_conflict' | 'sequence_diagrams_conflict'
+  canvasStyle?: { expectedVersion: number; actualVersion: number; canvasStyle: CanvasStyle; canvasStyleVersion: number }
+  sequenceDiagrams?: { expectedVersion: number; actualVersion: number; diagrams: SequenceDiagram[]; sequenceDiagramsVersion: number }
 }
 
 export type SubmitResult = CommittedResult | ConflictResult
@@ -61,6 +69,9 @@ export class OperationService {
     try {
       return await this.db.transaction((repos) => this.commit(repos, actorId, input, operations))
     } catch (error) {
+      if (error instanceof CanvasStyleConflictSignal || error instanceof SequenceDiagramsConflictSignal) {
+        return this.buildConflict(input.workspaceId, input.baseVersion, [], error)
+      }
       if (!(error instanceof VersionConflictSignal)) throw error
       return this.buildConflict(input.workspaceId, input.baseVersion, error.conflicts)
     }
@@ -108,10 +119,25 @@ export class OperationService {
       lock: true,
     })
 
-    // 3. idempotency：依 operation ID（不是連線 ID）去重
+    // 3. idempotency：依 operation / transaction ID（不是連線 ID）去重，且內容必須與原請求相同
     const operationIds = operations.map((o) => o.input.operationId)
+    const digest = requestDigest(input)
     const existing = await repos.operations.findByOperationIds(workspace.id, actorId, operationIds)
-    if (existing.length === operations.length) return toResult('duplicate', existing)
+    const sameTransaction = await repos.operations.findByTransaction(workspace.id, actorId, input.transactionId)
+    if (existing.length === operations.length) {
+      const original = existing.every((o) => o.transactionId === input.transactionId) && sameTransaction.length === existing.length
+      if (original && existing.every((o) => o.requestDigest === digest)) return toResult('duplicate', existing)
+      throw conflict('idempotency_mismatch', 'These operation IDs were already committed with different content', {
+        reason: !original ? 'transaction_mismatch' : existing.some((o) => o.requestDigest === null) ? 'original_digest_unavailable' : 'content_mismatch',
+        transactionId: existing[0]!.transactionId,
+      })
+    }
+    if (existing.length === 0 && sameTransaction.length > 0) {
+      throw conflict('idempotency_mismatch', 'This transaction ID was already committed with different operations', {
+        reason: 'transaction_reused',
+        transactionId: input.transactionId,
+      })
+    }
     if (existing.length > 0) {
       throw rejected('partial_duplicate', 'Some operations in this transaction were already committed', {
         committedOperationIds: existing.map((o) => o.operationId),
@@ -135,7 +161,10 @@ export class OperationService {
 
     for (const { input: opInput, op } of operations) {
       await checkExpectedVersions(repos, workspace.id, op, opInput.expectedObjectVersions)
-      const storedPayload = await applyOperation(repos, workspace.id, actorId, op)
+      const storedPayload = await applyOperation(repos, workspace.id, actorId, op, {
+        transactionId: input.transactionId,
+        operationId: opInput.operationId,
+      })
       serverSeq += 1
       committed.push(
         await repos.operations.append({
@@ -151,10 +180,13 @@ export class OperationService {
           operationType: op.kind,
           payload: storedPayload,
           schemaVersion: OPERATION_SCHEMA_VERSION,
+          requestDigest: digest,
         }),
       )
     }
 
+    // 時序圖 bindings 在全部 operation 套用後驗證（metadata 與 graph 必須同交易一致）
+    await assertSequenceBindings(repos, workspace.id)
     await repos.workspaces.advance(workspace.id, workspaceVersion, serverSeq)
     const result = toResult('accepted', committed)
     await repos.outbox.enqueue(workspace.id, serverSeq, 'operations_committed', {
@@ -173,6 +205,7 @@ export class OperationService {
     workspaceId: string,
     baseVersion: number,
     conflicts: VersionConflict[],
+    signal?: CanvasStyleConflictSignal | SequenceDiagramsConflictSignal,
   ): Promise<ConflictResult> {
     return this.db.readConsistent(async (repos) => {
       const workspace = await repos.workspaces.findById(workspaceId)
@@ -183,9 +216,57 @@ export class OperationService {
         workspaceVersion: workspace?.currentVersion ?? 0,
         lastServerSeq: workspace?.lastServerSeq ?? 0,
         missingOperations,
+        // 權威 style 與 checkpoint 來自同一個一致讀取點
+        ...(signal instanceof CanvasStyleConflictSignal && workspace
+          ? {
+              code: 'canvas_style_version_conflict' as const,
+              canvasStyle: {
+                expectedVersion: signal.expectedVersion,
+                actualVersion: workspace.canvasStyleVersion,
+                canvasStyle: workspace.canvasStyle,
+                canvasStyleVersion: workspace.canvasStyleVersion,
+              },
+            }
+          : {}),
+        ...(signal instanceof SequenceDiagramsConflictSignal && workspace
+          ? {
+              code: 'sequence_diagrams_conflict' as const,
+              sequenceDiagrams: {
+                expectedVersion: signal.expectedVersion,
+                actualVersion: workspace.sequenceDiagramsVersion,
+                diagrams: workspace.sequenceDiagrams,
+                sequenceDiagramsVersion: workspace.sequenceDiagramsVersion,
+              },
+            }
+          : {}),
       }
     })
   }
+}
+
+/**
+ * 原 envelope 的 digest：transaction / client / baseVersion 與每個 operation 的 ID、clientSeq、kind、
+ * expectedObjectVersions（空物件視同未提供）、payload；key 順序無關。
+ */
+export function requestDigest(input: SubmitOperationsInput): string {
+  return createHash('sha256')
+    .update(
+      stableStringify({
+        protocolVersion: input.protocolVersion,
+        transactionId: input.transactionId,
+        clientId: input.clientId,
+        baseVersion: input.baseVersion,
+        operations: input.operations.map((o) => ({
+          operationId: o.operationId,
+          clientSeq: o.clientSeq,
+          kind: o.kind,
+          expectedObjectVersions: o.expectedObjectVersions && Object.keys(o.expectedObjectVersions).length > 0 ? o.expectedObjectVersions : null,
+          payload: o.payload ?? null,
+        })),
+      }),
+      'utf8',
+    )
+    .digest('hex')
 }
 
 function toResult(status: CommittedResult['status'], operations: CommittedOperation[]): CommittedResult {

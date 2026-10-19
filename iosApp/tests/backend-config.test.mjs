@@ -21,7 +21,7 @@ test('simulator API uses Mac loopback while physical device uses development LAN
   const simulator = settings('iphonesimulator');
   const device = settings('iphoneos');
   assert.equal(simulator.BOARDERLESS_BACKEND_HOST, '127.0.0.1');
-  assert.equal(device.BOARDERLESS_BACKEND_HOST, '192.168.68.67');
+  assert.equal(device.BOARDERLESS_BACKEND_HOST, '192.168.68.65');
   for (const resolved of [simulator, device]) {
     assert.equal(resolved.BOARDERLESS_BACKEND_SCHEME, 'http');
     assert.equal(resolved.BOARDERLESS_BACKEND_PORT, '3000');

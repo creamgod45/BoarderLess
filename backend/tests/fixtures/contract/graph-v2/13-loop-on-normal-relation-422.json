@@ -1,0 +1,49 @@
+{
+  "description": "普通線不接受 loop route",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "00000000-0000-4000-8000-000000000043",
+      "transactionId": "00000000-0000-4000-8000-000000000044",
+      "baseVersion": 6,
+      "operations": [
+        {
+          "operationId": "00000000-0000-4000-8000-000000000045",
+          "clientSeq": 1,
+          "kind": "create_relation",
+          "payload": {
+            "relationId": "00000000-0000-4000-8000-000000000046",
+            "sourceObjectId": "66666666-6666-4666-8666-666666666666",
+            "targetObjectId": "88888888-8888-4888-8888-888888888888",
+            "direction": "forward",
+            "style": {
+              "geometry": {
+                "schema": "boarderless.relation-geometry.v1",
+                "route": {
+                  "mode": "loop",
+                  "side": "right",
+                  "extent": 80
+                },
+                "labelPlacement": {
+                  "mode": "auto"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 422,
+    "body": {
+      "error": {
+        "code": "invalid_relation_geometry",
+        "message": "relation geometry must use an auto or manual route with valid bounds"
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

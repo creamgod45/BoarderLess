@@ -80,7 +80,10 @@ class SelectionDistributionTest {
         text = id,
     )
 
-    private fun assertClose(expected: Float, actual: Float) {
+    private fun assertClose(
+        expected: Float,
+        actual: Float,
+    ) {
         assertTrue(abs(expected - actual) < 0.01f, "Expected $expected, got $actual")
     }
 }

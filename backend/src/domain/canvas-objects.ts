@@ -1,5 +1,8 @@
 import { Type, type Static, type TSchema } from 'typebox'
+import { textPlacementValid, vectorPathValid, type TextPlacement, type VectorPath } from './selection.ts'
+import { TextPlacementWireSchema, VectorPathWireSchema } from './vector-path.ts'
 import { Value } from 'typebox/value'
+import { NODE_SHAPES } from './node-shapes.ts'
 
 /**
  * Canvas object 的型別化 schema（BAI-008）。對齊 APP `CanvasObject` / `BackendWorkspaceRepository`：
@@ -13,11 +16,7 @@ import { Value } from 'typebox/value'
 export const OBJECT_SCHEMA_VERSION = 1
 
 /** APP `NodeShape.token` */
-export const NODE_SHAPES = [
-  'rounded', 'rectangle', 'ellipse', 'diamond', 'pill', 'parallelogram', 'hexagon', 'document', 'database',
-  'plain-text', 'triangle', 'pentagon', 'octagon', 'trapezoid', 'plus', 'arrow-right', 'arrow-left', 'arrow-up',
-  'arrow-down', 'triangle-down', 'right-triangle', 'chevron', 'double-arrow', 'star', 'manual-input',
-] as const
+export { NODE_SHAPES } from './node-shapes.ts'
 
 /** 主題色 token（APP NodeColor.kt）或使用者自選的 `#rrggbb` */
 export const NAMED_COLOR_TOKENS = ['paper', 'lilac', 'amber', 'mint', 'group', 'relation'] as const
@@ -61,6 +60,10 @@ const OBJECT_PROPERTIES = {
       text: Type.Optional(Type.String({ maxLength: LIMITS.text })),
       colorToken: Type.Optional(ColorToken),
       shapeToken: Type.Optional(Type.Enum(NODE_SHAPES)),
+      // 批次 D：TextNode 的可選自有向量路徑（不是新 objectType；不接受 SVG / URL）。null = 清除（properties 是淺層 merge）
+      vectorPath: Type.Optional(Type.Union([VectorPathWireSchema, Type.Null()])),
+      // APP v8 文字位置 / 外觀；null = 清除
+      textPlacement: Type.Optional(Type.Union([TextPlacementWireSchema, Type.Null()])),
     },
     { additionalProperties: false },
   ),
@@ -90,8 +93,11 @@ export function isObjectType(value: string): value is ObjectType {
   return Object.hasOwn(OBJECT_PROPERTIES, value)
 }
 
-/** Relation.style（APP 目前只送 colorToken） */
-export const RelationStyleSchema = Type.Object({ colorToken: Type.Optional(ColorToken) }, { additionalProperties: false })
+/** Relation.style：colorToken；geometry（boarderless.relation-geometry.v1）另由 relationGeometryIssue 驗證 */
+export const RelationStyleSchema = Type.Object(
+  { colorToken: Type.Optional(ColorToken), geometry: Type.Optional(Type.Unknown()) },
+  { additionalProperties: false },
+)
 
 export interface StateError {
   path: string
@@ -131,7 +137,23 @@ export function validateObjectState(
     ...errorsOf(TransformSchema, transform, '/transform'),
     ...errorsOf(OBJECT_PROPERTIES[objectType], properties, '/properties'),
   ]
+  if (errors.length === 0 && objectType === 'text') errors.push(...textExtensionErrors(transform as Transform, properties as Record<string, unknown>))
   return errors.length === 0 ? { ok: true } : { ok: false, code: 'invalid_object', errors }
+}
+
+/** vectorPath / textPlacement 的語意規則（APP VectorPath / TextPlacement init） */
+function textExtensionErrors(transform: Transform, properties: Record<string, unknown>): StateError[] {
+  const errors: StateError[] = []
+  const vectorPath = properties.vectorPath as VectorPath | null | undefined
+  if (vectorPath != null) {
+    if (!vectorPathValid(vectorPath)) errors.push({ path: '/properties/vectorPath', message: 'invalid vector path (schemaVersion / viewBox / command order / bounds / style)' })
+    if (!(transform.width > 0 && transform.height > 0)) errors.push({ path: '/transform', message: 'vector path nodes require a positive size' })
+  }
+  const textPlacement = properties.textPlacement as TextPlacement | null | undefined
+  if (textPlacement != null && !textPlacementValid(textPlacement)) {
+    errors.push({ path: '/properties/textPlacement', message: 'invalid text placement (offset / fontSize / weight / color)' })
+  }
+  return errors
 }
 
 export function validateRelationStyle(style: unknown): StateError[] {

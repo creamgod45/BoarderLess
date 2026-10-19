@@ -1,19 +1,28 @@
 package cg.creamgod.boarderless.data.remote
 
+import cg.creamgod.boarderless.data.PrivateFileSystem
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.channels.OverlappingFileLockException
 import java.nio.file.*
-import java.nio.file.attribute.PosixFilePermissions
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.locks.ReentrantLock
 
 internal class AtomicDraftBusyException : IOException("Draft store is busy")
+
 internal class AtomicDraftConflictException : IOException("Draft store generation changed")
-internal class AtomicDraftCommitUnknownException(cause: Exception) : IOException("Draft publication outcome requires a fresh read", cause)
-internal data class AtomicDraftRecord(val generation: Long, val payload: ByteArray?)
+
+internal class AtomicDraftCommitUnknownException(
+    cause: Exception,
+) : IOException("Draft publication outcome requires a fresh read", cause)
+
+internal data class AtomicDraftRecord(
+    val generation: Long,
+    val payload: ByteArray?,
+)
+
 internal enum class AtomicDraftStage { DataForced, Published, DirectoryForced }
 
 /** Desktop local-file primitive, not yet the SessionPreferences backend.
@@ -21,22 +30,59 @@ internal enum class AtomicDraftStage { DataForced, Published, DirectoryForced }
  * stable lock protocol. No ordinary-move fallback, legacy import, GC or automatic retry.
  * Null payload is a persisted tombstone (retains generation, preventing an ABA overwrite).
  */
-internal class DesktopAtomicDraftStore(rootPath: Path, private val checkpoint: (AtomicDraftStage) -> Unit = {}) {
+internal class DesktopAtomicDraftStore(
+    rootPath: Path,
+    private val checkpoint: (AtomicDraftStage) -> Unit = {},
+) {
     private val root: Path
+
     init {
         require(rootPath.isAbsolute)
         val requested = rootPath.normalize()
         if (!Files.exists(requested, LinkOption.NOFOLLOW_LINKS)) {
-            try { Files.createDirectory(requested, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------"))) }
-            catch (_: FileAlreadyExistsException) { /* Another initializer won; verify below. */ }
+            try {
+                Files.createDirectory(requested, *PrivateFileSystem.directoryAttributes(requested))
+            } catch (
+                _: FileAlreadyExistsException,
+            ) {
+                // Another initializer won; verify below.
+            }
         }
         checkPrivateRoot(requested)
         root = requested.toRealPath()
+        PrivateFileSystem.forceDirectory(requireNotNull(root.parent))
+    }
+
+    /** Read-only published-record catalog. Caller must hold a lifetime exclusion covering ALL
+     * writers when using this for migration; per-key locks alone do not freeze the catalog.
+     * Staging/lock files are retained, never interpreted as published records or reclaimed.
+     */
+    fun recordKeys(): Set<String> {
+        checkPrivateRoot(root)
+        return Files.list(root).use { paths ->
+            val keys = linkedSetOf<String>()
+            val iterator = paths.iterator()
+            while (iterator.hasNext()) {
+                val path = iterator.next()
+                val name = path.fileName.toString()
+                if (!name.endsWith(".record")) continue
+                val key = name.removeSuffix(".record")
+                require(key.matches(Regex("[0-9a-f]{64}")))
+                check(!Files.isSymbolicLink(path) && Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
+                keys.add(key)
+                require(keys.size <= 1024)
+            }
+            keys
+        }
     }
 
     fun read(scopeHash: String): AtomicDraftRecord? = locked(scopeHash) { readLocked(scopeHash) }
 
-    fun compareAndSet(scopeHash: String, expectedGeneration: Long?, payload: ByteArray?): AtomicDraftRecord {
+    fun compareAndSet(
+        scopeHash: String,
+        expectedGeneration: Long?,
+        payload: ByteArray?,
+    ): AtomicDraftRecord {
         require(expectedGeneration == null || expectedGeneration in 1..MaxGeneration)
         require(payload == null || payload.size <= MaximumPayloadBytes)
         val snapshot = payload?.copyOf()
@@ -45,10 +91,16 @@ internal class DesktopAtomicDraftStore(rootPath: Path, private val checkpoint: (
             if (current?.generation != expectedGeneration) throw AtomicDraftConflictException()
             val generation = (current?.generation ?: 0L) + 1
             check(generation in 1..MaxGeneration)
-            val header = ByteBuffer.allocate(HeaderSize).put(Magic).put(scopeBytes(scopeHash)).putLong(generation)
-                .putInt(snapshot?.size ?: -1).array()
+            val header =
+                ByteBuffer
+                    .allocate(HeaderSize)
+                    .put(Magic)
+                    .put(scopeBytes(scopeHash))
+                    .putLong(generation)
+                    .putInt(snapshot?.size ?: -1)
+                    .array()
             val hash = checksum(header, snapshot)
-            val staging = Files.createTempFile(root, "staging-", ".tmp", PrivateFileAttribute)
+            val staging = Files.createTempFile(root, "staging-", ".tmp", *PrivateFileSystem.fileAttributes(root))
             var publicationAttempted = false
             try {
                 FileChannel.open(staging, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS).use { channel ->
@@ -61,7 +113,7 @@ internal class DesktopAtomicDraftStore(rootPath: Path, private val checkpoint: (
                 publicationAttempted = true
                 Files.move(staging, recordPath(scopeHash), StandardCopyOption.ATOMIC_MOVE)
                 checkpoint(AtomicDraftStage.Published)
-                FileChannel.open(root, StandardOpenOption.READ).use { it.force(true) }
+                PrivateFileSystem.forceDirectory(root)
                 checkpoint(AtomicDraftStage.DirectoryForced)
             } catch (failure: Exception) {
                 // An exception during/after publication is not evidence that the old record won.
@@ -72,6 +124,27 @@ internal class DesktopAtomicDraftStore(rootPath: Path, private val checkpoint: (
             AtomicDraftRecord(generation, snapshot)
         }
     }
+
+    /** Resolve a freshly reviewed published generation without republishing it. A read alone
+     * cannot prove that a prior unknown move reached the directory durability barrier.
+     */
+    fun confirmDurable(
+        scopeHash: String,
+        expectedGeneration: Long,
+    ): AtomicDraftRecord =
+        locked(scopeHash) {
+            val current = requireNotNull(readLocked(scopeHash))
+            if (current.generation != expectedGeneration) throw AtomicDraftConflictException()
+            try {
+                FileChannel.open(recordPath(scopeHash), StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS).use { it.force(true) }
+                checkpoint(AtomicDraftStage.DataForced)
+                PrivateFileSystem.forceDirectory(root)
+                checkpoint(AtomicDraftStage.DirectoryForced)
+            } catch (failure: Exception) {
+                throw AtomicDraftCommitUnknownException(failure)
+            }
+            current
+        }
 
     private fun readLocked(scopeHash: String): AtomicDraftRecord? {
         val file = recordPath(scopeHash)
@@ -94,7 +167,10 @@ internal class DesktopAtomicDraftStore(rootPath: Path, private val checkpoint: (
         }
     }
 
-    private fun <T> locked(scopeHash: String, action: () -> T): T {
+    private fun <T> locked(
+        scopeHash: String,
+        action: () -> T,
+    ): T {
         require(scopeHash.matches(Regex("[0-9a-f]{64}")))
         checkPrivateRoot(root)
         val mutex = ProcessLocks.computeIfAbsent(root.toString()) { ReentrantLock() }
@@ -102,18 +178,38 @@ internal class DesktopAtomicDraftStore(rootPath: Path, private val checkpoint: (
         try {
             val lockPath = root.resolve("$scopeHash.lock")
             if (Files.exists(lockPath, LinkOption.NOFOLLOW_LINKS)) check(Files.isRegularFile(lockPath, LinkOption.NOFOLLOW_LINKS))
-            FileChannel.open(lockPath, setOf<OpenOption>(StandardOpenOption.CREATE, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS), PrivateFileAttribute).use { channel ->
-                val lock = try { channel.tryLock() ?: throw AtomicDraftBusyException() }
-                    catch (_: OverlappingFileLockException) { throw AtomicDraftBusyException() }
-                lock.use { return action() }
-            }
-        } finally { mutex.unlock() }
+            FileChannel
+                .open(
+                    lockPath,
+                    setOf<OpenOption>(StandardOpenOption.CREATE, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS),
+                    *PrivateFileSystem.fileAttributes(root),
+                ).use { channel ->
+                    val lock =
+                        try {
+                            channel.tryLock() ?: throw AtomicDraftBusyException()
+                        } catch (
+                            _: OverlappingFileLockException,
+                        ) {
+                            throw AtomicDraftBusyException()
+                        }
+                    lock.use { return action() }
+                }
+        } finally {
+            mutex.unlock()
+        }
     }
 
     private fun recordPath(scopeHash: String) = root.resolve("$scopeHash.record")
+
     private fun scopeBytes(scopeHash: String) = ByteArray(32) { scopeHash.substring(it * 2, it * 2 + 2).toInt(16).toByte() }
-    private fun checksum(header: ByteArray, payload: ByteArray?) = MessageDigest.getInstance("SHA-256").run {
-        update(header); payload?.let(::update); digest()
+
+    private fun checksum(
+        header: ByteArray,
+        payload: ByteArray?,
+    ) = MessageDigest.getInstance("SHA-256").run {
+        update(header)
+        payload?.let(::update)
+        digest()
     }
 
     private companion object {
@@ -122,17 +218,22 @@ internal class DesktopAtomicDraftStore(rootPath: Path, private val checkpoint: (
         const val RecordOverhead = 84
         const val MaximumPayloadBytes = 6 * 1024 * 1024
         const val MaxGeneration = 9_007_199_254_740_991L
-        val PrivateFileAttribute = PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------"))
         val ProcessLocks = ConcurrentHashMap<String, ReentrantLock>()
-        fun checkPrivateRoot(path: Path) {
-            check(!Files.isSymbolicLink(path) && Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS))
-            check(Files.getPosixFilePermissions(path, LinkOption.NOFOLLOW_LINKS) == PosixFilePermissions.fromString("rwx------"))
-        }
-        fun writeFully(channel: FileChannel, bytes: ByteArray) {
+
+        fun checkPrivateRoot(path: Path) = PrivateFileSystem.requirePrivateDirectory(path)
+
+        fun writeFully(
+            channel: FileChannel,
+            bytes: ByteArray,
+        ) {
             val buffer = ByteBuffer.wrap(bytes)
             while (buffer.hasRemaining()) check(channel.write(buffer) > 0)
         }
-        fun readFully(channel: FileChannel, length: Int): ByteArray {
+
+        fun readFully(
+            channel: FileChannel,
+            length: Int,
+        ): ByteArray {
             val buffer = ByteBuffer.allocate(length)
             while (buffer.hasRemaining()) check(channel.read(buffer) > 0)
             return buffer.array()

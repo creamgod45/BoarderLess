@@ -1,0 +1,45 @@
+{
+  "description": "payload 不接受 assetId：invalid_operation",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "00000000-0000-4000-8000-000000000033",
+      "transactionId": "00000000-0000-4000-8000-000000000034",
+      "baseVersion": 4,
+      "operations": [
+        {
+          "operationId": "00000000-0000-4000-8000-000000000035",
+          "clientSeq": 1,
+          "kind": "restore_media_references",
+          "payload": {
+            "objectId": "66666666-6666-4666-8666-666666666666",
+            "expectedObjectVersion": 4,
+            "originalTransactionId": "99999999-9999-4999-8999-999999999999",
+            "originalOperationId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "targetSide": "before",
+            "assetId": "77777777-7777-4777-8777-777777777777"
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 422,
+    "body": {
+      "error": {
+        "code": "invalid_operation",
+        "message": "One or more operations are invalid",
+        "details": [
+          {
+            "index": 0,
+            "path": "/payload",
+            "message": "must not have additional properties"
+          }
+        ]
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

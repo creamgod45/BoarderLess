@@ -22,7 +22,11 @@ class LocalizationTest {
     private val japanese = AppLanguage("ja", "日本語")
     private val available = listOf(DefaultLanguage, traditionalChinese, japanese)
 
-    private fun <T> withCatalog(language: AppLanguage, json: String, block: () -> T): T {
+    private fun <T> withCatalog(
+        language: AppLanguage,
+        json: String,
+        block: () -> T,
+    ): T {
         Localization.install(language, json)
         return try {
             block()
@@ -59,7 +63,8 @@ class LocalizationTest {
 
     @Test
     fun loadedCatalogsTranslateAndFallBackToEnglishPerKey() {
-        val json = """
+        val json =
+            """
             {
               "common": { "close": "關閉" },
               "status": {
@@ -68,15 +73,16 @@ class LocalizationTest {
               },
               "history": { "createdObjects": { "other": "已建立 {count} 個物件" } }
             }
-        """.trimIndent()
+            """.trimIndent()
         withCatalog(traditionalChinese, json) {
             assertEquals("關閉", Strings.common.close())
             assertEquals("正在開啟 Plan…", Strings.status.opening("Plan"))
             assertEquals("正在儲存 1 項變更…", Strings.status.savingChanges(1))
             assertEquals("Unknown error", Strings.common.unknownError())
-            val nodes = listOf("a", "b").map {
-                TextNode(id = CanvasObjectId(it), transform = CanvasTransform(Vec2.Zero, CanvasSize(10f, 10f)), text = it)
-            }
+            val nodes =
+                listOf("a", "b").map {
+                    TextNode(id = CanvasObjectId(it), transform = CanvasTransform(Vec2.Zero, CanvasSize(10f, 10f)), text = it)
+                }
             assertEquals(
                 "已建立 2 個物件",
                 describeHistoryOperation(CreateObjectsOperation("create", nodes), HistoryDirection.Redo),

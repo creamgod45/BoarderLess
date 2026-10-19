@@ -1,0 +1,113 @@
+{
+  "description": "selection v8：201，payload 原樣保存（不降版、不丟欄位）",
+  "request": {
+    "method": "PUT",
+    "path": "/api/v1/users/me/quick-schemes/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+    "headers": {
+      "if-none-match": "*",
+      "idempotency-key": "ffffffff-ffff-4fff-8fff-ffffffffffff"
+    },
+    "body": {
+      "resourceVersion": 2,
+      "name": "Selection v8",
+      "schemaVersion": 8,
+      "payload": {
+        "format": "boarderless/selection",
+        "version": 8,
+        "nodes": [
+          {
+            "originalId": "n1",
+            "x": 0,
+            "y": 0,
+            "width": 240,
+            "height": 120,
+            "rotationDegrees": 0,
+            "text": "Plan",
+            "colorToken": "paper",
+            "shapeToken": "rounded",
+            "parentOriginalId": null,
+            "locked": false,
+            "zOffset": 0,
+            "vectorPath": null,
+            "textPlacement": {
+              "anchor": "Below",
+              "offsetX": 0,
+              "offsetY": 8,
+              "appearance": {
+                "fontSize": 18,
+                "weight": 700,
+                "color": "#112233",
+                "font": "Serif",
+                "italic": true,
+                "underline": false,
+                "strikethrough": false
+              }
+            }
+          }
+        ],
+        "groups": [],
+        "media": [],
+        "relations": []
+      },
+      "assetBindings": []
+    }
+  },
+  "response": {
+    "status": 201,
+    "headers": {
+      "etag": "\"fixture-etag-7\"",
+      "cache-control": "private, no-store"
+    },
+    "body": {
+      "id": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+      "ownerId": "11111111-1111-4111-8111-111111111111",
+      "resourceVersion": 2,
+      "name": "Selection v8",
+      "schemaVersion": 8,
+      "payload": {
+        "media": [],
+        "nodes": [
+          {
+            "x": 0,
+            "y": 0,
+            "text": "Plan",
+            "width": 240,
+            "height": 120,
+            "locked": false,
+            "zOffset": 0,
+            "colorToken": "paper",
+            "originalId": "n1",
+            "shapeToken": "rounded",
+            "vectorPath": null,
+            "textPlacement": {
+              "anchor": "Below",
+              "offsetX": 0,
+              "offsetY": 8,
+              "appearance": {
+                "font": "Serif",
+                "color": "#112233",
+                "italic": true,
+                "weight": 700,
+                "fontSize": 18,
+                "underline": false,
+                "strikethrough": false
+              }
+            },
+            "rotationDegrees": 0,
+            "parentOriginalId": null
+          }
+        ],
+        "format": "boarderless/selection",
+        "groups": [],
+        "version": 8,
+        "relations": []
+      },
+      "assetBindings": [],
+      "revision": 1,
+      "createdAt": "2026-10-02T00:00:00.000Z",
+      "updatedAt": "2026-10-02T00:00:00.000Z",
+      "etag": "\"fixture-etag-7\"",
+      "assetAvailability": []
+    }
+  }
+}

@@ -1,6 +1,22 @@
 # Backend / App Integration Issues
 
-更新日期：2026-10-02
+更新日期：2026-10-05
+
+## 最新後端交付核對（2026-10-05）
+
+BAI-012 explicit fences已接APP雙次確認及strict receipt validator，保留pending／草稿；commit勝出採committed，unknown不可當fence成功。42143 JVM743零fail/error、6skip與跨平台main編譯成功；未真服務競爭／fence或GUI驗收。還需持久proof、fenced→fresh review→merge Apply及Undo，不將此子項交付當BAI-012解除。詳ORIGINAL_SUBMISSION_RECEIPT_ACCEPTANCE。
+
+BAI-012新增APP完整已提交恢復入口：明確確認時receipt+完整log+fresh ACL/state，而非receipt摘要直接ACK；成功沿既有evidence/journal確認清pending，不重送／建立fence。49374 JVM742零fail/error、6skip與跨平台main編譯通過。真實receipt/log時間序列、delete provenance／cold-start、多writer原子保存、明確fence→merge Apply及GUI仍Pending，後端不需為本切片新增API。詳ORIGINAL_SUBMISSION_RECEIPT_ACCEPTANCE。
+
+BAI-012 APP進展：已新增原pending transaction的正式operations/receipts唯讀查詢及恢復區入口，exact身份／逐operation／完整range驗證；unknown保留不當未提交、fenced不重送、committed不冒充含payload ACK。不建立fence／清pending。93230 JVM740tests零fail/error、6skip及Desktop／JS／Wasm／iOS arm64編譯成功；仍需完整ACK reconciliation／provenance、明確授權fence與正式merge Apply、真服務fixtures／GUI，不將BAI-012標解除。詳ORIGINAL_SUBMISSION_RECEIPT_ACCEPTANCE。
+
+最新：Undo／Redo／pending／submit已接restore，36118 JVM全套707tests零fail/error、4個其他live skip，restore真實HTTP1case無skip，僅新QA畫布；保存scoped版本及snapshot證據。BAI-001／011進入人工／跨端驗收，不再是未接線。正式fixtures16／20 version map UUID未跟payload匿名化，20 restore_relations也缺CAS；請後端修recorder map keys並重錄。22 state decode通過、20嚴格拒絕檢查通過，不當31份契約全通過。詳UNDO_RESTORE_ACCEPTANCE；receipt／fence merge、cold-start保存仍Pending，下段planning-only為早期紀錄。
+
+APP restore接線進度：新增從權威before state＋完整committed delete導出tombstone版本與objects→relations還原wire的BackendRestorationPlan，focused JVM3cases通過。它不是WorkspaceHistory可執行operation，不證明fresh ACL／server head、receipt或GUI；Undo/Redo／pending journal／正式submit與fixtures尚未接入，BAI-001／011仍APP Integration Pending。
+
+使用者交付資料正確性更新，唯讀核對現有 source／canvas-v1 index：BAI-008型別驗證（三kind／25形狀）、BAI-007群組parent／cycle／children、BAI-001 restore_objects／restore_relations、BAI-012 POST operations/receipts與operations/fences已存在；index列31份fixtures（目錄另有index本身）。後端回報145tests通過、競爭連跑5次；APP本輪未重跑後端tests／migration，也未確認正在運行服務已載入這份更新。因此狀態為「後端交付／APP整合與正式服務驗收待做」，不是完整功能解除。
+
+BAI-011刪除Undo／新增Redo須送restore，expectedObjectVersions比對tombstone、恢復version+1；create同ID不是restore。物件型別替換與relation端點變更仍明確unsupported_change，不算已實作。APP需核對inverse/rebase/reducer/catch-up與31份fixtures，再作正式雙端驗收；receipt unknown仍不能認定未提交，需使用fresh ACL／版本與explicit confirmation串接fence後才處理新merge，v1備份缺原wire provenance的限制不消失。舊DB非法資料掃描／migration仍待維護者，不由APP靜默修補。下方早期缺口描述保留歷史證據，最新狀態以本節及各狀態為準。
 
 ## 目前交付優先順序
 
@@ -14,7 +30,7 @@
 
 ## BAI-001：soft-delete 物件無法以穩定 ID 還原
 
-狀態：Blocking（刪除 Undo、Ungroup Undo）
+狀態：後端 restore 已交付；APP 刪除 Undo／新增 Redo／Ungroup Undo 對接與服務驗收待做（2026-10-05）。以下create失敗描述為歷史及仍不得使用的舊APP路徑。
 
 目前 App 的 inverse operation 會以原本的 object ID 還原被刪除的物件，確保 relation、parent 與歷史參照保持穩定。後端的 `delete_objects` 會 soft-delete projection row，但後續對相同 `objectId` 提交 `create_object` 時，仍把 deleted row 判定為既存物件並回覆：
 
@@ -154,6 +170,8 @@ APP refresh gate 更新（2026-10-02）：REST／notification-triggered refresh 
 
 ## BAI-005：Canvas 正式樣式沒有可同步、可撤銷的 operation
 
+2026-10-06 APP進度：Desktop本機文件已接CanvasStyle／version、Apply／Undo／Redo／atomic保存與reopen，參見[Canvas Style實作更新](BACKEND_CANVAS_STYLE_API_SPEC.md)。Backend supportsCanvasStyle仍false並在draft append／wire conversion前拒絕未支持operation；正式多人／跨裝置state、snapshot、log、capability仍缺，BAI-005保持Blocking。以下per-device描述適用server mode，不再適用Desktop本機document mode。
+
 狀態：Blocking（共享 Canvas 背景／網格樣式的保存與 Undo）
 
 合約草案：[BACKEND_CANVAS_STYLE_API_SPEC.md](BACKEND_CANVAS_STYLE_API_SPEC.md)。已拆開正式背景／gridStyle 與個人 showGrid／snap／viewport，補 projection／snapshot、CAS operation、單調版本 Undo／Redo 與 remote state guard、Preview／Cancel、舊資料 migration／checksum、capability rollout 與双端 fixtures。後端／APP 均待正式實作；grid world-unit／density 規則須共同確認，不能以草案或本機背景測試宣稱共享完成。
@@ -177,6 +195,8 @@ App 目前把 viewport、是否顯示網格、吸附開關與 `backgroundToken` 
 
 ## BAI-006：Quick Scheme 沒有使用者層級同步資源
 
+2026-10-06 APP進度：Desktop本機文件方案簿已改atomic file保存，四端APP接explicit方案檔匯出／匯入審核與fresh目的local ID，參見[Quick Scheme接線更新](BACKEND_QUICK_SCHEME_API_SPEC.md)。未交付自動跨裝置同步、user-scoped API／outbox、媒體materialization／retention pin，BAI-006保持Blocking；以下Settings描述適用server／既有平台模式。
+
 狀態：Blocking（Quick Scheme 跨裝置同步）
 
 合約草案：[BACKEND_QUICK_SCHEME_API_SPEC.md](BACKEND_QUICK_SCHEME_API_SPEC.md)。已拆開 resource envelope v2／selection v4，補 CRUD／ETag／idempotency、snapshot pagination、owner-scoped cache／outbox、migration journal，以及素材 source binding／retention pin／destination materialization 的必要擴充。路由、limits、auth、素材複製政策與共用 fixtures 待後端確認；文件交付不代表 API 已存在。
@@ -197,7 +217,7 @@ APP 本機讀取已統一預覽與插入驗證：缺少 JSON version 時依本�
 
 ## BAI-007：後端未完整維護 Group parent 階層 invariant
 
-狀態：Blocking（跨 client 群組樹完整性）
+狀態：後端 Group invariant 已交付；APP fixtures／舊資料及雙端驗收待做（2026-10-05）。以下非法parent／cycle實測為修正前歷史。
 
 App 的 Create／reparent operation 已原子拒絕不存在的 parent、非 Group parent、自我 parent 與 ancestor cycle；projection 載入也會拒絕這些狀態。但後端目前只確認 `parentId` 指向 active object，`update_object` 額外排除直接指向自己，沒有確認 parent 的 `objectType == group`，也沒有檢查間接循環。`canvas_objects.parent_id` 目前亦沒有同 Workspace 的複合 FK。
 
@@ -217,7 +237,7 @@ App 的 Create／reparent operation 已原子拒絕不存在的 parent、非 Gro
 
 ## BAI-008：Canvas object payload 尚未使用型別化 schema 驗證
 
-狀態：Blocking（跨 client projection 可讀性與 schema migration）
+狀態：後端型別驗證已交付（text／group／media，25種APP形狀）；APP fixtures／舊資料與migration驗收待做（2026-10-05）。下方7形狀allowlist及非法payload接受描述為修正前歷史，不作現行規格。
 
 後端的 `create_object.objectType` 目前接受任意非空字串，`transform`／`properties` 只要求 JSON object；`update_object` 亦直接替換 transform、shallow merge properties，沒有依 object type 驗證更新後完整狀態。這允許正式 projection 出現未知型別、非數字座標、負尺寸或不符合型別的 properties。
 
@@ -236,7 +256,7 @@ App projection 邊界目前採 fail-closed：遇到上述資料會保留最後�
 
 ## BAI-012：跨装置備份原提交的權威 reconciliation
 
-狀態：Contract Pending（2026-10-04；唯讀核對現有 REST catch-up／scoped 去重及 v1 備份欄位）。不指定未交付 endpoint，也不改後端。
+狀態：後端receipt／fence已交付；APP wire provenance／reconciliation／confirmed merge對接待做（2026-10-05）。正式新增路由POST /api/v1/workspaces/:workspaceId/operations/receipts與operations/fences；下方「所需合約」為此前需求，需依新source/schema/fixtures接線，不自行改後端。
 
 - v1 DraftReviewBackup 只有 domain operations／本機旗標，不含原 actor、完整 transaction wire manifest 或 committed receipt；mapper 的 wire operationId 是新 UUID，不能拿 domain ID 查 log。hasUnconfirmedSubmission=false、quarantined=false 或新裝置無 pending 不能證明原請求未提交／已完成。
 - 現有 GET operations afterSeq 是 catch-up，不是 receipt lookup／原请求 settlement。有限頁沒找到不是「未提交」，最新畫布內容相同亦不能認領原 transaction ack；不能以 activity summary 或備份 current 作權威。
@@ -247,7 +267,7 @@ App projection 邊界目前採 fail-closed：遇到上述資料會保留最後�
 
 ## BAI-011：草稿合併結構替換與刪除 Undo／Redo 合約
 
-狀態：Contract Pending（2026-10-04；僅唯讀原始碼核對，未啟動或修改後端）。
+狀態：restore合約後端已交付／APP待對接；物件型別與relation端點變更仍unsupported_change（2026-10-05）。以下同ID create觀察仍正確，不得以create代替restore。
 
 - `operation.service.ts` 的 create_object／create_relation 查既存 ID；`canvas.repository.ts` 的 findObjects／findRelations 包含 deleted_at rows。因此先 soft-delete 再以同 ID create 仍會拒絕，不能以本機 domain replay 成功作正式證據。
 - 最新 APP 已新增 UpdateMediaReferenceOperation，素材引用替換不再 delete＋create，而是既有 update_object.properties；保留 Node／relation ID、版本與 metadata。明確送 thumbnailAssetId=null 清舊縮圖，仍需完整素材引用 ACL、正式提交與雙端驗收。物件型別及 relation endpoint 變更仍採本機 delete＋create，同 ID 路徑未能送出；需正式 operation／capability 或明確不支援錯誤，不偷偷改 ID 丟掉引用。
@@ -264,3 +284,6 @@ App projection 邊界目前採 fail-closed：遇到上述資料會保留最後�
 - 後端只同步引用與畫布資料，不呼叫或代理 GIPHY API／媒體。不以素材是否仍可用決定刪除 Node；client 直接依 providerId 解析，缺失／無網路維持可恢復佔位。
 - capability／protocol 應明確包含此 kind；不支援的舊 client 要得到可辨識的升級提示，不可靜默丟掉物件或使用未知 type 建立不可讀 projection。
 - 後端交付需含 create／update／round-trip state／ACL／刪除復原／relation fixtures，以及拒絕敏感或未知 properties 的測試。APP 接續模型、renderer、CreateObjects／Undo／clipboard／Quick Scheme 與 viewport 批次解析；目前 `resolve(ids)` 已具 100 ID gate、rating=g、缺失處理與共用限額，不代表上述畫布路徑已完成。
+# 連線／節點新增契約草案（2026-10-05）
+
+[BACKEND_DIAGRAM_RELATION_V2_SPEC.md](BACKEND_DIAGRAM_RELATION_V2_SPEC.md) 供後端維護者交付self-loop／geometry／平行線／原子插線／相容與fixtures；第二階段sequence metadata。新增草案不是現有服務，endpoint修改及objectType替換仍unsupported_change。AI安全除錯UI無新增後端API要求。最新loop以CURRENT_LOOP_GOAL「最新有效執行清單」為準。

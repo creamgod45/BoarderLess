@@ -16,11 +16,12 @@ class LayerOrderingTest {
     fun forwardMovesASelectionBlockPastOneUnselectedObject() {
         val objects = nodes("a", "b", "c", "d")
 
-        val updates = layerZIndexUpdates(
-            objects = objects,
-            selectedIds = setOf(id("b"), id("c")),
-            move = LayerMove.Forward,
-        )
+        val updates =
+            layerZIndexUpdates(
+                objects = objects,
+                selectedIds = setOf(id("b"), id("c")),
+                move = LayerMove.Forward,
+            )
 
         assertEquals(listOf("a", "d", "b", "c"), orderAfter(objects, updates))
     }
@@ -29,11 +30,12 @@ class LayerOrderingTest {
     fun backwardMovesASelectionBlockPastOneUnselectedObject() {
         val objects = nodes("a", "b", "c", "d")
 
-        val updates = layerZIndexUpdates(
-            objects = objects,
-            selectedIds = setOf(id("b"), id("c")),
-            move = LayerMove.Backward,
-        )
+        val updates =
+            layerZIndexUpdates(
+                objects = objects,
+                selectedIds = setOf(id("b"), id("c")),
+                move = LayerMove.Backward,
+            )
 
         assertEquals(listOf("b", "c", "a", "d"), orderAfter(objects, updates))
     }
@@ -71,11 +73,15 @@ class LayerOrderingTest {
         assertEquals(setOf(0L, 1L, 2L), objects.map { updates[it.id] ?: it.zIndex }.toSet())
     }
 
-    private fun nodes(vararg ids: String): List<TextNode> = ids.mapIndexed { index, value ->
-        node(value, index.toLong())
-    }
+    private fun nodes(vararg ids: String): List<TextNode> =
+        ids.mapIndexed { index, value ->
+            node(value, index.toLong())
+        }
 
-    private fun node(value: String, zIndex: Long) = TextNode(
+    private fun node(
+        value: String,
+        zIndex: Long,
+    ) = TextNode(
         id = id(value),
         zIndex = zIndex,
         transform = CanvasTransform(Vec2.Zero, CanvasSize(100f, 80f)),
@@ -87,7 +93,8 @@ class LayerOrderingTest {
     private fun orderAfter(
         objects: List<TextNode>,
         updates: Map<CanvasObjectId, Long>,
-    ): List<String> = objects
-        .sortedWith(compareBy({ updates[it.id] ?: it.zIndex }, { it.id.value }))
-        .map { it.id.value }
+    ): List<String> =
+        objects
+            .sortedWith(compareBy({ updates[it.id] ?: it.zIndex }, { it.id.value }))
+            .map { it.id.value }
 }

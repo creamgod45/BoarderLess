@@ -1,0 +1,23 @@
+{
+  "description": "快照期間 collection 變更：410 cursor_expired，重新列舉",
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/users/me/quick-schemes?limit=2&cursor=fixture-cursor-2"
+  },
+  "response": {
+    "status": 410,
+    "headers": {
+      "cache-control": "private, no-store"
+    },
+    "body": {
+      "error": {
+        "code": "cursor_expired",
+        "message": "The listing snapshot changed or expired; restart from the first page",
+        "details": {
+          "collectionRevision": 4
+        }
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

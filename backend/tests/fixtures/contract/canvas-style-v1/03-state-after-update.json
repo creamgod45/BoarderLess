@@ -1,0 +1,28 @@
+{
+  "description": "state 反映新 style / version",
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/state"
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "workspaceId": "22222222-2222-4222-8222-222222222222",
+      "workspaceVersion": 1,
+      "throughServerSeq": 1,
+      "objects": [],
+      "relations": [],
+      "canvasStyle": {
+        "schemaVersion": 1,
+        "backgroundToken": "#204060",
+        "gridStyle": {
+          "pattern": "dots",
+          "colorToken": "auto"
+        }
+      },
+      "canvasStyleVersion": 1,
+      "sequenceDiagrams": [],
+      "sequenceDiagramsVersion": 0
+    }
+  }
+}

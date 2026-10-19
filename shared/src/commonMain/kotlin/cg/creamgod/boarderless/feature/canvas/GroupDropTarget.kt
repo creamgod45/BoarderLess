@@ -18,10 +18,12 @@ internal fun groupDropTargetId(
     if (movingTransforms.isEmpty()) return null
     val byId = groups.associateBy(GroupFrame::id)
     val corners = movingTransforms.flatMap(::rotatedTransformCorners)
-    val center = Vec2(
-        (corners.minOf(Vec2::x) + corners.maxOf(Vec2::x)) / 2f,
-        (corners.minOf(Vec2::y) + corners.maxOf(Vec2::y)) / 2f,
-    )
+    val center =
+        Vec2(
+            (corners.minOf(Vec2::x) + corners.maxOf(Vec2::x)) / 2f,
+            (corners.minOf(Vec2::y) + corners.maxOf(Vec2::y)) / 2f,
+        )
+
     fun depth(group: GroupFrame): Int {
         var parentId = group.parentId
         val visited = mutableSetOf(group.id)

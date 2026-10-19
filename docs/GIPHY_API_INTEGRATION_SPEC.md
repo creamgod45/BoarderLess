@@ -1,5 +1,13 @@
 # GIPHY API 接入規格
 
+## 2026-10-08 搜尋語言與分頁一致性
+
+GIPHY 瀏覽器現在依 APP 已啟用的語言送出 lang，英文使用 en、繁體中文使用 zh-TW，不再固定使用繁體中文。locale 正規化為供應商支援的代碼；中文優先採明確 Hans/Hant script，再判斷區域，未支援語言使用 en。依據重新核對的 [官方 Language Support](https://developers.giphy.com/docs/optional-settings/#language-support)。
+
+每個請求凍結當時語言；分頁只沿用同一語言的 offset。切換語言取消舊查詢與 preview refresh、失效 generation、清除結果／預覽／offset，但保留本次 key 與原搜尋文字。舊語言遲到的成功回應不能發佈；切換語言不自動搜尋、不自動重試，由使用者明確開始下一次查詢。
+
+JVM GiphyClientTest 14、JS Browser 947、Wasm Browser 947 全數通過；Desktop distributable、Android APK、iOS simulator compile 與 Web production distribution 完成，verified 成品已更新。新增語言代碼及 MockEngine 實際 query parameter 驗證（英文 offset 0→1、繁體中文新搜尋 offset 0，搜尋原詞沒有改寫）。此處仍是查詢預覽功能，不代表 external canvas node、跨端引用保存、正式品牌審核或實際 GIPHY key 的完整驗收。
+
 ## 2026-10-05 下一頁定位修正
 
 成功的手動下一頁請求仍依官方 pagination offset 追加完整結果，保留供應商排序與重複 ID；網格現在定位至第一個新增結果，避免停在舊頁看起來無效。新搜尋（即使結果數相同）回到頂部；空追加頁、失敗與取消不觸發定位。不預抓、不自動重試、不增加搜尋請求，不改 key／預算／保存政策。官方語意見 [Pagination Object](https://developers.giphy.com/docs/api/#pagination-object)。
@@ -37,7 +45,7 @@ Beta key 每小時 100 API 呼叫，平台各自用 key；production／enterpris
 - 結果為固定高度的兩欄 LazyVerticalGrid 縮圖網格；維持 API 順序、包含重複結果，不因媒體缺失移除卡片。使用 index＋provider ID 的位置 key 避免重疊頁 ID 撞 key；縮圖顯示 fixed_width_still／fixed_height_still，無符合 URL／大小的 rendition 時保留可選擇 metadata 卡片，不回退 original。
 - 縮圖與選取預覽共用程序內最多 3 個 in-flight 載入／解碼 permit，不是內容快取。只在卡片經 clip 後可見才載入；移出視窗或離開 composable 會取消並釋放顯示 Bitmap，重新進入會重新請求，不宣稱未批准的跨畫面快取。取消排隊不開始 download；GIF loader 在 permit 外 finally 關閉 client，避免排隊取消漏清理，resource check 在 ownership transfer 前完成。
 - 明確按搜尋／熱門才請求；typing 不請求，不預抓下一頁。已顯示的同一查詢不重複送出；新查詢取消舊 job，generation 與 cancellation gate 防止晚到結果覆寫。
-- 每頁 20、rating=g，搜尋原詞保留且只由 HTTP client 編碼一次。目前 UI 固定 lang=zh-TW；完整語言偏好映射待補。結果保持供應商順序，不重排、不以去重等方式修改結果。
+- 每頁 20、rating=g，搜尋原詞保留且只由 HTTP client 編碼一次。UI 的 lang 跟隨 APP 已啟用語言；切換語言失效舊分頁，由使用者重新搜尋。結果保持供應商順序，不重排、不以去重等方式修改結果。
 - 程序內按 key 的 rolling-hour gate 最多 100 次，失败请求也计入；429 遵守秒數 Retry-After，缺漏時保守暫停一小時。沒有自動 retry／polling，重啟及其他裝置的使用不在本機計數內，不能顯示其為帳號真實餘額。
 - query／offset 不合法時在發送前拒絕；401／403、429、無網路、malformed response 分類，錯誤不帶 key／完整 request URL。取消不轉為一般錯誤。
 - Desktop 從 `BOARDERLESS_GIPHY_API_KEY` environment 載入，或在面板輸入僅本次使用的 masked key；不讀取 backend `.env`、不提交金鑰、不將 key 傳給我們的 API。按官方 client-direct 模式，key 在 client 请求中可見，不是可保密的伺服器權限憑證。

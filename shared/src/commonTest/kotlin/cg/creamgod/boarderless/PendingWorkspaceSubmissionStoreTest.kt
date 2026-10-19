@@ -2,17 +2,141 @@ package cg.creamgod.boarderless
 
 import cg.creamgod.boarderless.data.remote.*
 import com.russhwolf.settings.Settings
+import kotlinx.serialization.json.*
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import kotlinx.serialization.json.*
 import org.kotlincrypto.hash.sha2.SHA256
 import kotlin.test.*
 
 class PendingWorkspaceSubmissionStoreTest {
     private val scope = PendingSubmissionScope("https://qa.example.invalid/api/v1", "user", "client", "workspace")
-    private fun entry(text: String = "Draft") = PendingWorkspaceSubmission(scope, "local-op",
-        SubmitOperationsRequest(clientId = scope.clientId, transactionId = "transaction", baseVersion = 8,
-            operations = listOf(OperationDto("wire-op", 10, "create_object", payload = buildJsonObject { put("text", text) }))))
+
+    private fun entry(text: String = "Draft") =
+        PendingWorkspaceSubmission(
+            scope,
+            "local-op",
+            SubmitOperationsRequest(
+                clientId = scope.clientId,
+                transactionId = "transaction",
+                baseVersion = 8,
+                operations = listOf(OperationDto("wire-op", 10, "create_object", payload = buildJsonObject { put("text", text) })),
+            ),
+        )
+
+    @Test fun stoppedInventoryIsScopedBoundedReadOnlyAndRequiresCompleteLegacyCatalog() {
+        val memory = InMemorySettings()
+        val store = PendingWorkspaceSubmissionStore(memory)
+        val saved = entry()
+        store.archiveStopped(saved)
+        val originalKey = memory.keys.single { it.startsWith("wsa1.") }
+        val otherScope = scope.copy(userId = "other")
+        val other = saved.copy(scope = otherScope)
+        store.archiveStopped(other)
+        val before = memory.keys.associateWith(memory::getStringOrNull)
+        assertEquals(listOf(saved), store.stoppedInventory(scope))
+        assertEquals(listOf(other), store.stoppedInventory(otherScope))
+        assertEquals(before, memory.keys.associateWith(memory::getStringOrNull))
+        // Earlier archives had no discoverable scope/transaction metadata; exact legacy ID only.
+        val manifest = Json.parseToJsonElement(memory.getStringOrNull(originalKey)!!).jsonObject
+        memory.putString(originalKey, JsonObject(manifest - "archiveScope" - "archiveTransactionId").toString())
+        assertFails { store.stoppedInventory(scope) }
+        assertEquals(listOf(saved), store.stoppedInventory(scope, listOf(saved.request.transactionId)))
+        assertEquals(saved, store.loadStopped(scope, saved.request.transactionId))
+        memory.putString(originalKey, JsonObject(manifest + ("archiveTransactionId" to JsonPrimitive("wrong"))).toString())
+        assertFails { store.stoppedInventory(scope) }
+        assertFails { store.loadStopped(scope, saved.request.transactionId) }
+    }
+
+    @Test fun stoppedInventoryRejectsOversizedCatalogBeforeReadingWireChunks() {
+        val memory = InMemorySettings()
+        repeat(257) { memory.putString("wsa1.fake-$it", "{}") }
+        var chunkReads = 0
+        val settings =
+            object : Settings by memory {
+                override fun getStringOrNull(key: String): String? {
+                    if (key.startsWith("wsac1.")) chunkReads++
+                    return memory.getStringOrNull(key)
+                }
+            }
+        assertFails { PendingWorkspaceSubmissionStore(settings).stoppedInventory(scope) }
+        assertEquals(0, chunkReads)
+    }
+
+    @Test fun stoppedInventoryBoundsAggregateDeclaredBytesBeforeReadingAnyWire() {
+        val memory = InMemorySettings()
+        val store = PendingWorkspaceSubmissionStore(memory)
+        repeat(5) { index ->
+            val saved = entry().let { it.copy(request = it.request.copy(transactionId = "tx-$index")) }
+            store.archiveStopped(saved)
+        }
+        memory.keys.filter { it.startsWith("wsa1.") }.forEach { key ->
+            val manifest = Json.parseToJsonElement(memory.getStringOrNull(key)!!).jsonObject
+            memory.putString(key, JsonObject(manifest + ("byteSize" to JsonPrimitive(1024 * 1024))).toString())
+        }
+        var chunkReads = 0
+        val settings =
+            object : Settings by memory {
+                override fun getStringOrNull(key: String): String? {
+                    if (key.startsWith("wsac1.")) chunkReads++
+                    return memory.getStringOrNull(key)
+                }
+            }
+        assertFails { PendingWorkspaceSubmissionStore(settings).stoppedInventory(scope) }
+        assertEquals(0, chunkReads)
+    }
+
+    @Test fun stoppedArchiveRetainsExactWireAcrossRecreationAndCannotBeReplaced() {
+        val memory = InMemorySettings()
+        val store = PendingWorkspaceSubmissionStore(memory)
+        val saved =
+            entry("🙂".repeat(8000)).copy(
+                deletionVersions = mapOf("object:old-node" to 3L),
+                deletionSnapshotDigests = mapOf("object:old-node" to "a".repeat(64)),
+            )
+        store.save(saved)
+        store.archiveStopped(saved)
+        store.archiveStopped(saved) // Exact repeated publication is idempotent.
+        assertEquals(saved, store.load(scope))
+        assertTrue(store.acknowledge(scope, saved.request.transactionId))
+        val reopened = PendingWorkspaceSubmissionStore(memory)
+        assertNull(reopened.load(scope))
+        assertEquals(saved, reopened.loadStopped(scope, saved.request.transactionId))
+        assertNull(reopened.loadStopped(scope.copy(userId = "other"), saved.request.transactionId))
+        assertNull(reopened.loadStopped(scope, "other"))
+        assertFails { reopened.archiveStopped(entry("different wire")) }
+        assertEquals(saved, reopened.loadStopped(scope, saved.request.transactionId))
+        val savedArchiveKey = memory.keys.single { it.startsWith("wsa1.") }
+        val next = entry("next").let { it.copy(request = it.request.copy(transactionId = "next-tx")) }
+        reopened.save(next)
+        reopened.archiveStopped(next)
+        assertEquals(next, reopened.loadStopped(scope, "next-tx"))
+        assertEquals(saved, reopened.loadStopped(scope, saved.request.transactionId))
+        memory.putString(savedArchiveKey, "{")
+        assertFailsWith<BackendContractException> {
+            reopened.loadStopped(scope, saved.request.transactionId)
+        }
+        assertEquals(next, reopened.loadStopped(scope, "next-tx"))
+    }
+
+    @Test fun stoppedArchivePublicationFailureRetainsOriginalPending() {
+        for (droppedPrefix in listOf("wsa1.", "wsac1.")) {
+            val memory = InMemorySettings()
+            val settings =
+                object : Settings by memory {
+                    override fun putString(
+                        key: String,
+                        value: String,
+                    ) {
+                        if (!key.startsWith(droppedPrefix)) memory.putString(key, value)
+                    }
+                }
+            val store = PendingWorkspaceSubmissionStore(settings)
+            val saved = entry("large".repeat(2000))
+            store.save(saved)
+            assertFails { store.archiveStopped(saved) }
+            assertEquals(saved, store.load(scope))
+        }
+    }
 
     @Test fun oversizedManifestAndDeclaredByteMismatchKeepEvidenceAndStopEarly() {
         val memory = InMemorySettings()
@@ -26,12 +150,13 @@ class PendingWorkspaceSubmissionStoreTest {
         assertEquals(raw + " ".repeat(512), memory.getStringOrNull(key))
         memory.putString(key, JsonObject(Json.parseToJsonElement(raw).jsonObject + ("byteSize" to JsonPrimitive(1))).toString())
         var reads = 0
-        val counted = object : Settings by memory {
-            override fun getStringOrNull(key: String): String? {
-                if (key.startsWith("wsc1.")) reads++
-                return memory.getStringOrNull(key)
+        val counted =
+            object : Settings by memory {
+                override fun getStringOrNull(key: String): String? {
+                    if (key.startsWith("wsc1.")) reads++
+                    return memory.getStringOrNull(key)
+                }
             }
-        }
         assertFailsWith<BackendContractException> { PendingWorkspaceSubmissionStore(counted).load(scope) }
         assertEquals(1, reads)
         memory.putString(key, raw)
@@ -41,7 +166,17 @@ class PendingWorkspaceSubmissionStoreTest {
     private fun deepEntry(): PendingWorkspaceSubmission {
         val saved = entry()
         val payload = buildJsonObject { put("deep", Json.parseToJsonElement("[".repeat(70) + "0" + "]".repeat(70))) }
-        return saved.copy(request = saved.request.copy(operations = listOf(saved.request.operations.single().copy(payload = payload))))
+        return saved.copy(
+            request =
+                saved.request.copy(
+                    operations =
+                        listOf(
+                            saved.request.operations
+                                .single()
+                                .copy(payload = payload),
+                        ),
+                ),
+        )
     }
 
     @Test fun deeplyNestedWireContentCannotBePublishedAndValidIdentityStillWorks() {
@@ -59,14 +194,22 @@ class PendingWorkspaceSubmissionStoreTest {
         val json = Json { encodeDefaults = true }
         val saved = deepEntry()
         val content = json.encodeToString(PendingWorkspaceSubmission.serializer(), saved)
-        fun digest(text: String) = SHA256().digest(text.encodeToByteArray()).joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
+
+        fun digest(text: String) =
+            SHA256().digest(text.encodeToByteArray()).joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
         val scopeJson = json.encodeToString(PendingSubmissionScope.serializer(), scope)
         val hash = digest(content)
         assertTrue(content.length <= 2048)
         memory.putString("wsc1." + digest("$scopeJson:$hash:0"), content)
-        memory.putString("wsp1." + digest(scopeJson), buildJsonObject {
-            put("version", 1); put("chunks", 1); put("byteSize", content.encodeToByteArray().size); put("digest", hash)
-        }.toString())
+        memory.putString(
+            "wsp1." + digest(scopeJson),
+            buildJsonObject {
+                put("version", 1)
+                put("chunks", 1)
+                put("byteSize", content.encodeToByteArray().size)
+                put("digest", hash)
+            }.toString(),
+        )
         val original = memory.keys.associateWith { memory.getStringOrNull(it) }
         val store = PendingWorkspaceSubmissionStore(memory)
         val failure = assertFailsWith<BackendContractException> { store.load(scope) }
@@ -78,14 +221,18 @@ class PendingWorkspaceSubmissionStoreTest {
 
     @Test fun restartRetainsExactWireIdentitiesAndLargeUnicodePayload() {
         val memory = InMemorySettings()
-        val limited = object : Settings by memory {
-            override fun putString(key: String, value: String) {
-                assertTrue(key.length <= 80)
-                assertTrue(value.length <= 8192)
-                assertFalse(value.lastOrNull()?.let { it in '\uD800'..'\uDBFF' } == true)
-                memory.putString(key, value)
+        val limited =
+            object : Settings by memory {
+                override fun putString(
+                    key: String,
+                    value: String,
+                ) {
+                    assertTrue(key.length <= 80)
+                    assertTrue(value.length <= 8192)
+                    assertFalse(value.lastOrNull()?.let { it in '\uD800'..'\uDBFF' } == true)
+                    memory.putString(key, value)
+                }
             }
-        }
         val saved = entry("A".repeat(2039) + "🙂".repeat(8000) + "素材")
         PendingWorkspaceSubmissionStore(limited).save(saved)
         assertEquals(saved, PendingWorkspaceSubmissionStore(limited).load(scope))
@@ -97,8 +244,14 @@ class PendingWorkspaceSubmissionStoreTest {
         val saved = entry()
         store.save(saved)
         store.save(saved)
-        for (other in listOf(scope.copy(apiBase = "https://other.invalid/api/v1"), scope.copy(userId = "other"),
-            scope.copy(clientId = "other"), scope.copy(workspaceId = "other"))) assertNull(store.load(other))
+        for (other in listOf(
+            scope.copy(apiBase = "https://other.invalid/api/v1"),
+            scope.copy(userId = "other"),
+            scope.copy(clientId = "other"),
+            scope.copy(workspaceId = "other"),
+        )) {
+            assertNull(store.load(other))
+        }
         assertFailsWith<IllegalStateException> { store.save(saved.copy(localOperationId = "other")) }
         assertFailsWith<IllegalStateException> { store.save(entry("Changed")) }
         assertFalse(store.acknowledge(scope, "other"))
@@ -110,12 +263,16 @@ class PendingWorkspaceSubmissionStoreTest {
     @Test fun incompleteWriteDoesNotPublishManifestAndExactRetryCanRecover() {
         val memory = InMemorySettings()
         var writes = 0
-        val interrupted = object : Settings by memory {
-            override fun putString(key: String, value: String) {
-                if (++writes == 2) error("Simulated interrupted storage")
-                memory.putString(key, value)
+        val interrupted =
+            object : Settings by memory {
+                override fun putString(
+                    key: String,
+                    value: String,
+                ) {
+                    if (++writes == 2) error("Simulated interrupted storage")
+                    memory.putString(key, value)
+                }
             }
-        }
         val saved = entry("Large".repeat(2000))
         assertFailsWith<IllegalStateException> { PendingWorkspaceSubmissionStore(interrupted).save(saved) }
         assertNull(PendingWorkspaceSubmissionStore(memory).load(scope))
@@ -140,9 +297,25 @@ class PendingWorkspaceSubmissionStoreTest {
         val settings = InMemorySettings()
         val store = PendingWorkspaceSubmissionStore(settings)
         val saved = entry()
-        for (request in listOf(saved.request.copy(clientId = "other"), saved.request.copy(baseVersion = Long.MAX_VALUE),
-            saved.request.copy(operations = listOf(saved.request.operations.single().copy(clientSeq = Long.MAX_VALUE))),
-            saved.request.copy(operations = saved.request.operations + saved.request.operations.single().copy(operationId = "next", clientSeq = 15)))) {
+        for (request in listOf(
+            saved.request.copy(clientId = "other"),
+            saved.request.copy(baseVersion = Long.MAX_VALUE),
+            saved.request.copy(
+                operations =
+                    listOf(
+                        saved.request.operations
+                            .single()
+                            .copy(clientSeq = Long.MAX_VALUE),
+                    ),
+            ),
+            saved.request.copy(
+                operations =
+                    saved.request.operations +
+                        saved.request.operations
+                            .single()
+                            .copy(operationId = "next", clientSeq = 15),
+            ),
+        )) {
             assertFailsWith<IllegalArgumentException> { store.save(saved.copy(request = request)) }
             assertEquals(0, settings.size)
         }

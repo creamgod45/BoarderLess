@@ -9,13 +9,28 @@ internal fun requireBoundedDraftJsonDepth(content: String) {
     var escaped = false
     content.forEach { char ->
         if (quoted) {
-            if (escaped) escaped = false
-            else if (char == '\\') escaped = true
-            else if (char == '"') quoted = false
-        } else when (char) {
-            '"' -> quoted = true
-            '{', '[' -> { require(stack.size < 64); stack.addLast(char) }
-            '}', ']' -> { require(stack.removeLastOrNull() == if (char == '}') '{' else '[') }
+            if (escaped) {
+                escaped = false
+            } else if (char == '\\') {
+                escaped = true
+            } else if (char == '"') {
+                quoted = false
+            }
+        } else {
+            when (char) {
+                '"' -> {
+                    quoted = true
+                }
+
+                '{', '[' -> {
+                    require(stack.size < 64)
+                    stack.addLast(char)
+                }
+
+                '}', ']' -> {
+                    require(stack.removeLastOrNull() == if (char == '}') '{' else '[')
+                }
+            }
         }
     }
     require(stack.isEmpty() && !quoted)

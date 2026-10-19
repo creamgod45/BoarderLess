@@ -23,7 +23,10 @@ internal val isMacOs = System.getProperty("os.name").orEmpty().startsWith("Mac",
  * menu and the app menu's titles are native, see [MacNativeMenus].
  */
 @Composable
-internal fun FrameWindowScope.WorkspaceMenuBar(bridge: WorkspaceMenuBridge, onCloseWindow: () -> Unit) {
+internal fun FrameWindowScope.WorkspaceMenuBar(
+    bridge: WorkspaceMenuBridge,
+    onCloseWindow: () -> Unit,
+) {
     MenuBar {
         Menu(Strings.menu.file()) {
             Command(bridge, "new-thought", Strings.content.newThought(), keyHint = "N")
@@ -32,7 +35,9 @@ internal fun FrameWindowScope.WorkspaceMenuBar(bridge: WorkspaceMenuBridge, onCl
             } else if (bridge.has("import-media")) {
                 Command(bridge, "import-media", Strings.media.importMedia())
             }
+            Command(bridge, "export-canvas", Strings.canvasExport.title())
             Separator()
+            Command(bridge, WorkspaceMenuCommands.Search, Strings.toolbar.search(), KeyShortcut(Key.F, meta = true))
             Command(bridge, WorkspaceMenuCommands.CommandPalette, Strings.palette.commandPalette(), KeyShortcut(Key.K, meta = true))
             Separator()
             Item(Strings.menu.closeWindow(), shortcut = KeyShortcut(Key.W, meta = true), onClick = onCloseWindow)
@@ -66,18 +71,19 @@ internal fun FrameWindowScope.WorkspaceMenuBar(bridge: WorkspaceMenuBridge, onCl
         }
     }
     val appName = Strings.app.name()
-    val nativeMenuTitles = MacNativeMenus.Titles(
-        window = Strings.menu.window(),
-        minimize = Strings.menu.minimize(),
-        zoom = Strings.menu.zoom(),
-        bringAllToFront = Strings.menu.bringAllToFront(),
-        about = Strings.menu.about(appName),
-        services = Strings.menu.services(),
-        hide = Strings.menu.hide(appName),
-        hideOthers = Strings.menu.hideOthers(),
-        showAll = Strings.menu.showAll(),
-        quit = Strings.menu.quit(appName),
-    )
+    val nativeMenuTitles =
+        MacNativeMenus.Titles(
+            window = Strings.menu.window(),
+            minimize = Strings.menu.minimize(),
+            zoom = Strings.menu.zoom(),
+            bringAllToFront = Strings.menu.bringAllToFront(),
+            about = Strings.menu.about(appName),
+            services = Strings.menu.services(),
+            hide = Strings.menu.hide(appName),
+            hideOthers = Strings.menu.hideOthers(),
+            showAll = Strings.menu.showAll(),
+            quit = Strings.menu.quit(appName),
+        )
     LaunchedEffect(nativeMenuTitles) {
         while (true) {
             MacNativeMenus.update(nativeMenuTitles)
@@ -109,5 +115,7 @@ private fun MenuScope.Command(
     )
 }
 
-internal fun workspaceMenuShortcut(enabled: Boolean, shortcut: KeyShortcut?): KeyShortcut? =
-    shortcut.takeIf { enabled }
+internal fun workspaceMenuShortcut(
+    enabled: Boolean,
+    shortcut: KeyShortcut?,
+): KeyShortcut? = shortcut.takeIf { enabled }

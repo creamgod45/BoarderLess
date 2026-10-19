@@ -10,7 +10,8 @@ class VideoAudioFocusSessionTest {
         val session = VideoAudioFocusSession(port) { error("Unexpected interruption") }
         assertTrue(session.update(false))
         assertEquals(0, port.requests)
-        session.release(); session.release()
+        session.release()
+        session.release()
         assertEquals(1, port.abandons)
         assertFailsWith<IllegalStateException> { session.update(true) }
     }
@@ -18,7 +19,8 @@ class VideoAudioFocusSessionTest {
     @Test fun audiblePlaybackRequestsOnceAndMuteOrPauseAbandons() {
         val port = Port()
         val session = VideoAudioFocusSession(port) { }
-        assertTrue(session.update(true)); assertTrue(session.update(true))
+        assertTrue(session.update(true))
+        assertTrue(session.update(true))
         assertEquals(1, port.requests)
         session.update(false)
         assertFalse(port.active)
@@ -49,7 +51,8 @@ class VideoAudioFocusSessionTest {
         val session = VideoAudioFocusSession(port) { interruptions++ }
         session.update(true)
         val oldCallback = checkNotNull(port.loss)
-        oldCallback(); oldCallback()
+        oldCallback()
+        oldCallback()
         assertEquals(1, interruptions)
         assertFalse(port.active)
         assertEquals(1, port.requests)
@@ -89,18 +92,25 @@ class VideoAudioFocusSessionTest {
     }
 
     private class Port : VideoAudioFocusPort {
-        var requests = 0; var abandons = 0
-        var granted = true; var active = false
+        var requests = 0
+        var abandons = 0
+        var granted = true
+        var active = false
         var loss: (() -> Unit)? = null
-        var requestError: Exception? = null; var abandonError: Exception? = null
+        var requestError: Exception? = null
+        var abandonError: Exception? = null
+
         override fun request(onLoss: () -> Unit): Boolean {
-            requests++; loss = onLoss
+            requests++
+            loss = onLoss
             requestError?.let { throw it }
             active = granted
             return granted
         }
+
         override fun abandon() {
-            abandons++; active = false
+            abandons++
+            active = false
             abandonError?.let { throw it }
         }
     }

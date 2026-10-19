@@ -4,20 +4,27 @@ import swagger from '@fastify/swagger'
 import swaggerUi from '@fastify/swagger-ui'
 import type postgres from 'postgres'
 import pkg from '../package.json' with { type: 'json' }
-import type { AppConfig } from './config/env.ts'
+import type { AppConfig, RealtimeConfig } from './config/env.ts'
 import { DEV_USER_HEADER, registerDevAuth } from './middlewares/auth.ts'
 import { registerErrorHandler } from './middlewares/error-handler.ts'
 import { Database } from './repositories/index.ts'
 import { apiRoutes } from './routes/api.routes.ts'
 import { pageRoutes } from './routes/page.routes.ts'
+import { quickSchemeRoutes } from './routes/quick-scheme.routes.ts'
 import { localStorageRoutes } from './routes/storage.routes.ts'
+import { requestValidatorCompiler } from './schemas/validator.ts'
+import { RealtimeHub } from './realtime/hub.ts'
+import { realtimeRestRoutes, realtimeSocketRoutes } from './routes/realtime.routes.ts'
 import { createServices } from './services/index.ts'
+import { RealtimeService } from './services/realtime.service.ts'
 import { LocalObjectStorage } from './storage/local.storage.ts'
 import type { ObjectStorage } from './storage/types.ts'
 import type { EndpointInfo } from './views/home.view.ts'
 
 export type BuildAppConfig = Pick<AppConfig, 'logLevel' | 'corsOrigins' | 'media'> & {
   worker: Pick<AppConfig['worker'], 'maxAttempts'>
+  /** 未提供或 enabled=false：不掛即時協作（REST 照常） */
+  realtime?: RealtimeConfig
 }
 
 export interface BuildAppOptions {
@@ -45,7 +52,6 @@ export async function buildApp({ config, sql, storage, logger = true }: BuildApp
       serializers: { req: serializeRequest },
     },
     genReqId: () => crypto.randomUUID(),
-    ajv: { customOptions: { removeAdditional: false, coerceTypes: 'array', useDefaults: true } },
   })
 
   const db = new Database(sql)
@@ -66,14 +72,15 @@ export async function buildApp({ config, sql, storage, logger = true }: BuildApp
     }
   })
 
+  app.setValidatorCompiler(requestValidatorCompiler)
   registerErrorHandler(app)
   registerDevAuth(app, services.users)
 
   await app.register(cors, {
     origin: config.corsOrigins.includes('*') ? true : config.corsOrigins,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['content-type', DEV_USER_HEADER],
-    exposedHeaders: ['content-length', 'etag'],
+    allowedHeaders: ['content-type', DEV_USER_HEADER, 'if-match', 'if-none-match', 'idempotency-key'],
+    exposedHeaders: ['content-length', 'etag', 'retry-after', 'idempotent-replayed'],
     maxAge: 600,
   })
 
@@ -89,7 +96,17 @@ export async function buildApp({ config, sql, storage, logger = true }: BuildApp
   await app.register(swaggerUi, { routePrefix: '/docs' })
 
   await app.register(pageRoutes(services, () => endpoints))
-  await app.register(apiRoutes(services), { prefix: '/api/v1' })
+  await app.register(quickSchemeRoutes(services.quickSchemes), { prefix: '/api/v1' })
+  const realtime = config.realtime?.enabled ? config.realtime : null
+  await app.register(apiRoutes(services, { realtime: realtime !== null }), { prefix: '/api/v1' })
+  if (realtime) {
+    const hub = new RealtimeHub(db, sql, services.operations, realtime, app.log)
+    await app.register(realtimeRestRoutes(new RealtimeService(db, realtime), realtime), { prefix: '/api/v1' })
+    await app.register(realtimeSocketRoutes(hub))
+    app.addHook('onReady', () => hub.start())
+    app.addHook('preClose', () => hub.stop())
+    app.decorate('realtimeHub', hub)
+  }
   if (storage instanceof LocalObjectStorage) await app.register(localStorageRoutes(storage))
 
   return app

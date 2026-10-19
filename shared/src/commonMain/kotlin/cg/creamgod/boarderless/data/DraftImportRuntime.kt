@@ -4,11 +4,18 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 
 /** Explicit, bounded local JSON selection. Never persist a path/grant or upload the selected file. */
-class DraftImportRuntime(val selectJson: (suspend (canRead: () -> Boolean) -> String?)? = null) {
-    companion object { val Unavailable = DraftImportRuntime() }
+class DraftImportRuntime(
+    val selectJson: (suspend (canRead: () -> Boolean) -> String?)? = null,
+) {
+    companion object {
+        val Unavailable = DraftImportRuntime()
+    }
 }
 
-internal suspend fun selectWorkspaceDraftBackup(runtime: DraftImportRuntime, canRead: () -> Boolean): String? {
+internal suspend fun selectWorkspaceDraftBackup(
+    runtime: DraftImportRuntime,
+    canRead: () -> Boolean,
+): String? {
     currentCoroutineContext().ensureActive()
     check(canRead())
     val result = checkNotNull(runtime.selectJson).invoke(canRead)

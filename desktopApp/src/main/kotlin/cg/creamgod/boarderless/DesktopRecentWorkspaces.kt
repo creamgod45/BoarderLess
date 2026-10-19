@@ -15,18 +15,29 @@ import java.awt.Taskbar
  * list. [onOpen] runs on the AWT event thread for a Dock menu item; a jump list entry reaches the
  * app through [DesktopInstanceChannel] instead.
  */
-internal fun desktopRecentWorkspacesPublisher(onOpen: (String) -> Unit): RecentWorkspacesPublisher = when {
-    isMacOs && Taskbar.isTaskbarSupported() && Taskbar.getTaskbar().isSupported(Taskbar.Feature.MENU) ->
-        RecentWorkspacesPublisher { workspaces -> EventQueue.invokeLater { Taskbar.getTaskbar().menu = dockMenu(workspaces, onOpen) } }
+internal fun desktopRecentWorkspacesPublisher(onOpen: (String) -> Unit): RecentWorkspacesPublisher =
+    when {
+        isMacOs && Taskbar.isTaskbarSupported() && Taskbar.getTaskbar().isSupported(Taskbar.Feature.MENU) -> {
+            RecentWorkspacesPublisher { workspaces -> EventQueue.invokeLater { Taskbar.getTaskbar().menu = dockMenu(workspaces, onOpen) } }
+        }
 
-    isWindows -> System.getProperty("jpackage.app-path")?.let(::WindowsJumpList)
-        ?.let { jumpList -> RecentWorkspacesPublisher { jumpList.publish(Strings.launcher.recentWorkspaces(), it) } }
-        ?: RecentWorkspacesPublisher.None
+        isWindows -> {
+            System
+                .getProperty("jpackage.app-path")
+                ?.let(::WindowsJumpList)
+                ?.let { jumpList -> RecentWorkspacesPublisher { jumpList.publish(Strings.launcher.recentWorkspaces(), it) } }
+                ?: RecentWorkspacesPublisher.None
+        }
 
-    else -> RecentWorkspacesPublisher.None
-}
+        else -> {
+            RecentWorkspacesPublisher.None
+        }
+    }
 
-private fun dockMenu(workspaces: List<RecentWorkspace>, onOpen: (String) -> Unit) = PopupMenu().apply {
+private fun dockMenu(
+    workspaces: List<RecentWorkspace>,
+    onOpen: (String) -> Unit,
+) = PopupMenu().apply {
     workspaces.forEach { workspace ->
         add(MenuItem(workspace.title).apply { addActionListener { onOpen(workspace.id) } })
     }

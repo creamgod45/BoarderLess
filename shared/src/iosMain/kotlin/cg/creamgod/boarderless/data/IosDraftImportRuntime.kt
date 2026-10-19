@@ -1,4 +1,5 @@
 @file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class, kotlinx.cinterop.BetaInteropApi::class)
+
 package cg.creamgod.boarderless.data
 
 import kotlinx.cinterop.*
@@ -7,20 +8,34 @@ import platform.Foundation.*
 import platform.posix.*
 
 /** External picker URL only; hold the grant exclusively around coordinated read, never bookmark. */
-internal suspend fun readIosExternalDraftJson(url: NSURL, canRead: () -> Boolean): String = withContext(Dispatchers.Default) {
-    val context = currentCoroutineContext()
-    try {
-        context.ensureActive()
-        check(canRead() && url.isFileURL())
-        val granted = url.startAccessingSecurityScopedResource()
+internal suspend fun readIosExternalDraftJson(
+    url: NSURL,
+    canRead: () -> Boolean,
+): String =
+    withContext(Dispatchers.Default) {
+        val context = currentCoroutineContext()
         try {
-            // Own-container files need no external grant. Never infer access to arbitrary URLs.
-            check(granted || isOwnSandboxDraftUrl(url))
-            coordinateIosDraftRead(url) { context.ensureActive(); canRead() }
-        } finally { if (granted) url.stopAccessingSecurityScopedResource() }
-    } catch (cancelled: CancellationException) { throw cancelled }
-    catch (_: Exception) { throw IllegalArgumentException("Draft file could not be read") }
-}
+            context.ensureActive()
+            check(canRead() && url.isFileURL())
+            val granted = url.startAccessingSecurityScopedResource()
+            try {
+                // Own-container files need no external grant. Never infer access to arbitrary URLs.
+                check(granted || isOwnSandboxDraftUrl(url))
+                coordinateIosDraftRead(url) {
+                    context.ensureActive()
+                    canRead()
+                }
+            } finally {
+                if (granted) url.stopAccessingSecurityScopedResource()
+            }
+        } catch (
+            cancelled: CancellationException,
+        ) {
+            throw cancelled
+        } catch (_: Exception) {
+            throw IllegalArgumentException("Draft file could not be read")
+        }
+    }
 
 internal fun isOwnSandboxDraftUrl(url: NSURL): Boolean {
     if (!url.isFileURL()) return false
@@ -29,7 +44,10 @@ internal fun isOwnSandboxDraftUrl(url: NSURL): Boolean {
     return path.startsWith(home.trimEnd('/') + "/")
 }
 
-internal fun coordinateIosDraftRead(url: NSURL, canRead: () -> Boolean): String {
+internal fun coordinateIosDraftRead(
+    url: NSURL,
+    canRead: () -> Boolean,
+): String {
     check(url.isFileURL() && canRead())
     var result: String? = null
     var failure: Throwable? = null
@@ -40,7 +58,9 @@ internal fun coordinateIosDraftRead(url: NSURL, canRead: () -> Boolean): String 
             try {
                 check(canRead())
                 result = readIosDraftJson(checkNotNull(checkNotNull(coordinated).path), canRead)
-            } catch (caught: Throwable) { failure = caught }
+            } catch (caught: Throwable) {
+                failure = caught
+            }
         }
         failure?.let { throw it }
         check(error.value == null && result != null) { "Draft read coordination failed" }
@@ -50,7 +70,10 @@ internal fun coordinateIosDraftRead(url: NSURL, canRead: () -> Boolean): String 
 }
 
 /** No symlinks/FIFOs; regular read-only fd checked before bytes, bounded despite file growth. */
-internal fun readIosDraftJson(path: String, canRead: () -> Boolean): String {
+internal fun readIosDraftJson(
+    path: String,
+    canRead: () -> Boolean,
+): String {
     check(canRead())
     val fd = open(path, O_RDONLY or O_NOFOLLOW or O_NONBLOCK)
     check(fd >= 0) { "Draft file could not be opened" }
@@ -72,12 +95,16 @@ internal fun readIosDraftJson(path: String, canRead: () -> Boolean): String {
             check(canRead())
             if (count == 0) break
             require(total + count <= 4 * 1024 * 1024)
-            chunks.add(buffer.copyOf(count)); total += count
+            chunks.add(buffer.copyOf(count))
+            total += count
         }
         require(total > 0)
         val bytes = ByteArray(total)
         var offset = 0
-        chunks.forEach { it.copyInto(bytes, offset); offset += it.size }
+        chunks.forEach {
+            it.copyInto(bytes, offset)
+            offset += it.size
+        }
         check(canRead())
         val text = bytes.decodeToString(throwOnInvalidSequence = true).removePrefix("\uFEFF")
         completed = true

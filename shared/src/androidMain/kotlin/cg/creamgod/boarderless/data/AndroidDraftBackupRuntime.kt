@@ -9,15 +9,20 @@ import kotlinx.coroutines.withContext
 import kotlin.coroutines.coroutineContext
 
 /** chooseNewDocument must use ACTION_CREATE_DOCUMENT, never an existing-document picker. */
-fun androidDraftBackupRuntime(context: Context, chooseNewDocument: suspend (String) -> Uri?) =
-    DraftBackupRuntime { suggested ->
-        chooseNewDocument(suggested)?.let { AndroidDraftBackupDestination(context.applicationContext, it) }
-    }
+fun androidDraftBackupRuntime(
+    context: Context,
+    chooseNewDocument: suspend (String) -> Uri?,
+) = DraftBackupRuntime { suggested ->
+    chooseNewDocument(suggested)?.let { AndroidDraftBackupDestination(context.applicationContext, it) }
+}
 
 /** A late result after recreation/cancellation contains only a newly-created blank document.
  * Never delete nonempty/unreadable results: keep them for the user's inspection instead.
  */
-suspend fun discardBlankDraftDocument(context: Context, uri: Uri) = withContext(Dispatchers.IO) {
+suspend fun discardBlankDraftDocument(
+    context: Context,
+    uri: Uri,
+) = withContext(Dispatchers.IO) {
     check(uri.scheme == "content" && DocumentsContract.isDocumentUri(context, uri))
     val resolver = context.contentResolver
     val empty = resolver.openInputStream(uri)?.use { it.read() == -1 } ?: false
@@ -25,13 +30,19 @@ suspend fun discardBlankDraftDocument(context: Context, uri: Uri) = withContext(
     check(DocumentsContract.deleteDocument(resolver, uri)) { "Unable to remove blank draft document" }
 }
 
-internal class AndroidDraftBackupDestination(private val context: Context, private val uri: Uri) : DraftBackupDestination {
+internal class AndroidDraftBackupDestination(
+    private val context: Context,
+    private val uri: Uri,
+) : DraftBackupDestination {
     private var closed = false
     private var used = false
     private var completed = false
     private var verifiedEmpty = false
 
-    override suspend fun write(json: String, canWrite: () -> Boolean) = withContext(Dispatchers.IO) {
+    override suspend fun write(
+        json: String,
+        canWrite: () -> Boolean,
+    ) = withContext(Dispatchers.IO) {
         check(!closed && !used)
         used = true
         coroutineContext.ensureActive()
@@ -53,13 +64,20 @@ internal class AndroidDraftBackupDestination(private val context: Context, priva
         completed = true
     }
 
-    override fun close() { closed = true }
-    override suspend fun dispose() = withContext(Dispatchers.IO) {
-        if (closed) return@withContext
+    override fun close() {
         closed = true
-        if (!completed) {
-            if (verifiedEmpty) check(DocumentsContract.deleteDocument(context.contentResolver, uri))
-            else discardBlankDraftDocument(context, uri)
-        }
     }
+
+    override suspend fun dispose() =
+        withContext(Dispatchers.IO) {
+            if (closed) return@withContext
+            closed = true
+            if (!completed) {
+                if (verifiedEmpty) {
+                    check(DocumentsContract.deleteDocument(context.contentResolver, uri))
+                } else {
+                    discardBlankDraftDocument(context, uri)
+                }
+            }
+        }
 }

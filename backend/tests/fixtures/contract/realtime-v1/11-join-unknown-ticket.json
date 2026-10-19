@@ -1,0 +1,32 @@
+{
+  "description": "未知 ticket：authentication_required；驗證前 workspaceId / connectionEpoch 為 null",
+  "transport": "websocket",
+  "subprotocol": "boarderless.v1",
+  "exchange": [
+    {
+      "direction": "client",
+      "frame": {
+        "type": "join_workspace",
+        "protocolVersion": 1,
+        "schemaVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "clientId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "connectionEpoch": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "lastSeenServerSeq": 0,
+        "metadataRevision": 1,
+        "ticket": "fixture-only-not-a-real-ticket"
+      }
+    },
+    {
+      "direction": "server",
+      "frame": {
+        "type": "protocol_error",
+        "protocolVersion": 1,
+        "workspaceId": null,
+        "connectionEpoch": null,
+        "code": "authentication_required"
+      }
+    }
+  ],
+  "closeCode": 4401
+}

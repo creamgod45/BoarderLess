@@ -37,29 +37,39 @@ class MediaActivityTrackerTest {
         assertEquals(MediaPlaybackActivity(false, 1), tracker.activity.value)
     }
 
-    @Test fun publicationOwnerCannotResumeAfterConflatedHideShowOrDisposal() = runTest {
-        val tracker = MediaActivityTracker()
-        tracker.setAvailable(true)
-        val openedEpoch = tracker.activity.value.epoch
-        var closes = 0
-        val updates = mutableListOf<WorkspacePresenceUpdate>()
-        val publisher = object : WorkspacePresencePublisher {
-            override suspend fun publish(update: WorkspacePresenceUpdate) { updates.add(update) }
-            override fun close() { closes++ }
+    @Test fun publicationOwnerCannotResumeAfterConflatedHideShowOrDisposal() =
+        runTest {
+            val tracker = MediaActivityTracker()
+            tracker.setAvailable(true)
+            val openedEpoch = tracker.activity.value.epoch
+            var closes = 0
+            val updates = mutableListOf<WorkspacePresenceUpdate>()
+            val publisher =
+                object : WorkspacePresencePublisher {
+                    override suspend fun publish(update: WorkspacePresenceUpdate) {
+                        updates.add(update)
+                    }
+
+                    override fun close() {
+                        closes++
+                    }
+                }
+            val job =
+                launch {
+                    publishWorkspacePresence(publisher, {
+                        val state = tracker.activity.value
+                        if (mediaActivityAllowsPublication(state, openedEpoch)) WorkspacePresenceIntent(Vec2(1f, 2f), emptySet()) else null
+                    }, { currentTime })
+                }
+            runCurrent()
+            tracker.setAvailable(false)
+            tracker.setAvailable(true)
+            advanceTimeBy(100)
+            job.join()
+            assertEquals(1, updates.size)
+            assertEquals(1, closes)
+            tracker.close()
+            tracker.setAvailable(true)
+            assertFalse(tracker.activity.value.available)
         }
-        val job = launch {
-            publishWorkspacePresence(publisher, {
-                val state = tracker.activity.value
-                if (mediaActivityAllowsPublication(state, openedEpoch)) WorkspacePresenceIntent(Vec2(1f, 2f), emptySet()) else null
-            }, { currentTime })
-        }
-        runCurrent()
-        tracker.setAvailable(false); tracker.setAvailable(true)
-        advanceTimeBy(100); job.join()
-        assertEquals(1, updates.size)
-        assertEquals(1, closes)
-        tracker.close()
-        tracker.setAvailable(true)
-        assertFalse(tracker.activity.value.available)
-    }
 }

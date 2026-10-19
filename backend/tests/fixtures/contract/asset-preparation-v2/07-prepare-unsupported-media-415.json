@@ -1,0 +1,39 @@
+{
+  "description": "非 canonical / allowlist MIME：415",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/assets/preparations",
+    "body": {
+      "schema": "boarderless.asset-prepare.v1",
+      "requestId": "99999999-9999-4999-8999-999999999999",
+      "metadata": {
+        "byteSize": 442,
+        "checksum": "sha256:15b8da68f777d7caaab816ede7dc7364cc979cc9bffaab4e93d39e24b624d49d",
+        "durationMs": null,
+        "height": 48,
+        "mediaType": "image/svg+xml",
+        "width": 64
+      }
+    }
+  },
+  "response": {
+    "status": 415,
+    "body": {
+      "error": {
+        "code": "unsupported_media_type",
+        "message": "Media type image/svg+xml is not allowed",
+        "details": {
+          "allowed": [
+            "image/png",
+            "image/jpeg",
+            "image/webp",
+            "image/gif",
+            "video/mp4",
+            "video/webm"
+          ]
+        }
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

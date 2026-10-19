@@ -1,0 +1,226 @@
+{
+  "contract": "Quick scheme v2（batch B）",
+  "generatedBy": "scripts/generate-quick-scheme-fixtures.ts",
+  "fixtures": [
+    {
+      "name": "00-capabilities-200",
+      "description": "resource / selection 版本、limits、receipt TTL、materializationEnabled=false",
+      "status": 200
+    },
+    {
+      "name": "01-create-selection-v1-201",
+      "description": "selection v1：201，payload 原樣保存（不降版、不丟欄位）",
+      "status": 201
+    },
+    {
+      "name": "02-create-selection-v2-201",
+      "description": "selection v2：201，payload 原樣保存（不降版、不丟欄位）",
+      "status": 201
+    },
+    {
+      "name": "03-create-selection-v3-201",
+      "description": "selection v3：201，payload 原樣保存（不降版、不丟欄位）",
+      "status": 201
+    },
+    {
+      "name": "04-create-selection-v5-201",
+      "description": "selection v5：201，payload 原樣保存（不降版、不丟欄位）",
+      "status": 201
+    },
+    {
+      "name": "05-create-selection-v6-201",
+      "description": "selection v6：201，payload 原樣保存（不降版、不丟欄位）",
+      "status": 201
+    },
+    {
+      "name": "06-create-selection-v7-201",
+      "description": "selection v7：201，payload 原樣保存（不降版、不丟欄位）",
+      "status": 201
+    },
+    {
+      "name": "07-create-selection-v8-201",
+      "description": "selection v8：201，payload 原樣保存（不降版、不丟欄位）",
+      "status": 201
+    },
+    {
+      "name": "08-create-selection-v9-201",
+      "description": "selection v9：201，payload 原樣保存（不降版、不丟欄位）",
+      "status": 201
+    },
+    {
+      "name": "10-create-selection-v1-legacy-201",
+      "description": "舊版最小 v1（缺省欄位依預設值）：201",
+      "status": 201
+    },
+    {
+      "name": "11-create-selection-v4-media-201",
+      "description": "v4 媒體方案：assetBindings 精確覆蓋原檔 / 縮圖；assetAvailability 為讀取時狀態",
+      "status": 201
+    },
+    {
+      "name": "20-create-201",
+      "description": "If-None-Match: * + Idempotency-Key：201 resource + ETag",
+      "status": 201
+    },
+    {
+      "name": "21-get-200",
+      "description": "GET：200 + ETag + Cache-Control: private, no-store",
+      "status": 200
+    },
+    {
+      "name": "22-get-304",
+      "description": "If-None-Match 命中：304 無 body",
+      "status": 304
+    },
+    {
+      "name": "23-update-200",
+      "description": "以最新 ETag 完整替換（改名也送完整資源）：200 revision 2、新 ETag",
+      "status": 200
+    },
+    {
+      "name": "24-update-stale-412",
+      "description": "過期 ETag：412 revision_conflict（UI 保留 draft，提供使用遠端 / 另存副本 / 檢查差異）",
+      "status": 412
+    },
+    {
+      "name": "25-create-replay-201",
+      "description": "同 Idempotency-Key + 同內容重送：回原結果（原 ETag），即使之後已更新",
+      "status": 201
+    },
+    {
+      "name": "26-idempotency-mismatch-409",
+      "description": "同 key 不同內容：409 idempotency_mismatch",
+      "status": 409
+    },
+    {
+      "name": "27-create-existing-412",
+      "description": "已存在的 id 再 create：412",
+      "status": 412
+    },
+    {
+      "name": "28-missing-precondition-428",
+      "description": "缺 If-None-Match / If-Match：428 precondition_required",
+      "status": 428
+    },
+    {
+      "name": "29-if-match-star-428",
+      "description": "If-Match: * 不能取代具體 ETag：428",
+      "status": 428
+    },
+    {
+      "name": "30-foreign-owner-404",
+      "description": "他人的方案 ID：404（不洩漏存在）",
+      "status": 404
+    },
+    {
+      "name": "31-delete-204",
+      "description": "DELETE（If-Match + Idempotency-Key）：204；保留 tombstone、移除自己的 pin、不刪素材",
+      "status": 204
+    },
+    {
+      "name": "32-delete-replay-204",
+      "description": "同 key 重送 delete：204（原結果）",
+      "status": 204
+    },
+    {
+      "name": "33-get-deleted-404",
+      "description": "刪除後 GET：404",
+      "status": 404
+    },
+    {
+      "name": "34-create-after-delete-412",
+      "description": "tombstone 防復活：同 id create 回 412 {deleted: true}",
+      "status": 412
+    },
+    {
+      "name": "40-unsupported-resource-version-422",
+      "description": "resourceVersion 不支援：422",
+      "status": 422
+    },
+    {
+      "name": "41-unsupported-selection-422",
+      "description": "selection schemaVersion 不支援：422",
+      "status": 422
+    },
+    {
+      "name": "42-invalid-payload-422",
+      "description": "payload 不合法：422 invalid_payload + APP issue code",
+      "status": 422
+    },
+    {
+      "name": "43-body-owner-rejected-422",
+      "description": "body 不接受 ownerId / revision 等 server 欄位：422",
+      "status": 422
+    },
+    {
+      "name": "44-duplicate-key-400",
+      "description": "嚴格 JSON：重複 key 拒絕",
+      "status": 400
+    },
+    {
+      "name": "45-missing-binding-422",
+      "description": "媒體引用缺 binding：422 invalid_asset_binding",
+      "status": 422
+    },
+    {
+      "name": "46-asset-access-denied-403",
+      "description": "非來源 workspace 成員：403 asset_access_denied（持有 UUID 不等於授權）",
+      "status": 403
+    },
+    {
+      "name": "47-create-first-for-quota",
+      "description": "（quota 前置）",
+      "status": 201
+    },
+    {
+      "name": "48-quota-exceeded-409",
+      "description": "每使用者 1000 方案：409 quota_exceeded",
+      "status": 409
+    },
+    {
+      "name": "50-list-seed-0",
+      "description": "（分頁前置）",
+      "status": 201
+    },
+    {
+      "name": "50-list-seed-1",
+      "description": "（分頁前置）",
+      "status": 201
+    },
+    {
+      "name": "50-list-seed-2",
+      "description": "（分頁前置）",
+      "status": 201
+    },
+    {
+      "name": "51-list-page-1",
+      "description": "列表：穩定快照 cursor（綁定 owner / collectionRevision / 期限）",
+      "status": 200
+    },
+    {
+      "name": "52-list-page-2",
+      "description": "下一頁：同一快照",
+      "status": 200
+    },
+    {
+      "name": "53-list-restart",
+      "description": "（重新列舉）",
+      "status": 200
+    },
+    {
+      "name": "54-list-not-modified-304",
+      "description": "首頁 If-None-Match = collection ETag：304",
+      "status": 304
+    },
+    {
+      "name": "55-list-mutation-during-listing",
+      "description": "（列舉途中變更）",
+      "status": 200
+    },
+    {
+      "name": "56-list-cursor-expired-410",
+      "description": "快照期間 collection 變更：410 cursor_expired，重新列舉",
+      "status": 410
+    }
+  ]
+}

@@ -112,9 +112,13 @@ Undo：刪 R1/R2、刪 N、`restore_relations` 原 R，使用各權威版本與 
 
 ## 6. 第二階段：明確圖型及時序 metadata
 
-預設圖型 flowchart；只有使用者明確建立其他圖型才改 expression。需求為 workspace 的版本化 diagram metadata（提出 schema `boarderless.diagram.v1`），不是僅存 Mermaid 字串。正式 operation 名稱與 metadata revision／CAS envelope 由後端另行交付；本階段未交付前不開 sequence 建立入口。
+預設圖型 flowchart；只有使用者明確建立其他圖型才改 expression。2026-10-11 APP 已提供本機時序圖建立／引導式分支編輯、metadata history與保存基礎；正式server capability尚未交付，server模式入口仍受repository能力限制。不得把本機入口宣稱為server支援。
 
-sequence 至少需：ordered participants（participantId、nodeId、actor／participant）；ordered steps（stepId、relationId、call／return／self-message、blockId）；ordered blocks（blockId、parentBlockId、alt／else／loop／par、標題與子順序）。身分使用 UUID，N/E 只是 AI packet alias，不可存成正式 ID。
+正式格式請以現存APP `SequenceCanvasDiagram.kt`／`SequenceDiagramDraft.kt`為準，不另造相近schema。schema為`boarderless.sequence-canvas.v1`，包含containerId、participants(participant＋objectId)、messages(message＋relationId＋position)、blocks(id／kind／branchLabels／objectId／position)。position為blockId（root為null）、branchIndex、order，flat保存但保持完整巢狀順序。participant/message/block語意ID是`[A-Za-z_][A-Za-z0-9_]{0,63}`且拒保留字，不是UUID；graph objectId／relationId才是獨立畫布身分，正式server路徑依既有UUID schema。N/E只是AI packet alias，不可取代任一保存身分。
+
+APP limits：每workspace最多64份diagram；每diagram participant 1..32、message 1..512、block最多128、nesting最多16；loop一個branch、alt／parallel 2..16，每branch非空、label最多4096 UTF-8 bytes、全draft text最多262144 bytes。arrow kind為Call／Return／Async／Signal、dashed獨立；Return必須dashed、Call不得dashed，同source/target代表self-message。嚴格Unicode／plain label與reserved IDs规则沿`requireSequenceText`／`requireSequenceId`，不要把Mermaid source或任意HTML當state。
+
+workspace現存欄位為sequenceDiagrams與sequenceDiagramsVersion；APP `UpdateSequenceDiagramsOperation`含expectedSequenceDiagramsVersion、before、after，before完整CAS及version單調；必要graph bindings變更同transaction驗完整`hasValidSequenceBindings`。正式wire operation名／payload及capability仍待backend定案並交fixtures；不能因Kotlin operation存在就直接送未宣告kind。
 
 需明確決定完整文法：alt 的 else 分支、par 的分支、巢狀 block，以及 relation 刪除後引用處理。限制順序無重複、引用存在且同 workspace、block 無 cycle；self-message 必須是相同 participant，普通 call 不能被座標暗示成 self-message。訊息／block 排序與 graph geometry 分開。
 

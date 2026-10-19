@@ -1,0 +1,52 @@
+{
+  "description": "宣告尺寸與實際不符：rejected declared_metadata_mismatch，declared 保留、verified 保存實際值",
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/assets/preparations/00000000-0000-4000-8000-000000000041"
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "schema": "boarderless.asset-preparation.v1",
+      "requestId": "00000000-0000-4000-8000-000000000041",
+      "requestDigest": "a4f8cca869eb2cc474a9bf88d9ee64a8c1fdea49b777c93fa4a0a0658a8da980",
+      "phase": "rejected",
+      "declared": {
+        "byteSize": 442,
+        "checksum": "sha256:15b8da68f777d7caaab816ede7dc7364cc979cc9bffaab4e93d39e24b624d49d",
+        "durationMs": null,
+        "height": 24,
+        "mediaType": "image/png",
+        "width": 32
+      },
+      "verified": {
+        "width": 64,
+        "height": 48,
+        "durationMs": null
+      },
+      "asset": {
+        "id": "00000000-0000-4000-8000-000000000042",
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "ownerId": "11111111-1111-4111-8111-111111111111",
+        "storageKey": "workspaces/22222222-2222-4222-8222-222222222222/assets/00000000-0000-4000-8000-000000000042.png",
+        "mediaType": "image/png",
+        "byteSize": 442,
+        "checksum": "sha256:15b8da68f777d7caaab816ede7dc7364cc979cc9bffaab4e93d39e24b624d49d",
+        "status": "rejected",
+        "createdAt": "2026-10-02T00:00:00.000Z",
+        "updatedAt": "2026-10-02T00:00:00.000Z",
+        "width": 32,
+        "height": 24,
+        "durationMs": null,
+        "thumbnailAssetId": null,
+        "rejectionReason": "declared_metadata_mismatch"
+      },
+      "lease": {
+        "leaseId": "00000000-0000-4000-8000-000000000043",
+        "ticketRequestId": "00000000-0000-4000-8000-000000000044",
+        "generation": 1,
+        "expiresAt": "2026-10-02T00:15:00.000Z"
+      }
+    }
+  }
+}

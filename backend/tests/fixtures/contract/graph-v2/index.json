@@ -1,0 +1,286 @@
+{
+  "contract": "Graph v2（batch D：relation geometry / insert node / vectorPath）",
+  "generatedBy": "scripts/generate-graph-fixtures.ts",
+  "fixtures": [
+    {
+      "name": "01-nodes",
+      "description": "兩個端點節點",
+      "status": 200
+    },
+    {
+      "name": "02-create-four-directions-parallel",
+      "description": "四方向 + 平行線（不同 relationId 同端點）；manual route + manual label",
+      "status": 200
+    },
+    {
+      "name": "03-update-geometry-auto-reset",
+      "description": "geometry 整個子物件替換（重設 auto），不殘留舊 waypoints",
+      "status": 200
+    },
+    {
+      "name": "04-update-colortoken-keeps-geometry",
+      "description": "舊 client 只改 colorToken：geometry 保留",
+      "status": 200
+    },
+    {
+      "name": "05-update-manual-label",
+      "description": "manual route + manual label",
+      "status": 200
+    },
+    {
+      "name": "10-self-loop-without-geometry-422",
+      "description": "自循環必須明確 geometry：422 invalid_relation_geometry",
+      "status": 422
+    },
+    {
+      "name": "11-self-loop-manual-422",
+      "description": "自循環不接受 manual route",
+      "status": 422
+    },
+    {
+      "name": "12-create-self-loops",
+      "description": "自循環：loop route 與 auto（預設 right / 80 由 renderer 固定）",
+      "status": 200
+    },
+    {
+      "name": "13-loop-on-normal-relation-422",
+      "description": "普通線不接受 loop route",
+      "status": 422
+    },
+    {
+      "name": "14-node-with-self-loop",
+      "description": "（前置）帶自循環的節點",
+      "status": 200
+    },
+    {
+      "name": "15-delete-node-cascades-self-loop-once",
+      "description": "刪除節點：自循環只 cascade 一次（cascadedRelationIds）",
+      "status": 200
+    },
+    {
+      "name": "16-restore-node-and-self-loop",
+      "description": "還原：relation version 只 +1",
+      "status": 200
+    },
+    {
+      "name": "20-unknown-geometry-schema-422",
+      "description": "未知 geometry schema：unsupported_geometry_schema；同交易的其他 operation 不提交",
+      "status": 422
+    },
+    {
+      "name": "21-null-geometry-422",
+      "description": "explicit null 不是重設（重設用完整 auto）；同交易的其他 operation 不提交",
+      "status": 422
+    },
+    {
+      "name": "22-33-waypoints-422",
+      "description": "33 個 waypoints；同交易的其他 operation 不提交",
+      "status": 422
+    },
+    {
+      "name": "23-coordinate-out-of-range-422",
+      "description": "座標超過 ±10,000,000；同交易的其他 operation 不提交",
+      "status": 422
+    },
+    {
+      "name": "24-incomplete-manual-label-422",
+      "description": "manual label 必須完整四欄；同交易的其他 operation 不提交",
+      "status": 422
+    },
+    {
+      "name": "25-unknown-field-422",
+      "description": "分支內不相干欄位；同交易的其他 operation 不提交",
+      "status": 422
+    },
+    {
+      "name": "30-insert-forward-0-original",
+      "description": "（前置）原線 forward",
+      "status": 200
+    },
+    {
+      "name": "30-insert-forward-1-insert",
+      "description": "插入節點（forward）：delete R（版本 CAS）+ create N + create R1 / R2，同一 transaction；新段 geometry auto",
+      "status": 200
+    },
+    {
+      "name": "30-insert-forward-2-undo",
+      "description": "Undo：刪 R1 / R2、刪 N（版本 CAS）、restore 原 R（tombstone CAS，原 geometry 保留）",
+      "status": 200
+    },
+    {
+      "name": "30-insert-forward-3-redo",
+      "description": "Redo：刪 R、restore N、restore R1 / R2（同 ID，不重建）",
+      "status": 200
+    },
+    {
+      "name": "31-insert-backward-0-original",
+      "description": "（前置）原線 backward",
+      "status": 200
+    },
+    {
+      "name": "31-insert-backward-1-insert",
+      "description": "插入節點（backward）：delete R（版本 CAS）+ create N + create R1 / R2，同一 transaction；新段 geometry auto",
+      "status": 200
+    },
+    {
+      "name": "31-insert-backward-2-undo",
+      "description": "Undo：刪 R1 / R2、刪 N（版本 CAS）、restore 原 R（tombstone CAS，原 geometry 保留）",
+      "status": 200
+    },
+    {
+      "name": "31-insert-backward-3-redo",
+      "description": "Redo：刪 R、restore N、restore R1 / R2（同 ID，不重建）",
+      "status": 200
+    },
+    {
+      "name": "32-insert-both-0-original",
+      "description": "（前置）原線 both",
+      "status": 200
+    },
+    {
+      "name": "32-insert-both-1-insert",
+      "description": "插入節點（both）：delete R（版本 CAS）+ create N + create R1 / R2，同一 transaction；新段 geometry auto",
+      "status": 200
+    },
+    {
+      "name": "32-insert-both-2-undo",
+      "description": "Undo：刪 R1 / R2、刪 N（版本 CAS）、restore 原 R（tombstone CAS，原 geometry 保留）",
+      "status": 200
+    },
+    {
+      "name": "32-insert-both-3-redo",
+      "description": "Redo：刪 R、restore N、restore R1 / R2（同 ID，不重建）",
+      "status": 200
+    },
+    {
+      "name": "33-insert-none-0-original",
+      "description": "（前置）原線 none",
+      "status": 200
+    },
+    {
+      "name": "33-insert-none-1-insert",
+      "description": "插入節點（none）：delete R（版本 CAS）+ create N + create R1 / R2，同一 transaction；新段 geometry auto",
+      "status": 200
+    },
+    {
+      "name": "33-insert-none-2-undo",
+      "description": "Undo：刪 R1 / R2、刪 N（版本 CAS）、restore 原 R（tombstone CAS，原 geometry 保留）",
+      "status": 200
+    },
+    {
+      "name": "33-insert-none-3-redo",
+      "description": "Redo：刪 R、restore N、restore R1 / R2（同 ID，不重建）",
+      "status": 200
+    },
+    {
+      "name": "34-insert-self-loop-0-original",
+      "description": "（前置）原線 self-loop",
+      "status": 200
+    },
+    {
+      "name": "34-insert-self-loop-1-insert",
+      "description": "插入節點（self-loop）：delete R（版本 CAS）+ create N + create R1 / R2，同一 transaction；新段 geometry auto",
+      "status": 200
+    },
+    {
+      "name": "34-insert-self-loop-2-undo",
+      "description": "Undo：刪 R1 / R2、刪 N（版本 CAS）、restore 原 R（tombstone CAS，原 geometry 保留）",
+      "status": 200
+    },
+    {
+      "name": "34-insert-self-loop-3-redo",
+      "description": "Redo：刪 R、restore N、restore R1 / R2（同 ID，不重建）",
+      "status": 200
+    },
+    {
+      "name": "35-race-0-original",
+      "description": "（前置）",
+      "status": 200
+    },
+    {
+      "name": "35-race-1-first-accepted",
+      "description": "兩端同時插入：先到者 accepted",
+      "status": 200
+    },
+    {
+      "name": "35-race-2-second-conflict-409",
+      "description": "後到者以舊版本 CAS：409 conflict，不建立 N",
+      "status": 409
+    },
+    {
+      "name": "36-receipt-unknown",
+      "description": "未知 ACK：先查原 transaction receipt（未提交 → unknown）",
+      "status": 200
+    },
+    {
+      "name": "37-insert-commit",
+      "description": "原請求送達並 commit",
+      "status": 200
+    },
+    {
+      "name": "38-receipt-committed",
+      "description": "再查：committed receipt；重送原 envelope 回 duplicate，不另造 ID",
+      "status": 200
+    },
+    {
+      "name": "40-create-vector-path",
+      "description": "TextNode vectorPath：line / quadratic / cubic、closed / open、多 subpath（EvenOdd 孔洞）、控制點超出 viewBox",
+      "status": 200
+    },
+    {
+      "name": "41-update-vector-path",
+      "description": "vectorPath 整個替換（properties 淺層 merge 的單一 key）",
+      "status": 200
+    },
+    {
+      "name": "42-text-placement",
+      "description": "textPlacement（APP v8）",
+      "status": 200
+    },
+    {
+      "name": "43-clear-with-null",
+      "description": "null 清除 vectorPath / textPlacement",
+      "status": 200
+    },
+    {
+      "name": "44-invalid-command-order-422",
+      "description": "非法 command 順序（連續 move / 空 subpath）",
+      "status": 422
+    },
+    {
+      "name": "45-unknown-command-422",
+      "description": "未知 command（不接受 SVG）",
+      "status": 422
+    },
+    {
+      "name": "46-unknown-schema-422",
+      "description": "vectorPath schemaVersion 2",
+      "status": 422
+    },
+    {
+      "name": "47-delete-restore-vector-path",
+      "description": "刪除 / 還原保留 path（BAI-011 restore）",
+      "status": 200
+    },
+    {
+      "name": "48-delete",
+      "description": "（刪除）",
+      "status": 200
+    },
+    {
+      "name": "49-restore",
+      "description": "還原後 path 完整",
+      "status": 200
+    },
+    {
+      "name": "50-state",
+      "description": "最終 projection：geometry / 自循環 / vectorPath 完整",
+      "status": 200
+    },
+    {
+      "name": "51-catch-up",
+      "description": "operation log catch-up：正式 payload 保留 geometry / vectorPath",
+      "status": 200
+    }
+  ]
+}

@@ -18,11 +18,12 @@ class CanvasPreferencesTest {
         val properties = Properties()
         val first = CanvasPreferences(PropertiesSettings(properties))
         val viewport = Viewport(pan = Vec2(320f, -48f), zoom = 1.75f)
-        val display = CanvasDisplaySettings(
-            showGrid = false,
-            snapToGrid = true,
-            backgroundToken = "cool",
-        )
+        val display =
+            CanvasDisplaySettings(
+                showGrid = false,
+                snapToGrid = true,
+                backgroundToken = "cool",
+            )
 
         first.saveViewport("workspace-a", viewport)
         first.saveDisplaySettings("workspace-a", display)
@@ -47,11 +48,12 @@ class CanvasPreferencesTest {
 
     @Test
     fun corruptedNonFiniteViewportIsIgnored() {
-        val properties = Properties().apply {
-            setProperty("workspace.workspace-a.viewport.panX", "12.0")
-            setProperty("workspace.workspace-a.viewport.panY", "24.0")
-            setProperty("workspace.workspace-a.viewport.zoom", "Infinity")
-        }
+        val properties =
+            Properties().apply {
+                setProperty("workspace.workspace-a.viewport.panX", "12.0")
+                setProperty("workspace.workspace-a.viewport.panY", "24.0")
+                setProperty("workspace.workspace-a.viewport.zoom", "Infinity")
+            }
         val preferences = CanvasPreferences(PropertiesSettings(properties))
 
         assertNull(preferences.loadViewport("workspace-a"))

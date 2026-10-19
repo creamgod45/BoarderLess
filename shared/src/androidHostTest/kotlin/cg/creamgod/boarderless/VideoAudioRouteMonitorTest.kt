@@ -15,7 +15,8 @@ class VideoAudioRouteMonitorTest {
         assertEquals(1, source.subscriptions)
         source.callbacks[0]()
         assertEquals(1, interruptions)
-        monitor.stop(); monitor.stop()
+        monitor.stop()
+        monitor.stop()
         assertEquals(1, source.closes)
         source.callbacks[0]()
         assertEquals(1, interruptions)
@@ -24,7 +25,8 @@ class VideoAudioRouteMonitorTest {
     @Test fun oldReceiverCannotInterruptNewAudibleLease() {
         val source = Source()
         val monitor = VideoAudioRouteMonitor(source)
-        var oldInterruptions = 0; var currentInterruptions = 0
+        var oldInterruptions = 0
+        var currentInterruptions = 0
         monitor.start { oldInterruptions++ }
         monitor.start { currentInterruptions++ }
         assertEquals(1, source.closes)
@@ -62,12 +64,19 @@ class VideoAudioRouteMonitorTest {
 
     private class Source : VideoAudioRouteSource {
         val callbacks = mutableListOf<() -> Unit>()
-        var subscriptions = 0; var closes = 0
-        var closeError: Exception? = null; var subscribeError: Exception? = null
+        var subscriptions = 0
+        var closes = 0
+        var closeError: Exception? = null
+        var subscribeError: Exception? = null
+
         override fun subscribe(onNoisy: () -> Unit): AutoCloseable {
-            subscriptions++; callbacks += onNoisy
+            subscriptions++
+            callbacks += onNoisy
             subscribeError?.let { throw it }
-            return AutoCloseable { closes++; closeError?.let { throw it } }
+            return AutoCloseable {
+                closes++
+                closeError?.let { throw it }
+            }
         }
     }
 }

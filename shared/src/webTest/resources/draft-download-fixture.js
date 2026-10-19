@@ -41,6 +41,11 @@ globalThis.boarderlessDraftDownloadFixture = {
         return String(s[field]);
     },
     text(done) { this.state.blob.text().then(done, () => done('FIXTURE_READ_FAILED')); },
+    hex(done) {
+        this.state.blob.arrayBuffer().then(buffer => {
+            done(Array.from(new Uint8Array(buffer), byte => byte.toString(16).padStart(2, '0')).join(''));
+        }, () => done('FIXTURE_READ_FAILED'));
+    },
     failClick() { this.state.failClick = true; },
     expire() {
         const callbacks = Array.from(this.state.timers.values()); this.state.timers.clear();

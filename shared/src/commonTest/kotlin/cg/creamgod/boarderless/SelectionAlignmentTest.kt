@@ -14,11 +14,12 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class SelectionAlignmentTest {
-    private val nodes = listOf(
-        node("first", 0f, 100f, 140f, 80f, 20f),
-        node("second", 360f, 380f, 100f, 160f, -15f),
-        node("third", 760f, 40f, 180f, 100f, 30f),
-    )
+    private val nodes =
+        listOf(
+            node("first", 0f, 100f, 140f, 80f, 20f),
+            node("second", 360f, 380f, 100f, 160f, -15f),
+            node("third", 760f, 40f, 180f, 100f, 30f),
+        )
 
     @Test
     fun horizontalModesAlignRotatedVisualBoundsAndPreserveVerticalPositions() {

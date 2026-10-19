@@ -1,7 +1,9 @@
 @file:OptIn(kotlin.js.ExperimentalWasmJsInterop::class)
+
 package cg.creamgod.boarderless.data
 
-@JsFun("""(filename, json, canWrite) => {
+@JsFun(
+    """(filename, json, canWrite) => {
     if (!canWrite() || document.hidden || !document.body) throw new Error('Download unavailable');
     let url = null, timer = null, anchor = null;
     try {
@@ -23,5 +25,10 @@ package cg.creamgod.boarderless.data
     } finally {
         if (anchor) anchor.remove();
     }
-}""")
-internal actual external fun browserDispatchDraftDownload(filename: String, json: String, canWrite: () -> Boolean)
+}""",
+)
+internal actual external fun browserDispatchDraftDownload(
+    filename: String,
+    json: String,
+    canWrite: () -> Boolean,
+)

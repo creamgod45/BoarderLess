@@ -17,13 +17,16 @@ internal data class WorkspaceSubmissionQueue(
     val size: Int get() = entries.size
     val isEmpty: Boolean get() = entries.isEmpty()
 
-    fun enqueue(operation: WorkspaceOperation, workspaceAfter: Workspace): WorkspaceSubmissionQueue = copy(
-        entries = entries + PendingWorkspaceSubmission(nextToken, operation, workspaceAfter),
-        nextToken = nextToken + 1,
-    )
+    fun enqueue(
+        operation: WorkspaceOperation,
+        workspaceAfter: Workspace,
+    ): WorkspaceSubmissionQueue =
+        copy(
+            entries = entries + PendingWorkspaceSubmission(nextToken, operation, workspaceAfter),
+            nextToken = nextToken + 1,
+        )
 
-    fun accept(token: Long): WorkspaceSubmissionQueue =
-        if (entries.firstOrNull()?.token == token) copy(entries = entries.drop(1)) else this
+    fun accept(token: Long): WorkspaceSubmissionQueue = if (entries.firstOrNull()?.token == token) copy(entries = entries.drop(1)) else this
 
     fun clear(): WorkspaceSubmissionQueue = copy(entries = emptyList())
 }

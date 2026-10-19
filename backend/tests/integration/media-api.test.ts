@@ -529,6 +529,44 @@ describe.skipIf(!sql || !hasMediaTools)('media asset lifecycle (Media v1)', () =
       const missingRef = await api.post(`/workspaces/${ws}/operations`, media({ mediaKind: 'video' }))
       expect(missingRef.body.error.code).toBe('invalid_object')
     })
+
+    test('ASSET-07: new and replaced references must be ready; restore keeps the original reference', async () => {
+      const ws = await newWorkspace()
+      const ops = `/workspaces/${ws}/operations`
+      const version = async () => (await api.get(`/workspaces/${ws}`)).body.currentVersion as number
+      const submit = async (operations: Parameters<typeof envelope>[1]) => api.post(ops, envelope(await version(), operations))
+      const image = (assetId: string) => ({ assetId, mediaKind: 'image', altText: '' })
+
+      const { assetId: pending } = await uploadAndComplete(ws, 'image.png') // accepted，尚未驗證
+      const notReady = await submit([{ kind: 'create_object', payload: { objectId: uuid(), objectType: 'media', properties: image(pending) } }])
+      expect([notReady.status, notReady.body.error.code]).toEqual([422, 'asset_not_ready'])
+      expect(notReady.body.error.details.assets).toEqual([{ assetId: pending, status: 'pending' }])
+
+      const corrupted = Buffer.from(await readFixture('image.jpg'))
+      corrupted[corrupted.length - 10]! ^= 0xff
+      const { assetId: rejected } = await uploadAndComplete(ws, 'image.jpg', corrupted)
+      await env.runner.drain()
+      const viaRejected = await submit([{ kind: 'create_object', payload: { objectId: uuid(), objectType: 'media', properties: image(rejected) } }])
+      expect(viaRejected.body.error.details.assets).toEqual([{ assetId: rejected, status: 'rejected' }])
+
+      // ready 素材可新建
+      const node = uuid()
+      expect((await submit([{ kind: 'create_object', payload: { objectId: node, objectType: 'media', properties: image(pending) } }])).body.status).toBe('accepted')
+
+      // 替換成未 ready 的素材：拒絕
+      const { assetId: another } = await uploadAndComplete(ws, 'image.webp')
+      const replace = await submit([{ kind: 'update_object', payload: { objectId: node, properties: { assetId: another } } }])
+      expect(replace.body.error.code).toBe('asset_not_ready')
+
+      // 原素材 missing 後：不改引用的編輯照常；刪除後 restore 可還原原引用（不要求 ready、不讓素材復活）
+      await env.storage.delete((await api.get(`/workspaces/${ws}/assets/${pending}`)).body.storageKey)
+      expect((await api.get(`/workspaces/${ws}/assets/${pending}/content`)).status).toBe(409)
+      const edit = await submit([{ kind: 'update_object', payload: { objectId: node, properties: { altText: 'still here', assetId: pending } } }])
+      expect(edit.body.status).toBe('accepted')
+      expect((await submit([{ kind: 'delete_objects', payload: { objectIds: [node] } }])).body.status).toBe('accepted')
+      expect((await submit([{ kind: 'restore_objects', payload: { objectIds: [node] } }])).body.status).toBe('accepted')
+      expect((await api.get(`/workspaces/${ws}/assets/${pending}`)).body.status).toBe('missing')
+    })
   })
 })
 

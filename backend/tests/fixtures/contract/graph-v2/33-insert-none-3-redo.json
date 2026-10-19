@@ -1,0 +1,119 @@
+{
+  "description": "Redo：刪 R、restore N、restore R1 / R2（同 ID，不重建）",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "00000000-0000-4000-8000-000000000183",
+      "transactionId": "00000000-0000-4000-8000-000000000184",
+      "baseVersion": 24,
+      "operations": [
+        {
+          "operationId": "00000000-0000-4000-8000-000000000185",
+          "clientSeq": 1,
+          "kind": "delete_relations",
+          "payload": {
+            "relationIds": [
+              "00000000-0000-4000-8000-000000000168"
+            ]
+          }
+        },
+        {
+          "operationId": "00000000-0000-4000-8000-000000000186",
+          "clientSeq": 2,
+          "kind": "restore_objects",
+          "payload": {
+            "objectIds": [
+              "00000000-0000-4000-8000-000000000173"
+            ]
+          }
+        },
+        {
+          "operationId": "00000000-0000-4000-8000-000000000187",
+          "clientSeq": 3,
+          "kind": "restore_relations",
+          "payload": {
+            "relationIds": [
+              "00000000-0000-4000-8000-000000000175",
+              "00000000-0000-4000-8000-000000000177"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "status": "accepted",
+      "fromServerSeq": 59,
+      "toServerSeq": 61,
+      "workspaceVersion": 25,
+      "operations": [
+        {
+          "serverSeq": 59,
+          "operationId": "00000000-0000-4000-8000-000000000185",
+          "transactionId": "00000000-0000-4000-8000-000000000184",
+          "actorId": "11111111-1111-4111-8111-111111111111",
+          "clientId": "00000000-0000-4000-8000-000000000183",
+          "clientSeq": 1,
+          "baseVersion": 24,
+          "workspaceVersion": 25,
+          "operationType": "delete_relations",
+          "payload": {
+            "relationIds": [
+              "00000000-0000-4000-8000-000000000168"
+            ]
+          },
+          "schemaVersion": 1,
+          "committedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "serverSeq": 60,
+          "operationId": "00000000-0000-4000-8000-000000000186",
+          "transactionId": "00000000-0000-4000-8000-000000000184",
+          "actorId": "11111111-1111-4111-8111-111111111111",
+          "clientId": "00000000-0000-4000-8000-000000000183",
+          "clientSeq": 2,
+          "baseVersion": 24,
+          "workspaceVersion": 25,
+          "operationType": "restore_objects",
+          "payload": {
+            "objectIds": [
+              "00000000-0000-4000-8000-000000000173"
+            ],
+            "restoredVersions": {
+              "00000000-0000-4000-8000-000000000173": 3
+            }
+          },
+          "schemaVersion": 1,
+          "committedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "serverSeq": 61,
+          "operationId": "00000000-0000-4000-8000-000000000187",
+          "transactionId": "00000000-0000-4000-8000-000000000184",
+          "actorId": "11111111-1111-4111-8111-111111111111",
+          "clientId": "00000000-0000-4000-8000-000000000183",
+          "clientSeq": 3,
+          "baseVersion": 24,
+          "workspaceVersion": 25,
+          "operationType": "restore_relations",
+          "payload": {
+            "relationIds": [
+              "00000000-0000-4000-8000-000000000175",
+              "00000000-0000-4000-8000-000000000177"
+            ],
+            "restoredVersions": {
+              "00000000-0000-4000-8000-000000000177": 3,
+              "00000000-0000-4000-8000-000000000175": 3
+            }
+          },
+          "schemaVersion": 1,
+          "committedAt": "2026-10-02T00:00:00.000Z"
+        }
+      ]
+    }
+  }
+}

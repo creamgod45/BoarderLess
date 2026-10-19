@@ -1,0 +1,683 @@
+{
+  "description": "最終 projection：geometry / 自循環 / vectorPath 完整",
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/state"
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "workspaceId": "22222222-2222-4222-8222-222222222222",
+      "workspaceVersion": 39,
+      "throughServerSeq": 86,
+      "objects": [
+        {
+          "objectId": "66666666-6666-4666-8666-666666666666",
+          "objectType": "text",
+          "objectVersion": 1,
+          "parentId": null,
+          "zIndex": 0,
+          "locked": false,
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "width": 260,
+            "height": 132,
+            "rotationDegrees": 0
+          },
+          "properties": {
+            "text": "A"
+          },
+          "createdBy": "11111111-1111-4111-8111-111111111111",
+          "updatedBy": "11111111-1111-4111-8111-111111111111",
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "objectId": "88888888-8888-4888-8888-888888888888",
+          "objectType": "text",
+          "objectVersion": 1,
+          "parentId": null,
+          "zIndex": 0,
+          "locked": false,
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "width": 260,
+            "height": 132,
+            "rotationDegrees": 0
+          },
+          "properties": {
+            "text": "B"
+          },
+          "createdBy": "11111111-1111-4111-8111-111111111111",
+          "updatedBy": "11111111-1111-4111-8111-111111111111",
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "objectId": "00000000-0000-4000-8000-000000000050",
+          "objectType": "text",
+          "objectVersion": 3,
+          "parentId": null,
+          "zIndex": 0,
+          "locked": false,
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "width": 260,
+            "height": 132,
+            "rotationDegrees": 0
+          },
+          "properties": {},
+          "createdBy": "11111111-1111-4111-8111-111111111111",
+          "updatedBy": "11111111-1111-4111-8111-111111111111",
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "objectId": "00000000-0000-4000-8000-000000000104",
+          "objectType": "text",
+          "objectVersion": 3,
+          "parentId": null,
+          "zIndex": 0,
+          "locked": false,
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "width": 260,
+            "height": 132,
+            "rotationDegrees": 0
+          },
+          "properties": {
+            "text": "Step"
+          },
+          "createdBy": "11111111-1111-4111-8111-111111111111",
+          "updatedBy": "11111111-1111-4111-8111-111111111111",
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "objectId": "00000000-0000-4000-8000-000000000127",
+          "objectType": "text",
+          "objectVersion": 3,
+          "parentId": null,
+          "zIndex": 0,
+          "locked": false,
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "width": 260,
+            "height": 132,
+            "rotationDegrees": 0
+          },
+          "properties": {
+            "text": "Step"
+          },
+          "createdBy": "11111111-1111-4111-8111-111111111111",
+          "updatedBy": "11111111-1111-4111-8111-111111111111",
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "objectId": "00000000-0000-4000-8000-000000000150",
+          "objectType": "text",
+          "objectVersion": 3,
+          "parentId": null,
+          "zIndex": 0,
+          "locked": false,
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "width": 260,
+            "height": 132,
+            "rotationDegrees": 0
+          },
+          "properties": {
+            "text": "Step"
+          },
+          "createdBy": "11111111-1111-4111-8111-111111111111",
+          "updatedBy": "11111111-1111-4111-8111-111111111111",
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "objectId": "00000000-0000-4000-8000-000000000173",
+          "objectType": "text",
+          "objectVersion": 3,
+          "parentId": null,
+          "zIndex": 0,
+          "locked": false,
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "width": 260,
+            "height": 132,
+            "rotationDegrees": 0
+          },
+          "properties": {
+            "text": "Step"
+          },
+          "createdBy": "11111111-1111-4111-8111-111111111111",
+          "updatedBy": "11111111-1111-4111-8111-111111111111",
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "objectId": "00000000-0000-4000-8000-000000000196",
+          "objectType": "text",
+          "objectVersion": 3,
+          "parentId": null,
+          "zIndex": 0,
+          "locked": false,
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "width": 260,
+            "height": 132,
+            "rotationDegrees": 0
+          },
+          "properties": {
+            "text": "Step"
+          },
+          "createdBy": "11111111-1111-4111-8111-111111111111",
+          "updatedBy": "11111111-1111-4111-8111-111111111111",
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "objectId": "00000000-0000-4000-8000-000000000219",
+          "objectType": "text",
+          "objectVersion": 1,
+          "parentId": null,
+          "zIndex": 0,
+          "locked": false,
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "width": 260,
+            "height": 132,
+            "rotationDegrees": 0
+          },
+          "properties": {},
+          "createdBy": "11111111-1111-4111-8111-111111111111",
+          "updatedBy": "11111111-1111-4111-8111-111111111111",
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "objectId": "00000000-0000-4000-8000-000000000236",
+          "objectType": "text",
+          "objectVersion": 1,
+          "parentId": null,
+          "zIndex": 0,
+          "locked": false,
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "width": 260,
+            "height": 132,
+            "rotationDegrees": 0
+          },
+          "properties": {},
+          "createdBy": "11111111-1111-4111-8111-111111111111",
+          "updatedBy": "11111111-1111-4111-8111-111111111111",
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "objectId": "00000000-0000-4000-8000-000000000242",
+          "objectType": "text",
+          "objectVersion": 7,
+          "parentId": null,
+          "zIndex": 0,
+          "locked": false,
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "width": 260,
+            "height": 132,
+            "rotationDegrees": 0
+          },
+          "properties": {
+            "text": "",
+            "vectorPath": {
+              "style": {
+                "fillRule": "EvenOdd",
+                "strokeWidth": 2,
+                "fillColorToken": "paper",
+                "strokeColorToken": null
+              },
+              "viewBox": {
+                "width": 100,
+                "height": 100
+              },
+              "commands": [
+                {
+                  "type": "move",
+                  "point": {
+                    "x": 0,
+                    "y": 0
+                  }
+                },
+                {
+                  "type": "line",
+                  "point": {
+                    "x": 100,
+                    "y": 0
+                  }
+                },
+                {
+                  "type": "line",
+                  "point": {
+                    "x": 100,
+                    "y": 100
+                  }
+                },
+                {
+                  "type": "line",
+                  "point": {
+                    "x": 0,
+                    "y": 100
+                  }
+                },
+                {
+                  "type": "close"
+                },
+                {
+                  "type": "move",
+                  "point": {
+                    "x": 25,
+                    "y": 25
+                  }
+                },
+                {
+                  "type": "line",
+                  "point": {
+                    "x": 75,
+                    "y": 25
+                  }
+                },
+                {
+                  "type": "quadratic",
+                  "point": {
+                    "x": 75,
+                    "y": 75
+                  },
+                  "control": {
+                    "x": 150,
+                    "y": 50
+                  }
+                },
+                {
+                  "type": "close"
+                },
+                {
+                  "type": "move",
+                  "point": {
+                    "x": -40,
+                    "y": -40
+                  }
+                },
+                {
+                  "type": "cubic",
+                  "point": {
+                    "x": 10,
+                    "y": 10
+                  },
+                  "control1": {
+                    "x": 200,
+                    "y": -60
+                  },
+                  "control2": {
+                    "x": -60,
+                    "y": 200
+                  }
+                }
+              ],
+              "schemaVersion": 1
+            },
+            "textPlacement": null
+          },
+          "createdBy": "11111111-1111-4111-8111-111111111111",
+          "updatedBy": "11111111-1111-4111-8111-111111111111",
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        }
+      ],
+      "relations": [
+        {
+          "relationId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          "relationVersion": 4,
+          "sourceObjectId": "66666666-6666-4666-8666-666666666666",
+          "targetObjectId": "88888888-8888-4888-8888-888888888888",
+          "direction": "forward",
+          "intent": "flow",
+          "label": "call",
+          "style": {
+            "geometry": {
+              "route": {
+                "mode": "manual",
+                "waypoints": [
+                  {
+                    "x": 320,
+                    "y": 180
+                  },
+                  {
+                    "x": 520,
+                    "y": 180
+                  }
+                ]
+              },
+              "schema": "boarderless.relation-geometry.v1",
+              "labelPlacement": {
+                "mode": "manual",
+                "normalOffset": 24,
+                "pathFraction": 0.5,
+                "tangentOffset": 0
+              }
+            },
+            "colorToken": "#123456"
+          },
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "relationId": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+          "relationVersion": 1,
+          "sourceObjectId": "66666666-6666-4666-8666-666666666666",
+          "targetObjectId": "88888888-8888-4888-8888-888888888888",
+          "direction": "backward",
+          "intent": null,
+          "label": null,
+          "style": {
+            "geometry": {
+              "route": {
+                "mode": "auto"
+              },
+              "schema": "boarderless.relation-geometry.v1",
+              "labelPlacement": {
+                "mode": "auto"
+              }
+            }
+          },
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "relationId": "00000000-0000-4000-8000-000000000015",
+          "relationVersion": 1,
+          "sourceObjectId": "66666666-6666-4666-8666-666666666666",
+          "targetObjectId": "88888888-8888-4888-8888-888888888888",
+          "direction": "both",
+          "intent": null,
+          "label": null,
+          "style": {},
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "relationId": "00000000-0000-4000-8000-000000000017",
+          "relationVersion": 1,
+          "sourceObjectId": "66666666-6666-4666-8666-666666666666",
+          "targetObjectId": "88888888-8888-4888-8888-888888888888",
+          "direction": "none",
+          "intent": null,
+          "label": null,
+          "style": {},
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "relationId": "00000000-0000-4000-8000-000000000019",
+          "relationVersion": 1,
+          "sourceObjectId": "66666666-6666-4666-8666-666666666666",
+          "targetObjectId": "88888888-8888-4888-8888-888888888888",
+          "direction": "forward",
+          "intent": "parallel",
+          "label": null,
+          "style": {},
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "relationId": "00000000-0000-4000-8000-000000000040",
+          "relationVersion": 1,
+          "sourceObjectId": "66666666-6666-4666-8666-666666666666",
+          "targetObjectId": "66666666-6666-4666-8666-666666666666",
+          "direction": "none",
+          "intent": null,
+          "label": "retry",
+          "style": {
+            "geometry": {
+              "route": {
+                "mode": "loop",
+                "side": "right",
+                "extent": 80
+              },
+              "schema": "boarderless.relation-geometry.v1",
+              "labelPlacement": {
+                "mode": "auto"
+              }
+            }
+          },
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "relationId": "00000000-0000-4000-8000-000000000042",
+          "relationVersion": 1,
+          "sourceObjectId": "66666666-6666-4666-8666-666666666666",
+          "targetObjectId": "66666666-6666-4666-8666-666666666666",
+          "direction": "forward",
+          "intent": null,
+          "label": null,
+          "style": {
+            "geometry": {
+              "route": {
+                "mode": "auto"
+              },
+              "schema": "boarderless.relation-geometry.v1",
+              "labelPlacement": {
+                "mode": "auto"
+              }
+            }
+          },
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "relationId": "00000000-0000-4000-8000-000000000052",
+          "relationVersion": 3,
+          "sourceObjectId": "00000000-0000-4000-8000-000000000050",
+          "targetObjectId": "00000000-0000-4000-8000-000000000050",
+          "direction": "forward",
+          "intent": null,
+          "label": null,
+          "style": {
+            "geometry": {
+              "route": {
+                "mode": "loop",
+                "side": "right",
+                "extent": 80
+              },
+              "schema": "boarderless.relation-geometry.v1",
+              "labelPlacement": {
+                "mode": "auto"
+              }
+            }
+          },
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "relationId": "00000000-0000-4000-8000-000000000108",
+          "relationVersion": 3,
+          "sourceObjectId": "00000000-0000-4000-8000-000000000104",
+          "targetObjectId": "88888888-8888-4888-8888-888888888888",
+          "direction": "forward",
+          "intent": null,
+          "label": null,
+          "style": {},
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "relationId": "00000000-0000-4000-8000-000000000106",
+          "relationVersion": 3,
+          "sourceObjectId": "66666666-6666-4666-8666-666666666666",
+          "targetObjectId": "00000000-0000-4000-8000-000000000104",
+          "direction": "forward",
+          "intent": "flow",
+          "label": "call",
+          "style": {},
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "relationId": "00000000-0000-4000-8000-000000000129",
+          "relationVersion": 3,
+          "sourceObjectId": "88888888-8888-4888-8888-888888888888",
+          "targetObjectId": "00000000-0000-4000-8000-000000000127",
+          "direction": "forward",
+          "intent": null,
+          "label": null,
+          "style": {},
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "relationId": "00000000-0000-4000-8000-000000000131",
+          "relationVersion": 3,
+          "sourceObjectId": "00000000-0000-4000-8000-000000000127",
+          "targetObjectId": "66666666-6666-4666-8666-666666666666",
+          "direction": "forward",
+          "intent": null,
+          "label": null,
+          "style": {},
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "relationId": "00000000-0000-4000-8000-000000000154",
+          "relationVersion": 3,
+          "sourceObjectId": "00000000-0000-4000-8000-000000000150",
+          "targetObjectId": "88888888-8888-4888-8888-888888888888",
+          "direction": "both",
+          "intent": null,
+          "label": null,
+          "style": {},
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "relationId": "00000000-0000-4000-8000-000000000152",
+          "relationVersion": 3,
+          "sourceObjectId": "66666666-6666-4666-8666-666666666666",
+          "targetObjectId": "00000000-0000-4000-8000-000000000150",
+          "direction": "both",
+          "intent": null,
+          "label": null,
+          "style": {},
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "relationId": "00000000-0000-4000-8000-000000000177",
+          "relationVersion": 3,
+          "sourceObjectId": "00000000-0000-4000-8000-000000000173",
+          "targetObjectId": "88888888-8888-4888-8888-888888888888",
+          "direction": "none",
+          "intent": null,
+          "label": null,
+          "style": {},
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "relationId": "00000000-0000-4000-8000-000000000175",
+          "relationVersion": 3,
+          "sourceObjectId": "66666666-6666-4666-8666-666666666666",
+          "targetObjectId": "00000000-0000-4000-8000-000000000173",
+          "direction": "none",
+          "intent": null,
+          "label": null,
+          "style": {},
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "relationId": "00000000-0000-4000-8000-000000000198",
+          "relationVersion": 3,
+          "sourceObjectId": "66666666-6666-4666-8666-666666666666",
+          "targetObjectId": "00000000-0000-4000-8000-000000000196",
+          "direction": "forward",
+          "intent": null,
+          "label": null,
+          "style": {},
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "relationId": "00000000-0000-4000-8000-000000000200",
+          "relationVersion": 3,
+          "sourceObjectId": "00000000-0000-4000-8000-000000000196",
+          "targetObjectId": "66666666-6666-4666-8666-666666666666",
+          "direction": "forward",
+          "intent": null,
+          "label": null,
+          "style": {},
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "relationId": "00000000-0000-4000-8000-000000000221",
+          "relationVersion": 1,
+          "sourceObjectId": "66666666-6666-4666-8666-666666666666",
+          "targetObjectId": "00000000-0000-4000-8000-000000000219",
+          "direction": "forward",
+          "intent": null,
+          "label": null,
+          "style": {},
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "relationId": "00000000-0000-4000-8000-000000000223",
+          "relationVersion": 1,
+          "sourceObjectId": "00000000-0000-4000-8000-000000000219",
+          "targetObjectId": "88888888-8888-4888-8888-888888888888",
+          "direction": "forward",
+          "intent": null,
+          "label": null,
+          "style": {},
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        },
+        {
+          "relationId": "00000000-0000-4000-8000-000000000238",
+          "relationVersion": 1,
+          "sourceObjectId": "66666666-6666-4666-8666-666666666666",
+          "targetObjectId": "88888888-8888-4888-8888-888888888888",
+          "direction": "forward",
+          "intent": null,
+          "label": null,
+          "style": {},
+          "createdAt": "2026-10-02T00:00:00.000Z",
+          "updatedAt": "2026-10-02T00:00:00.000Z"
+        }
+      ],
+      "canvasStyle": {
+        "schemaVersion": 1,
+        "backgroundToken": "default",
+        "gridStyle": {
+          "pattern": "lines",
+          "colorToken": "auto"
+        }
+      },
+      "canvasStyleVersion": 0,
+      "sequenceDiagrams": [],
+      "sequenceDiagramsVersion": 0
+    }
+  }
+}

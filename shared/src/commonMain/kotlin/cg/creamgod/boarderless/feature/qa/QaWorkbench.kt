@@ -3,6 +3,7 @@ package cg.creamgod.boarderless.feature.qa
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,7 +27,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -64,10 +64,11 @@ fun QaWorkbenchHost(runtime: QaRuntime) {
 
     Box(modifier = Modifier.fillMaxSize()) {
         GlassSurface(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(top = 8.dp, end = 10.dp),
+            modifier =
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .padding(top = 8.dp, end = 10.dp),
         ) {
             ShellButton(
                 label = Strings.qa.openWorkbench(),
@@ -82,7 +83,10 @@ fun QaWorkbenchHost(runtime: QaRuntime) {
 }
 
 @Composable
-private fun QaWorkbench(runtime: QaRuntime, onClose: () -> Unit) {
+private fun QaWorkbench(
+    runtime: QaRuntime,
+    onClose: () -> Unit,
+) {
     val colors = BoarderLessTheme.colors
     val scope = rememberCoroutineScope()
     val questions = rememberQaQuestions()
@@ -102,26 +106,28 @@ private fun QaWorkbench(runtime: QaRuntime, onClose: () -> Unit) {
     var generalNotes by remember { mutableStateOf("") }
     var feedback by remember { mutableStateOf(Strings.qa.developmentOnly()) }
 
-    fun draft(): QaReportDraft = QaReportDraft(
-        title = title,
-        version = version,
-        platform = platform,
-        deviceAndOrientation = device,
-        tester = tester,
-        date = date,
-        scope = reportScope,
-        exclusions = exclusions,
-        automatedEvidence = automatedEvidence,
-        generalNotes = generalNotes,
-        questions = questions.map { question ->
-            QaQuestionResult(
-                question = question,
-                answer = answers[question.id] ?: QaAnswer.Pending,
-                note = notes[question.id].orEmpty(),
-            )
-        },
-        screenshots = screenshots.toList(),
-    )
+    fun draft(): QaReportDraft =
+        QaReportDraft(
+            title = title,
+            version = version,
+            platform = platform,
+            deviceAndOrientation = device,
+            tester = tester,
+            date = date,
+            scope = reportScope,
+            exclusions = exclusions,
+            automatedEvidence = automatedEvidence,
+            generalNotes = generalNotes,
+            questions =
+                questions.map { question ->
+                    QaQuestionResult(
+                        question = question,
+                        answer = answers[question.id] ?: QaAnswer.Pending,
+                        note = notes[question.id].orEmpty(),
+                    )
+                },
+            screenshots = screenshots.toList(),
+        )
 
     fun addScreenshot(action: suspend () -> QaActionResult<QaScreenshot>) {
         scope.launch {
@@ -135,46 +141,55 @@ private fun QaWorkbench(runtime: QaRuntime, onClose: () -> Unit) {
         scope.launch {
             val report = draft()
             val fileName = reportFileName(title, date)
-            val result = when (type) {
-                QaDocumentType.Html -> runtime.exportHtml(
-                    fileName,
-                    report.toQaHtml("docs/產品 QA 品質檢驗 SOP.md"),
-                )
-                QaDocumentType.Pdf -> runtime.exportPdf(fileName, report)
-            }
+            val result =
+                when (type) {
+                    QaDocumentType.Html -> {
+                        runtime.exportHtml(
+                            fileName,
+                            report.toQaHtml("docs/產品 QA 品質檢驗 SOP.md"),
+                        )
+                    }
+
+                    QaDocumentType.Pdf -> {
+                        runtime.exportPdf(fileName, report)
+                    }
+                }
             result.value?.let { generatedDocuments += it }
             feedback = result.message ?: if (result.succeeded) Strings.qa.documentGenerated() else Strings.common.unknownError()
         }
     }
 
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(colors.canvas.copy(alpha = 0.82f))
-            .windowInsetsPadding(WindowInsets.safeDrawing)
-            .padding(14.dp),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(colors.canvas.copy(alpha = 0.82f))
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(14.dp),
         contentAlignment = Alignment.Center,
     ) {
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .semantics {
-                    contentDescription = Strings.qa.closeWorkbench()
-                    role = Role.Button
-                }
-                .clickable(role = Role.Button, onClick = onClose),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .semantics {
+                        contentDescription = Strings.qa.closeWorkbench()
+                        role = Role.Button
+                    }.clickable(role = Role.Button, onClick = onClose),
         )
         GlassSurface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight()
-                .widthIn(max = 980.dp)
-                .pointerInput(Unit) { detectTapGestures(onTap = {}) },
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight()
+                    .widthIn(max = 980.dp)
+                    .pointerInput(Unit) { detectTapGestures(onTap = {}) },
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(18.dp),
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(18.dp),
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -200,10 +215,11 @@ private fun QaWorkbench(runtime: QaRuntime, onClose: () -> Unit) {
                 }
                 Spacer(Modifier.height(8.dp))
                 Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(end = 6.dp),
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(end = 6.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     QaSection(Strings.qa.reportMetadata()) {
@@ -341,15 +357,19 @@ private fun QaWorkbench(runtime: QaRuntime, onClose: () -> Unit) {
 private fun rememberQaQuestions(): List<QaQuestion> = qaQuestionCatalog()
 
 @Composable
-private fun QaSection(title: String, content: @Composable ColumnScope.() -> Unit) {
+private fun QaSection(
+    title: String,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     val colors = BoarderLessTheme.colors
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(colors.canvas.copy(alpha = 0.56f))
-            .border(1.dp, colors.contentBorder, RoundedCornerShape(14.dp))
-            .padding(14.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(colors.canvas.copy(alpha = 0.56f))
+                .border(1.dp, colors.contentBorder, RoundedCornerShape(14.dp))
+                .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         BasicText(title, style = TextStyle(colors.contentText, 14.sp, FontWeight.Bold))
@@ -374,13 +394,14 @@ private fun QaTextField(
             singleLine = singleLine,
             textStyle = TextStyle(colors.contentText, 13.sp),
             cursorBrush = SolidColor(colors.accent),
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = if (singleLine) 42.dp else 74.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(colors.contentSurface)
-                .border(1.dp, colors.contentBorder, RoundedCornerShape(10.dp))
-                .padding(11.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = if (singleLine) 42.dp else 74.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(colors.contentSurface)
+                    .border(1.dp, colors.contentBorder, RoundedCornerShape(10.dp))
+                    .padding(11.dp),
         )
     }
 }
@@ -395,11 +416,12 @@ private fun QaQuestionEditor(
 ) {
     val colors = BoarderLessTheme.colors
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(11.dp))
-            .background(colors.contentSurface)
-            .padding(11.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(11.dp))
+                .background(colors.contentSurface)
+                .padding(11.dp),
         verticalArrangement = Arrangement.spacedBy(7.dp),
     ) {
         BasicText(
@@ -415,12 +437,13 @@ private fun QaQuestionEditor(
         ) {
             QaAnswer.entries.forEach { candidate ->
                 ShellButton(
-                    label = when (candidate) {
-                        QaAnswer.Pending -> Strings.qa.pending()
-                        QaAnswer.Passed -> Strings.qa.pass()
-                        QaAnswer.Failed -> Strings.qa.fail()
-                        QaAnswer.NotApplicable -> Strings.qa.notApplicable()
-                    },
+                    label =
+                        when (candidate) {
+                            QaAnswer.Pending -> Strings.qa.pending()
+                            QaAnswer.Passed -> Strings.qa.pass()
+                            QaAnswer.Failed -> Strings.qa.fail()
+                            QaAnswer.NotApplicable -> Strings.qa.notApplicable()
+                        },
                     accent = answer == candidate,
                     onClick = { onAnswer(candidate) },
                 )
@@ -438,11 +461,12 @@ private fun QaAttachmentEditor(
 ) {
     val colors = BoarderLessTheme.colors
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(11.dp))
-            .background(colors.contentSurface)
-            .padding(10.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(11.dp))
+                .background(colors.contentSurface)
+                .padding(10.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -472,15 +496,28 @@ private fun QaHint(text: String) {
     )
 }
 
-private fun reportFileName(title: String, date: String): String {
-    val safe = title.lowercase().map { character ->
-        when {
-            character.isLetterOrDigit() -> character
-            character == '-' || character == '_' -> character
-            else -> '-'
-        }
-    }.joinToString("").trim('-').take(48).ifBlank { "boarderless-qa" }
-    val suffix = date.map { if (it.isLetterOrDigit() || it == '-') it else '-' }
-        .joinToString("").trim('-').take(20)
+private fun reportFileName(
+    title: String,
+    date: String,
+): String {
+    val safe =
+        title
+            .lowercase()
+            .map { character ->
+                when {
+                    character.isLetterOrDigit() -> character
+                    character == '-' || character == '_' -> character
+                    else -> '-'
+                }
+            }.joinToString("")
+            .trim('-')
+            .take(48)
+            .ifBlank { "boarderless-qa" }
+    val suffix =
+        date
+            .map { if (it.isLetterOrDigit() || it == '-') it else '-' }
+            .joinToString("")
+            .trim('-')
+            .take(20)
     return if (suffix.isBlank()) safe else "$safe-$suffix"
 }

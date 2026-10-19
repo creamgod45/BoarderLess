@@ -45,6 +45,82 @@ test("native picker cancellation completes once and removes the hidden input", (
     assert.equal(input.removed, true);
 });
 
+test("focus before delayed file change must not cancel a successful selection", async () => {
+    const originalSetTimeout = globalThis.setTimeout;
+    const originalClearTimeout = globalThis.clearTimeout;
+    const timers = new Map();
+    let nextTimer = 0;
+    globalThis.setTimeout = (callback, delay) => { const id = ++nextTimer; timers.set(id, { callback, delay }); return id; };
+    globalThis.clearTimeout = id => timers.delete(id);
+    const results = [];
+    try {
+        bridge.pick("delayed-change", (value, error) => results.push({ value, error }));
+        const input = selectedInput;
+        window.dispatchEvent(new Event("focus"));
+        window.dispatchEvent(new Event("focus"));
+        // Native focus may precede file-provider resolution by more than the former 250ms.
+        for (const [id, timer] of [...timers]) {
+            if (timer.delay <= 1000) { timers.delete(id); timer.callback(); }
+        }
+        assert.equal(results.length, 0, "Focus with no File is not evidence of cancellation");
+        assert.notEqual(input.removed, true);
+        input.files = [new File(["abc"], "delayed.png", { type: "image/png" })];
+        input.dispatchEvent(new Event("change"));
+        assert.equal(results.length, 1);
+        assert.equal(JSON.parse(results[0].value).name, "delayed.png");
+        assert.equal(results[0].error, null);
+        assert.equal(input.removed, true);
+        assert.equal(timers.size, 0);
+        bridge.release("delayed-change.file");
+    } finally {
+        bridge.cancel("delayed-change");
+        globalThis.setTimeout = originalSetTimeout;
+        globalThis.clearTimeout = originalClearTimeout;
+    }
+});
+
+test("legacy picker deadline is an error, not a false user cancellation, and cleans up", () => {
+    const originalSetTimeout = globalThis.setTimeout;
+    const originalClearTimeout = globalThis.clearTimeout;
+    const timers = new Map();
+    globalThis.setTimeout = (callback, delay) => { timers.set(1, { callback, delay }); return 1; };
+    globalThis.clearTimeout = id => timers.delete(id);
+    const results = [];
+    try {
+        bridge.pick("deadline", (value, error) => results.push({ value, error }));
+        const input = selectedInput;
+        window.dispatchEvent(new Event("focus"));
+        assert.equal(results.length, 0);
+        const timer = timers.get(1);
+        assert.equal(timer.delay, 120000);
+        timer.callback();
+        assert.equal(results.length, 1);
+        assert.equal(results[0].value, null);
+        assert.match(results[0].error, /timed out/);
+        assert.equal(input.removed, true);
+        assert.equal(timers.size, 0);
+        input.dispatchEvent(new Event("change"));
+        bridge.cancel("deadline");
+        assert.equal(results.length, 1);
+    } finally {
+        bridge.cancel("deadline");
+        globalThis.setTimeout = originalSetTimeout;
+        globalThis.clearTimeout = originalClearTimeout;
+    }
+});
+
+test("explicit UI cancel prevents delayed change and releases deadline", () => {
+    let calls = 0;
+    bridge.pick("ui-cancel", (value, error) => { calls++; assert.equal(value, null); assert.equal(error, null); });
+    const input = selectedInput;
+    window.dispatchEvent(new Event("focus"));
+    bridge.cancel("ui-cancel");
+    input.files = [new File(["abc"], "late.png", { type: "image/png" })];
+    input.dispatchEvent(new Event("change"));
+    assert.equal(calls, 1);
+    assert.equal(input.removed, true);
+});
+
 test("unsupported and oversized files never obtain a retained file handle", async () => {
     for (const [id, file] of [
         ["wrong-type", new File(["abc"], "x.txt", { type: "text/plain" })],

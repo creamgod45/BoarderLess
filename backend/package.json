@@ -14,15 +14,27 @@
     "db:down": "docker compose down",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
+    "deadcode": "tsc --noEmit --noUnusedLocals --noUnusedParameters && bunx knip@5 --no-progress --include files,dependencies,unlisted,unresolved,classMembers,enumMembers,duplicates",
     "fixtures:media": "bun scripts/generate-media-fixtures.ts",
     "fixtures:contract": "bun scripts/generate-contract-fixtures.ts",
-    "fixtures:canvas": "bun scripts/generate-canvas-fixtures.ts"
+    "fixtures:canvas": "bun scripts/generate-canvas-fixtures.ts",
+    "fixtures:preparation": "bun scripts/generate-preparation-fixtures.ts",
+    "fixtures:realtime": "bun scripts/generate-realtime-fixtures.ts",
+    "fixtures:quick-scheme": "bun scripts/generate-quick-scheme-fixtures.ts",
+    "fixtures:canvas-style": "bun scripts/generate-canvas-style-fixtures.ts",
+    "fixtures:graph": "bun scripts/generate-graph-fixtures.ts",
+    "fixtures:sequence": "bun scripts/generate-sequence-fixtures.ts",
+    "fixtures:media-restore": "bun scripts/generate-media-restore-fixtures.ts",
+    "fixtures:all": "bun run fixtures:contract && bun run fixtures:canvas && bun run fixtures:preparation && bun run fixtures:realtime && bun run fixtures:quick-scheme && bun run fixtures:canvas-style && bun run fixtures:graph && bun run fixtures:sequence && bun run fixtures:media-restore",
+    "acceptance:db-restart": "bun scripts/acceptance/db-restart.ts",
+    "acceptance:multi-process": "bun scripts/acceptance/multi-process.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",
     "@fastify/swagger": "^9.9.0",
     "@fastify/swagger-ui": "^6.1.1",
     "@fastify/type-provider-typebox": "^6.1.0",
+    "@fastify/websocket": "11",
     "aws4fetch": "^1.0.20",
     "fastify": "^5.12.5",
     "pino": "^10.3.1",
@@ -31,6 +43,7 @@
   },
   "devDependencies": {
     "@types/bun": "^1.4.2",
+    "@types/ws": "^8.18.2",
     "typescript": "^7.0.2"
   }
 }

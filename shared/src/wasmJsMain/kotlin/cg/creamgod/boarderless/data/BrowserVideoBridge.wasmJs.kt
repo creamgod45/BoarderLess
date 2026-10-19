@@ -1,18 +1,52 @@
 @file:OptIn(kotlin.js.ExperimentalWasmJsInterop::class)
+
 package cg.creamgod.boarderless.data
+
 @JsFun("(id, mime) => globalThis.boarderlessVideo.create(id, mime)")
-internal actual external fun browserVideoCreate(id: String, mime: String)
+internal actual external fun browserVideoCreate(
+    id: String,
+    mime: String,
+)
+
 @JsFun("(id, bytes) => globalThis.boarderlessVideo.append(id, bytes)")
-internal actual external fun browserVideoAppend(id: String, bytes: String)
+internal actual external fun browserVideoAppend(
+    id: String,
+    bytes: String,
+)
+
 @JsFun("(id, state, done) => globalThis.boarderlessVideo.open(id, state, done)")
-internal actual external fun browserVideoOpen(id: String, state: (String) -> Unit, done: (String?) -> Unit)
+internal actual external fun browserVideoOpen(
+    id: String,
+    state: (String) -> Unit,
+    done: (String?) -> Unit,
+)
+
 @JsFun("(id, action, value, done) => globalThis.boarderlessVideo.command(id, action, value, done)")
-internal actual external fun browserVideoCommand(id: String, action: String, value: Double, done: (String?) -> Unit)
+internal actual external fun browserVideoCommand(
+    id: String,
+    action: String,
+    value: Double,
+    done: (String?) -> Unit,
+)
+
 @JsFun("(id, request, done) => globalThis.boarderlessVideo.frame(id, request, done)")
-internal actual external fun browserVideoFrame(id: String, request: String, done: (String?, String?) -> Unit)
+internal actual external fun browserVideoFrame(
+    id: String,
+    request: String,
+    done: (String?, String?) -> Unit,
+)
+
 @JsFun("(id, request) => globalThis.boarderlessVideo.cancelFrame(id, request)")
-internal actual external fun browserVideoCancelFrame(id: String, request: String)
+internal actual external fun browserVideoCancelFrame(
+    id: String,
+    request: String,
+)
+
 @JsFun("(id, attached) => globalThis.boarderlessVideo.attached(id, attached)")
-internal actual external fun browserVideoAttached(id: String, attached: Boolean)
+internal actual external fun browserVideoAttached(
+    id: String,
+    attached: Boolean,
+)
+
 @JsFun("(id) => globalThis.boarderlessVideo.release(id)")
 internal actual external fun browserVideoRelease(id: String)

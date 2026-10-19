@@ -26,7 +26,7 @@ Use the run configurations provided by the run widget in your IDE's toolbar. You
   - JS target (slower, supports older browsers): `./gradlew :webApp:jsBrowserDevelopmentRun`
 - iOS app: open the [/iosApp](./iosApp) directory in Xcode and run it from there. The simulator uses
   `127.0.0.1:3000` on the simulator; physical iPhone builds use the current development LAN host
-  `192.168.68.67:3000` via the `sdk=iphoneos*` setting in `iosApp/Configuration/Config.xcconfig`.
+  `192.168.68.65:3000` via the `sdk=iphoneos*` setting in `iosApp/Configuration/Config.xcconfig`.
   For another network, change that device setting or explicitly override `BOARDERLESS_BACKEND_HOST`
   when building. Rebuild/reinstall after changing it; allow Local Network access on the iPhone.
   The API and the storage host issued in signed tickets must both be reachable from the device.

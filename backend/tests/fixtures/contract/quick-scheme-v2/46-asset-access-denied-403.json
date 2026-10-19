@@ -1,0 +1,110 @@
+{
+  "description": "非來源 workspace 成員：403 asset_access_denied（持有 UUID 不等於授權）",
+  "request": {
+    "method": "PUT",
+    "path": "/api/v1/users/me/quick-schemes/00000000-0000-4000-8000-000000000048",
+    "headers": {
+      "if-none-match": "*",
+      "idempotency-key": "00000000-0000-4000-8000-000000000049"
+    },
+    "body": {
+      "resourceVersion": 2,
+      "name": "Foreign",
+      "schemaVersion": 4,
+      "payload": {
+        "format": "boarderless/selection",
+        "version": 4,
+        "nodes": [
+          {
+            "originalId": "n1",
+            "x": 0,
+            "y": 0,
+            "width": 240,
+            "height": 120,
+            "rotationDegrees": 0,
+            "text": "Plan",
+            "colorToken": "paper",
+            "shapeToken": "rounded",
+            "parentOriginalId": null,
+            "locked": false,
+            "zOffset": 0,
+            "vectorPath": null
+          }
+        ],
+        "groups": [],
+        "media": [
+          {
+            "originalId": "m1",
+            "x": 0,
+            "y": 200,
+            "width": 320,
+            "height": 180,
+            "rotationDegrees": 0,
+            "assetId": "00000000-0000-4000-8000-000000000022",
+            "mediaKind": "image",
+            "altText": "diagram",
+            "thumbnailAssetId": null,
+            "parentOriginalId": null,
+            "locked": false,
+            "zOffset": 1
+          },
+          {
+            "originalId": "m2",
+            "x": 400,
+            "y": 200,
+            "width": 320,
+            "height": 180,
+            "rotationDegrees": 0,
+            "assetId": "00000000-0000-4000-8000-000000000023",
+            "mediaKind": "video",
+            "altText": "",
+            "thumbnailAssetId": "00000000-0000-4000-8000-000000000024",
+            "parentOriginalId": null,
+            "locked": false,
+            "zOffset": 2
+          }
+        ],
+        "relations": [
+          {
+            "sourceId": "n1",
+            "targetId": "m1",
+            "direction": "Forward",
+            "intent": null,
+            "label": null,
+            "geometry": null
+          }
+        ]
+      },
+      "assetBindings": [
+        {
+          "assetId": "00000000-0000-4000-8000-000000000022",
+          "sourceWorkspaceId": "00000000-0000-4000-8000-000000000019",
+          "kind": "original"
+        },
+        {
+          "assetId": "00000000-0000-4000-8000-000000000023",
+          "sourceWorkspaceId": "00000000-0000-4000-8000-000000000019",
+          "kind": "original"
+        },
+        {
+          "assetId": "00000000-0000-4000-8000-000000000024",
+          "sourceWorkspaceId": "00000000-0000-4000-8000-000000000019",
+          "kind": "thumbnail"
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 403,
+    "headers": {
+      "cache-control": "private, no-store"
+    },
+    "body": {
+      "error": {
+        "code": "asset_access_denied",
+        "message": "No read access to a source workspace of the referenced assets"
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

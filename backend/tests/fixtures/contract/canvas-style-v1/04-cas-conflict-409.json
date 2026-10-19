@@ -1,0 +1,55 @@
+{
+  "description": "expectedCanvasStyleVersion 過期：409 canvas_style_version_conflict + 權威 style 與 checkpoint",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "66666666-6666-4666-8666-666666666666",
+      "transactionId": "77777777-7777-4777-8777-777777777777",
+      "baseVersion": 1,
+      "operations": [
+        {
+          "operationId": "88888888-8888-4888-8888-888888888888",
+          "clientSeq": 1,
+          "kind": "update_canvas_style",
+          "payload": {
+            "expectedCanvasStyleVersion": 0,
+            "canvasStyle": {
+              "schemaVersion": 1,
+              "backgroundToken": "default",
+              "gridStyle": {
+                "pattern": "lines",
+                "colorToken": "auto"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 409,
+    "body": {
+      "status": "conflict",
+      "conflicts": [],
+      "workspaceVersion": 1,
+      "lastServerSeq": 1,
+      "missingOperations": [],
+      "code": "canvas_style_version_conflict",
+      "canvasStyle": {
+        "expectedVersion": 0,
+        "actualVersion": 1,
+        "canvasStyle": {
+          "schemaVersion": 1,
+          "backgroundToken": "#204060",
+          "gridStyle": {
+            "pattern": "dots",
+            "colorToken": "auto"
+          }
+        },
+        "canvasStyleVersion": 1
+      }
+    }
+  }
+}

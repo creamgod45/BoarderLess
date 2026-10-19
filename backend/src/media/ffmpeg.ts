@@ -11,7 +11,8 @@ export class MediaToolUnavailableError extends Error {
 export interface ProbeResult {
   formatName: string
   durationMs: number | null
-  video: { width: number; height: number; codec: string } | null
+  /** width / height 為編碼（儲存）尺寸；rotationDegrees 來自 display matrix 或舊版 rotate tag */
+  video: { width: number; height: number; codec: string; rotationDegrees: number | null } | null
   hasAudio: boolean
 }
 
@@ -22,6 +23,12 @@ interface ExecResult {
 }
 
 const MAX_OUTPUT = 1024 * 1024
+
+function rotationOf(stream: { side_data_list?: { rotation?: number | string }[]; tags?: { rotate?: string } }): number | null {
+  const raw = stream.side_data_list?.find((d) => d.rotation !== undefined)?.rotation ?? stream.tags?.rotate
+  const degrees = Number(raw)
+  return raw === undefined || !Number.isFinite(degrees) ? null : degrees
+}
 
 /**
  * 外部媒體工具。每次呼叫都是獨立 child process，不阻塞 event loop；
@@ -47,7 +54,15 @@ export class MediaTools {
     try {
       const data = JSON.parse(res.stdout) as {
         format?: { format_name?: string; duration?: string }
-        streams?: { codec_type?: string; codec_name?: string; width?: number; height?: number; duration?: string }[]
+        streams?: {
+          codec_type?: string
+          codec_name?: string
+          width?: number
+          height?: number
+          duration?: string
+          side_data_list?: { rotation?: number | string }[]
+          tags?: { rotate?: string }
+        }[]
       }
       const streams = data.streams ?? []
       const video = streams.find((s) => s.codec_type === 'video' && (s.width ?? 0) > 0 && (s.height ?? 0) > 0)
@@ -55,7 +70,9 @@ export class MediaTools {
       return {
         formatName: data.format?.format_name ?? '',
         durationMs: Number.isFinite(seconds) && seconds > 0 ? Math.round(seconds * 1000) : null,
-        video: video ? { width: video.width!, height: video.height!, codec: video.codec_name ?? '' } : null,
+        video: video
+          ? { width: video.width!, height: video.height!, codec: video.codec_name ?? '', rotationDegrees: rotationOf(video) }
+          : null,
         hasAudio: streams.some((s) => s.codec_type === 'audio'),
       }
     } catch {

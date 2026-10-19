@@ -1,7 +1,9 @@
 @file:OptIn(kotlin.js.ExperimentalWasmJsInterop::class)
+
 package cg.creamgod.boarderless.data
 
-@JsFun("""(id, changed) => {
+@JsFun(
+    """(id, changed) => {
     const owners = globalThis.boarderlessMediaActivityOwners || (globalThis.boarderlessMediaActivityOwners = new Map());
     if (owners.has(id)) throw new Error('Activity owner already bound');
     let hiddenByPage = false, frozen = false;
@@ -23,12 +25,18 @@ package cg.creamgod.boarderless.data
         window.removeEventListener('pageshow', show);
     });
     refresh();
-}""")
-internal actual external fun browserBindMediaActivity(ownerId: String, onChange: (Boolean) -> Unit)
+}""",
+)
+internal actual external fun browserBindMediaActivity(
+    ownerId: String,
+    onChange: (Boolean) -> Unit,
+)
 
-@JsFun("""(id) => {
+@JsFun(
+    """(id) => {
     const owners = globalThis.boarderlessMediaActivityOwners;
     const dispose = owners && owners.get(id);
     if (dispose) { owners.delete(id); dispose(); }
-}""")
+}""",
+)
 internal actual external fun browserUnbindMediaActivity(ownerId: String)

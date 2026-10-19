@@ -23,9 +23,10 @@ class GroupDropTargetTest {
 
     @Test
     fun rotatedGroupUsesItsActualSilhouetteInsteadOfItsAxisAlignedBounds() {
-        val rotated = group("rotated", 100f, 100f, 200f, 100f, z = 1).copy(
-            transform = CanvasTransform(Vec2(100f, 100f), CanvasSize(200f, 100f), rotationDegrees = 45f),
-        )
+        val rotated =
+            group("rotated", 100f, 100f, 200f, 100f, z = 1).copy(
+                transform = CanvasTransform(Vec2(100f, 100f), CanvasSize(200f, 100f), rotationDegrees = 45f),
+            )
 
         assertEquals(
             rotated.id,
@@ -45,10 +46,11 @@ class GroupDropTargetTest {
     @Test
     fun multiNodeSelectionUsesItsCombinedVisualCenter() {
         val lane = group("lane", 200f, 100f, 400f, 300f, z = 1)
-        val transforms = listOf(
-            CanvasTransform(Vec2(240f, 140f), CanvasSize(80f, 60f)),
-            CanvasTransform(Vec2(460f, 280f), CanvasSize(120f, 80f), rotationDegrees = 20f),
-        )
+        val transforms =
+            listOf(
+                CanvasTransform(Vec2(240f, 140f), CanvasSize(80f, 60f)),
+                CanvasTransform(Vec2(460f, 280f), CanvasSize(120f, 80f), rotationDegrees = 20f),
+            )
 
         assertEquals(lane.id, groupDropTargetId(listOf(lane), transforms))
         assertNull(

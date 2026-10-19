@@ -14,10 +14,11 @@ internal fun gridSnappedSelectionDelta(
 ): Vec2 {
     require(gridSize > 0f) { "Grid size must be positive" }
     val freePosition = anchorPosition + rawDelta
-    val snappedPosition = Vec2(
-        x = (freePosition.x / gridSize).roundToInt() * gridSize,
-        y = (freePosition.y / gridSize).roundToInt() * gridSize,
-    )
+    val snappedPosition =
+        Vec2(
+            x = (freePosition.x / gridSize).roundToInt() * gridSize,
+            y = (freePosition.y / gridSize).roundToInt() * gridSize,
+        )
     return snappedPosition - anchorPosition
 }
 
@@ -31,10 +32,11 @@ internal fun scaleSelectionTransforms(
     return transforms.mapValues { (_, transform) ->
         val originalCenter = transform.center
         val nextCenter = selectionCenter + (originalCenter - selectionCenter) * factor
-        val nextSize = CanvasSize(
-            width = max(transform.size.width * factor, minimumSize.width),
-            height = max(transform.size.height * factor, minimumSize.height),
-        )
+        val nextSize =
+            CanvasSize(
+                width = max(transform.size.width * factor, minimumSize.width),
+                height = max(transform.size.height * factor, minimumSize.height),
+            )
         transform.copy(
             position = nextCenter - Vec2(nextSize.width / 2f, nextSize.height / 2f),
             size = nextSize,

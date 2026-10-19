@@ -1,0 +1,54 @@
+{
+  "description": "presence_update（world 座標；未知 selection 丟棄）→ 其他 gateway 收到 presence_delta",
+  "transport": "websocket",
+  "subprotocol": "boarderless.v1",
+  "exchange": [
+    {
+      "direction": "client",
+      "frame": {
+        "type": "presence_update",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000043",
+        "cursor": {
+          "x": 120.5,
+          "y": -32
+        },
+        "selectedObjectIds": [
+          "00000000-0000-4000-8000-000000000047",
+          "00000000-0000-4000-8000-000000000465"
+        ],
+        "presenceSeq": 1
+      }
+    },
+    {
+      "direction": "server",
+      "frame": {
+        "type": "presence_delta",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000048",
+        "roomEpoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "roomRevision": 9,
+        "upserts": [
+          {
+            "connectionId": "00000000-0000-4000-8000-000000000466",
+            "userId": "11111111-1111-4111-8111-111111111111",
+            "clientId": "00000000-0000-4000-8000-000000000044",
+            "displayName": "Owner",
+            "role": "owner",
+            "cursor": {
+              "x": 120.5,
+              "y": -32
+            },
+            "selectedObjectIds": [
+              "00000000-0000-4000-8000-000000000047"
+            ],
+            "presenceSeq": 1
+          }
+        ],
+        "removedConnectionIds": []
+      }
+    }
+  ]
+}

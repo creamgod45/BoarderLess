@@ -15,12 +15,13 @@ internal fun marqueeIntersectsTransform(
     val top = min(firstCorner.y, secondCorner.y)
     val right = max(firstCorner.x, secondCorner.x)
     val bottom = max(firstCorner.y, secondCorner.y)
-    val marqueeCorners = listOf(
-        Vec2(left, top),
-        Vec2(right, top),
-        Vec2(right, bottom),
-        Vec2(left, bottom),
-    )
+    val marqueeCorners =
+        listOf(
+            Vec2(left, top),
+            Vec2(right, top),
+            Vec2(right, bottom),
+            Vec2(left, bottom),
+        )
     val objectCorners = rotatedTransformCorners(transform)
     val objectHorizontal = rotateVector(Vec2(1f, 0f), transform.rotationDegrees)
     val objectVertical = rotateVector(Vec2(0f, 1f), transform.rotationDegrees)

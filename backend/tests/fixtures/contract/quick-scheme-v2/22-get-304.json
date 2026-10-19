@@ -1,0 +1,17 @@
+{
+  "description": "If-None-Match 命中：304 無 body",
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/users/me/quick-schemes/00000000-0000-4000-8000-000000000025",
+    "headers": {
+      "if-none-match": "\"fixture-etag-11\""
+    }
+  },
+  "response": {
+    "status": 304,
+    "headers": {
+      "etag": "\"fixture-etag-11\"",
+      "cache-control": "private, no-store"
+    }
+  }
+}

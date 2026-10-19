@@ -17,9 +17,9 @@
         "message": "body/checksum must match pattern \"^sha256:[0-9a-f]{64}$\"",
         "details": [
           {
-            "instancePath": "/checksum",
-            "schemaPath": "#/properties/checksum/pattern",
             "keyword": "pattern",
+            "schemaPath": "#/properties/checksum",
+            "instancePath": "/checksum",
             "params": {
               "pattern": "^sha256:[0-9a-f]{64}$"
             },

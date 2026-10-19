@@ -46,6 +46,57 @@ export interface WorkerConfig {
   gcIntervalMs: number
 }
 
+/** 即時協作 gateway（BACKEND_REALTIME_API_SPEC）；限制同時公布於 realtime-capabilities 並由 gateway 強制 */
+export interface RealtimeConfig {
+  /** false：不掛 WebSocket gateway（REST 照常） */
+  enabled: boolean
+  /** 對外 WebSocket URL；未設定時依 request host / x-forwarded-proto 推導 ws(s)://host/api/v1/realtime */
+  publicUrl: string | null
+  /** 允許的 Origin；`*` 全部允許。沒有 Origin header 的原生 client 允許 */
+  allowedOrigins: string[]
+  ticketTtlSeconds: number
+  authTimeoutMs: number
+  maxMessageBytes: number
+  /** 落後超過此 transaction 數即 resync_required，不無限緩衝 */
+  maxPendingTransactions: number
+  /** socket 待送位元組上限（慢 consumer） */
+  maxBufferedBytes: number
+  /** join 時可直接 catch-up 的 operation 數；超過改 snapshot_required */
+  maxCatchUpOperations: number
+  heartbeatIntervalMs: number
+  presenceTtlMs: number
+  maxSelectionIds: number
+  cursorUpdatesPerSecond: number
+  selectionUpdatesPerSecond: number
+  maxUnauthenticatedSockets: number
+  /** outbox publisher / 安全網輪詢間隔 */
+  publishIntervalMs: number
+  pollIntervalMs: number
+}
+
+export function defaultRealtimeConfig(overrides: Partial<RealtimeConfig> = {}): RealtimeConfig {
+  return {
+    enabled: true,
+    publicUrl: null,
+    allowedOrigins: ['*'],
+    ticketTtlSeconds: 60,
+    authTimeoutMs: 3000,
+    maxMessageBytes: 1_048_576,
+    maxPendingTransactions: 128,
+    maxBufferedBytes: 4 * 1_048_576,
+    maxCatchUpOperations: 1000,
+    heartbeatIntervalMs: 15_000,
+    presenceTtlMs: 45_000,
+    maxSelectionIds: 128,
+    cursorUpdatesPerSecond: 10,
+    selectionUpdatesPerSecond: 4,
+    maxUnauthenticatedSockets: 1000,
+    publishIntervalMs: 100,
+    pollIntervalMs: 2000,
+    ...overrides,
+  }
+}
+
 export interface AppConfig {
   nodeEnv: string
   host: string
@@ -59,6 +110,7 @@ export interface AppConfig {
   storage: StorageConfig
   media: MediaConfig
   worker: WorkerConfig
+  realtime: RealtimeConfig
 }
 
 function required(name: string): string {
@@ -137,6 +189,19 @@ export function loadConfig(): AppConfig {
       ffprobePath: str('FFPROBE_PATH', 'ffprobe'),
       tmpDir: str('MEDIA_TMP_DIR', tmpdir()),
     },
+    realtime: defaultRealtimeConfig({
+      enabled: str('REALTIME_ENABLED', 'true') === 'true',
+      publicUrl: process.env.REALTIME_PUBLIC_URL || null,
+      allowedOrigins: str('REALTIME_ALLOWED_ORIGINS', str('CORS_ORIGINS', '*'))
+        .split(',')
+        .map((o) => o.trim())
+        .filter(Boolean),
+      ticketTtlSeconds: int('REALTIME_TICKET_TTL_SECONDS', 60),
+      heartbeatIntervalMs: int('REALTIME_HEARTBEAT_INTERVAL_MS', 15_000),
+      presenceTtlMs: int('REALTIME_PRESENCE_TTL_MS', 45_000),
+      maxMessageBytes: int('REALTIME_MAX_MESSAGE_BYTES', 1_048_576),
+      maxPendingTransactions: int('REALTIME_MAX_PENDING_TRANSACTIONS', 128),
+    }),
     worker: {
       concurrency: int('WORKER_CONCURRENCY', 2),
       pollIntervalMs: int('WORKER_POLL_INTERVAL_MS', 1000),

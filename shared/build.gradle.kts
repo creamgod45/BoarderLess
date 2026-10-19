@@ -38,21 +38,57 @@ abstract class GenerateI18nStrings : DefaultTask() {
         @Suppress("UNCHECKED_CAST")
         val root = groovy.json.JsonSlurper().parse(englishCatalog.get().asFile, "UTF-8") as Map<String, Any?>
         val pluralForms = setOf("zero", "one", "two", "few", "many", "other")
-        val keywords = setOf(
-            "as", "break", "class", "continue", "do", "else", "false", "for", "fun", "if", "in", "interface",
-            "is", "null", "object", "package", "return", "super", "this", "throw", "true", "try", "typealias",
-            "typeof", "val", "var", "when", "while",
-        )
+        val keywords =
+            setOf(
+                "as",
+                "break",
+                "class",
+                "continue",
+                "do",
+                "else",
+                "false",
+                "for",
+                "fun",
+                "if",
+                "in",
+                "interface",
+                "is",
+                "null",
+                "object",
+                "package",
+                "return",
+                "super",
+                "this",
+                "throw",
+                "true",
+                "try",
+                "typealias",
+                "typeof",
+                "val",
+                "var",
+                "when",
+                "while",
+            )
         val placeholder = Regex("""\{(\w+)\}""")
+
         fun id(name: String) = if (name in keywords) "`$name`" else name
-        fun literal(text: String) = "\"" + text.replace("\\", "\\\\").replace("\"", "\\\"").replace("$", "\\$") + "\""
+
+        fun literal(text: String) = "\"" + text.replace("\\", "\\\\").replace("\"", "\\\"").replace("$", "\\$").replace("\r", "\\r").replace("\n", "\\n").replace("\t", "\\t") + "\""
+
         fun params(vararg texts: String) = texts.flatMap { text -> placeholder.findAll(text).map { it.groupValues[1] } }.distinct()
+
         fun isPlural(value: Map<*, *>) = "other" in value && value.keys.all { it in pluralForms } && value.values.all { it is String }
 
         val out = StringBuilder()
         out.append("// Generated from composeResources/files/i18n/en.json by :shared:generateI18nStrings. Do not edit.\n")
         out.append("@file:Suppress(\"ClassName\", \"unused\")\n\npackage cg.creamgod.boarderless.i18n\n\n")
-        fun emit(name: String, node: Map<*, *>, path: String, indent: String) {
+
+        fun emit(
+            name: String,
+            node: Map<*, *>,
+            path: String,
+            indent: String,
+        ) {
             out.append("${indent}object ${id(name)} {\n")
             node.forEach { (rawKey, value) ->
                 val key = rawKey as String
@@ -69,6 +105,7 @@ abstract class GenerateI18nStrings : DefaultTask() {
                             out.append("${inner}fun ${id(key)}($signature): String = tr(${literal(fullKey)}, ${literal(value)}, $args)\n")
                         }
                     }
+
                     value is Map<*, *> && isPlural(value) -> {
                         val other = value["other"] as String
                         val one = value["one"] as String? ?: other
@@ -78,8 +115,14 @@ abstract class GenerateI18nStrings : DefaultTask() {
                         out.append("${inner}fun ${id(key)}($signature): String =\n")
                         out.append("$inner    trPlural(${literal(fullKey)}, ${literal(one)}, ${literal(other)}, count$args)\n")
                     }
-                    value is Map<*, *> -> emit(key, value, fullKey, inner)
-                    else -> throw GradleException("Unsupported value at $fullKey in en.json")
+
+                    value is Map<*, *> -> {
+                        emit(key, value, fullKey, inner)
+                    }
+
+                    else -> {
+                        throw GradleException("Unsupported value at $fullKey in en.json")
+                    }
                 }
             }
             out.append("$indent}\n")
@@ -91,31 +134,32 @@ abstract class GenerateI18nStrings : DefaultTask() {
     }
 }
 
-val generateI18nStrings = tasks.register<GenerateI18nStrings>("generateI18nStrings") {
-    englishCatalog.set(layout.projectDirectory.file("src/commonMain/composeResources/files/i18n/en.json"))
-    outputDirectory.set(layout.buildDirectory.dir("generated/i18n/commonMain/kotlin"))
-}
+val generateI18nStrings =
+    tasks.register<GenerateI18nStrings>("generateI18nStrings") {
+        englishCatalog.set(layout.projectDirectory.file("src/commonMain/composeResources/files/i18n/en.json"))
+        outputDirectory.set(layout.buildDirectory.dir("generated/i18n/commonMain/kotlin"))
+    }
 
 kotlin {
     listOf(
         iosArm64(),
-        iosSimulatorArm64()
+        iosSimulatorArm64(),
     ).forEach { iosTarget ->
         iosTarget.binaries.framework {
             baseName = "Shared"
             isStatic = true
         }
     }
-    
+
     jvm()
-    
+
     js {
         browser {
             testTask { useKarma { useChromeHeadless() } }
         }
         binaries.executable()
     }
-    
+
     @OptIn(ExperimentalWasmDsl::class)
     wasmJs {
         browser {
@@ -123,30 +167,37 @@ kotlin {
         }
         binaries.executable()
     }
-    
+
     android {
-       namespace = "cg.creamgod.boarderless.shared"
-       compileSdk = libs.versions.android.compileSdk.get().toInt()
-       minSdk = libs.versions.android.minSdk.get().toInt()
-    
-       compilerOptions {
-           jvmTarget = JvmTarget.JVM_11
-       }
-       androidResources {
-           enable = true
-       }
-       withHostTest {
-           isIncludeAndroidResources = true
-       }
-       withDeviceTestBuilder {
-           sourceSetTreeName = "test"
-       }.configure {
-           instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-       }
+        namespace = "cg.creamgod.boarderless.shared"
+        compileSdk =
+            libs.versions.android.compileSdk
+                .get()
+                .toInt()
+        minSdk =
+            libs.versions.android.minSdk
+                .get()
+                .toInt()
+
+        compilerOptions {
+            jvmTarget = JvmTarget.JVM_11
+        }
+        androidResources {
+            enable = true
+        }
+        withHostTest {
+            isIncludeAndroidResources = true
+        }
+        withDeviceTestBuilder {
+            sourceSetTreeName = "test"
+        }.configure {
+            instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        }
     }
-    
+
     sourceSets {
         androidMain.dependencies {
+            implementation(libs.ktor.client.okhttp)
             implementation(libs.androidx.startup.runtime)
             implementation(libs.glide.gifdecoder)
             implementation(libs.compose.uiToolingPreview)
@@ -158,6 +209,13 @@ kotlin {
         commonMain {
             kotlin.srcDir(generateI18nStrings)
         }
+        jvmMain.dependencies {
+            implementation(libs.ktor.client.okhttp)
+        }
+        jvmTest.dependencies {
+            // Actual offscreen canvas/export tests need the host Skia native runtime.
+            runtimeOnly(compose.desktop.currentOs)
+        }
         commonMain.dependencies {
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
@@ -167,6 +225,7 @@ kotlin {
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.androidx.lifecycle.runtimeCompose)
             implementation(libs.ktor.client.core)
+            implementation(libs.ktor.client.websockets)
             implementation(libs.ktor.client.contentNegotiation)
             implementation(libs.ktor.client.engineDefaults)
             implementation(libs.ktor.serialization.kotlinxJson)
@@ -204,7 +263,10 @@ tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
         inputs.property("mediaLiveAcceptance", liveMedia)
         inputs.property("mediaLiveBaseUrl", providers.environmentVariable("BOARDERLESS_MEDIA_LIVE_BASE_URL").orElse("unset"))
         listOf("USER", "WORKSPACE", "ASSET").forEach { field ->
-            inputs.property("mediaLiveDownload$field", providers.environmentVariable("BOARDERLESS_MEDIA_LIVE_DOWNLOAD_$field").orElse("unset"))
+            inputs.property(
+                "mediaLiveDownload$field",
+                providers.environmentVariable("BOARDERLESS_MEDIA_LIVE_DOWNLOAD_$field").orElse("unset"),
+            )
         }
         inputs.files(rootProject.fileTree("backend/tests/fixtures/media"))
         // The backend's current state is not a Gradle input: a cached test report can never
@@ -212,15 +274,26 @@ tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
         outputs.upToDateWhen { liveMedia.get() != "true" }
         outputs.doNotCacheIf("Live media acceptance must actually contact the backend") { liveMedia.get() == "true" }
     }
-    if (name == "jvmTest") doFirst {
-        val testTask = this as org.gradle.api.tasks.testing.Test
-        testTask.systemProperty("boarderless.test.classpath", testTask.classpath.asPath)
+    if (name == "jvmTest") {
+        doFirst {
+            val testTask = this as org.gradle.api.tasks.testing.Test
+            testTask.systemProperty("boarderless.test.classpath", testTask.classpath.asPath)
+        }
     }
 }
 
 // Karma loads these scripts outside the compiled Kotlin test bundle.
 tasks.matching { it.name == "jsBrowserTest" || it.name == "wasmJsBrowserTest" }.configureEach {
+    inputs.dir(layout.projectDirectory.dir("karma.config.d"))
     inputs.file(rootProject.layout.projectDirectory.file("webApp/src/webMain/resources/media-import.js"))
+    inputs.file(rootProject.layout.projectDirectory.file("webApp/src/webMain/resources/image-export.js"))
+    inputs.file(rootProject.layout.projectDirectory.file("webApp/src/webMain/resources/durable-records.js"))
+    inputs.file(rootProject.layout.projectDirectory.file("webApp/src/webMain/resources/local-originals.js"))
+    inputs.file(layout.projectDirectory.file("src/webTest/resources/local-originals-fixture.js"))
+    inputs.file(rootProject.layout.projectDirectory.file("webApp/src/webMain/resources/scheme-bundle.js"))
+    inputs.file(layout.projectDirectory.file("src/webTest/resources/scheme-bundle-fixture.js"))
+    inputs.file(layout.projectDirectory.file("src/webTest/resources/durable-records-fixture.js"))
+    inputs.file(layout.projectDirectory.file("src/webTest/resources/image-export-fixture.js"))
     inputs.file(rootProject.layout.projectDirectory.file("webApp/src/webMain/resources/video-playback.js"))
     inputs.file(layout.projectDirectory.file("src/webTest/resources/media-import-fixture.js"))
 }

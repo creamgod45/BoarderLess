@@ -20,6 +20,9 @@ export function registerErrorHandler(app: FastifyInstance): void {
     if (error instanceof AppError) {
       return send(error.statusCode, error.code, error.message, error.details)
     }
+    if ((error as Partial<FastifyError>).code === 'FST_ERR_CTP_BODY_TOO_LARGE') {
+      return send(413, 'payload_too_large', 'Request body is too large')
+    }
     if ('validation' in error && error.validation) {
       return send(400, 'validation_error', error.message, error.validation)
     }

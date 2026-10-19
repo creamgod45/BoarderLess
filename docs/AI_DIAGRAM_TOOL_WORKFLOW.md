@@ -1,5 +1,8 @@
 # AI 圖形規劃與工具流程
 
+2026-10-08 選填請求參數：AI圖形草稿與AI畫布理解新增「最大輸出 Tokens」及「Temperature」欄位，兩者初始皆空白。移除UI固定4096輸出tokens；AiRequestBodyProfile改nullable，普通請求與工具初次／後續round共用同一wire參數組裝。有填值才送數值；留空或僅空白完全省略key，不送null、不補預設。Token名稱維持明確protocol mapping：OpenAI Chat為max_completion_tokens，Anthropic Messages為max_tokens。輸入tokens須正整數且可由Int表示，temperature須有限數值；非法輸入顯示提示且停用送出，不默默轉成省略或預設值，未自行限制tokens為65536或temperature為某個供應商區間。參數跟隨不可變server profile，整個工具流程每輪一致，畫布理解編輯參數會重置approval。此變更沒有發出付費AI請求，也不代替供應商／模型的實際相容性驗收。
+
+驗證：獨立建置目錄、停用build cache／incremental編譯，完整JVM1026 tests（6既有skip）與Desktop52 tests零failures／errors；新增三項參數解析與兩protocol普通／工具初次及後續round wire tests，涵蓋空白、省略任一欄、temperature=0、65537 tokens不被自行拒絕及非法輸入。Desktop distributable通過並更新desktopApp/build/verified/BoarderLess.app，git diff --check通過。
 2026-10-06 APP工具任務與批次review已接線：Ai理解視窗新增「AI圖形草稿」入口，editor且提交佇列／recovery安全時可用，延續canvas modal／鍵盤隔離。AiDiagramToolDialog提供selection或whole≤128objects、模型／完整endpoint／認證／version／local HTTP、任務，key僅記憶體，沒有設定／key持久化；Router工具支援需真任務驗證，初始capability僅APP既有七shape／preset node colors／group，selfLoop=false，未宣稱pen/media/v2能力。每個真正HTTP都先展示完整不可變body＋endpoint/model並等待新checkbox＋send，拒絕／取消／dispose釋放pending gate；gate依同一review實例而非round值同意，stale／double按鈕不能批准下一輪。session／history／role／queue／recovery變化同步guard並取消清plan；backend fresh check失敗以WorkspaceBackend typed status區分AI本身HTTP。
 
 完成後唯本機preview：call items中文／英文操作名稱、逐項include/exclude→立即重算domain dependencies/version、node shapes/color/group/rotation fit preview與完整文字／geometry／relation direction/label/intent inventory，Double bounds避免大座標Float overflow；小圖連線是中心直線概略，不宣称正式geometry或實機視覺已驗。AiDiagramDraft→loop Ready新增本機logical refs mapping，維持read N及new A等名稱，UUID僅UI、未進任何provider body／safe log。final無proposal顯「未提出可套用變更」，不假稱產生圖形。
@@ -96,3 +99,27 @@ Router／model 必須另通過 **tool calling** 能力驗收；文字串流相�
 5. 真實Router與四平台工具任務驗收：建立流程圖、群組／連線／intent、已有圖排版、錯誤修案、取消／撤權／衝突／未知ACK；人工視覺與遮擋按QA SOP，效能最後。
 
 依 OpenAI Docs 核對 [function calling](https://developers.openai.com/api/docs/guides/function-calling)：模型請求工具，由應用程式執行並傳回result；不是模型取得任意後端權限。本文件工具名稱／草稿政策是BoarderLess規劃，不是OpenAI官方工具或已部署服務。Claude wire schema待工具實作時核對其正式文件。
+# 2026-10-08：本機自循環草稿與可交付 geometry
+
+AI 圖形草稿使用和手動畫布一致的 supportsRelationGeometry repository 旗標設定 selfLoops，不再固定 false。Desktop 本機文件支援時，list_diagram_capabilities 會宣告 true，create_relations 可為同一核准節點建立自循環；目前正式後端仍宣告 false，其來源／目標不得相同的限制未變更，不能把本機支援視為後端已交付。
+
+自循環必須保存明確 RelationGeometry / RelationRoute.Loop，不能只依靠 live renderer 的隱式路徑。這使 Clipboard／方案簿的 v6 驗證與 preview 可接受 AI 產出的自循環。每個節點既有及同批新增的自循環會計入 extent，沿用手動畫布的 80 + count × 32（上限 4096）規則。
+
+工具只建立隔離草稿，仍需每輪送出審閱／授權及最後 proposal 審閱／套用；沒有增加供應商呼叫或跳過範圍、版本、權限檢查。共用測試驗雙自循環、隔離草稿、fresh-authority 最後審核、路徑與 Clipboard roundtrip、Undo／Redo；native 測試使用實際 DesktopFileWorkspaceRepository 與方案簿，保存後新 repository 重開，驗 UTF-8 label、geometry、收據與方案預覽路徑。這些不是 GUI 操作、真實 AI Router 或正式多人協作驗收。
+
+上述自循環最終聚焦 JVM 24/24 pass、0 failed/skipped；JS／Wasm／Android／iOS simulator 共用程式碼編譯通過（1m48s）。驗證後已透過清理腳本刪除本機建置輸出，未保留新打包成品。
+# 2026-10-08：在既有連線插入節點的 AI 草稿工具
+
+APP 的能力集合新增 relationNodeInsertion。啟用時 OpenAI Chat／Claude Messages 提供第九個工具 insert_node_on_relation；保留既有八個工具，不自行推測 Router 支援。工具輸入為核准 relation 代號、新節點完整規格（id/text/x/y/width/height/shape/color，parent 選填）及兩條新關係的 logical ID。位置與尺寸必須明確提供，不依版面猜執行流程。
+
+手動插入與 AI 共用 relationNodeInsertion 交易 factory：新增節點、刪除原 relation、建立兩条新 relation。Backward 依實際流向反轉來源／目標並轉為 Forward，None／Both／Forward 保留方向；原 label/intent 只放第一段，顏色保留。新連線依明確新節點位置 auto reroute，未宣稱保留原 waypoints；Undo 留有完整原 relation snapshot，可還原 geometry 與屬性。既有正式 create_object / delete_relations / create_relation / create_relation 契約不變，沒有新增 backend operation kind。
+
+工具僅能使用目前核准或草稿內的 relation/node/group 代號，鎖定及時序圖保護依既有 gate。原 relation 代號移除後仍保留為 reserved，整次任务不能重用，避免後續回合混淆。拒絕的工具呼叫不發佈新 UUID／references／proposal。每輪 HTTP body 仍分別審閱及授權，整份草稿仍須最後審核／fresh authority／套用。
+
+可以描述：「先讀取核准圖形，在 E1 插入『驗證』節點，保留原有方向與條件，不修改其他物件，只產生草稿供我審核。」E1 必須以實際工具 graph 的 relation 代號為準。
+
+2026-10-09 補齊插入時的最高圖層配置及原 relation 版本／端點座標／圖層範圍檢查，與手動插入一致，失敗不發佈草稿。最終聚焦 JVM 48/48 pass、0 failed/skipped，兩協定 MockEngine 工具迴圈驗逐輪授權；JS／Wasm／Android／iOS simulator 共用程式碼編譯通過（1m35s）。本機建置資料約124.4 MiB已自動清理；未驗真實 Router、GUI 或正式後端交易。
+
+# 2026-10-09：說明用途與開始前代號
+
+入口改名為「AI 協助編輯圖形（草稿）」。開始前核准列表顯示與真正工具共用排序的 N／E aliases、箭頭方向與關係標籤，供任務描述使用；超過256條核准關係不能開始。AI 收到核准物件的結構資料，沒有圖片像素或素材 URL 欄位，因此不能推斷圖片內容。連線插入的審核項目已有中英文操作名稱。JVM聚焦33/33 pass、四平台共用編譯通過（1m34s），尚未驗真正 GUI／Router。建置資料已自動清除。

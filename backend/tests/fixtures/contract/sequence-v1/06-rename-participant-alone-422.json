@@ -1,0 +1,39 @@
+{
+  "description": "只改 participant 節點文字：label 不一致，拒絕",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "00000000-0000-4000-8000-000000000031",
+      "transactionId": "00000000-0000-4000-8000-000000000032",
+      "baseVersion": 1,
+      "operations": [
+        {
+          "operationId": "00000000-0000-4000-8000-000000000033",
+          "clientSeq": 1,
+          "kind": "update_object",
+          "payload": {
+            "objectId": "77777777-7777-4777-8777-777777777777",
+            "properties": {
+              "text": "Browser"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 422,
+    "body": {
+      "error": {
+        "code": "invalid_sequence_binding",
+        "message": "Sequence diagram metadata does not match the graph after this transaction",
+        "details": {
+          "containerId": "66666666-6666-4666-8666-666666666666"
+        }
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

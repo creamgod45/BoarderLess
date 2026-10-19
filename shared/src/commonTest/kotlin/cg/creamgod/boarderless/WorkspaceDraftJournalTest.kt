@@ -15,10 +15,52 @@ class WorkspaceDraftJournalTest {
     private val scope = PendingSubmissionScope("https://qa.invalid/api/v1", "actor", "client", "workspace")
     private val baseline = Workspace(WorkspaceId("workspace"), "Fixture")
     private val session = WorkspaceSession("actor", "client", WorkspaceMemberRole.Editor, 8, 19, baseline)
-    private fun create(text: String = "Draft") = CreateObjectsOperation("create", listOf(TextNode(CanvasObjectId("node"),
-        transform = CanvasTransform(Vec2.Zero, CanvasSize(240f, 120f)), text = text)))
-    private fun apply(operation: WorkspaceOperation, before: Workspace) = (operation.applyTo(before) as OperationResult.Applied).workspace
+
+    private fun create(text: String = "Draft") =
+        CreateObjectsOperation(
+            "create",
+            listOf(
+                TextNode(
+                    CanvasObjectId("node"),
+                    transform = CanvasTransform(Vec2.Zero, CanvasSize(240f, 120f)),
+                    text = text,
+                ),
+            ),
+        )
+
+    private fun apply(
+        operation: WorkspaceOperation,
+        before: Workspace,
+    ) = (operation.applyTo(before) as OperationResult.Applied).workspace
+
     private fun edit(before: String = "Draft") = EditTextOperation("edit", listOf(TextChange(CanvasObjectId("node"), 1, before, "Edited")))
+
+    @Test fun failedChunkOrManifestPublicationNeverReclaimsPriorReadableJournal() {
+        for (prefix in listOf("wdc1.", "wdj1.")) {
+            val memory = InMemorySettings()
+            var dropWrites = false
+            val settings =
+                object : Settings by memory {
+                    override fun putString(
+                        key: String,
+                        value: String,
+                    ) {
+                        if (!(dropWrites && key.startsWith(prefix))) memory.putString(key, value)
+                    }
+                }
+            val store = WorkspaceDraftJournalStore(settings)
+            store.append(scope, session, baseline, create())
+            val saved = assertNotNull(store.load(scope))
+            val originalChunks = memory.keys.filter { it.startsWith("wdc1.") }.associateWith(memory::getStringOrNull)
+            dropWrites = true
+            assertFails { store.quarantine(scope) }
+            assertEquals(saved, store.load(scope))
+            assertEquals(originalChunks, originalChunks.keys.associateWith(memory::getStringOrNull))
+            dropWrites = false
+            store.quarantine(scope)
+            assertEquals(saved.copy(quarantined = true), store.load(scope))
+        }
+    }
 
     @Test fun excessiveSerializedTransactionDepthIsRejectedBeforePublishingChunks() {
         val memory = InMemorySettings()
@@ -37,8 +79,12 @@ class WorkspaceDraftJournalTest {
         val memory = InMemorySettings()
         val store = WorkspaceDraftJournalStore(memory)
         val maximum = 9_007_199_254_740_991L
-        for (invalid in listOf(session.copy(workspaceVersion = -1), session.copy(lastServerSeq = -1),
-            session.copy(workspaceVersion = maximum + 1), session.copy(lastServerSeq = maximum + 1))) {
+        for (invalid in listOf(
+            session.copy(workspaceVersion = -1),
+            session.copy(lastServerSeq = -1),
+            session.copy(workspaceVersion = maximum + 1),
+            session.copy(lastServerSeq = maximum + 1),
+        )) {
             assertFailsWith<IllegalStateException> { store.append(scope, invalid, baseline, create()) }
             assertTrue(memory.keys.isEmpty())
         }
@@ -82,12 +128,13 @@ class WorkspaceDraftJournalTest {
         val manifest = Json.parseToJsonElement(raw).jsonObject
         memory.putString(key, JsonObject(manifest + ("bytes" to JsonPrimitive(1))).toString())
         var chunkReads = 0
-        val counted = object : Settings by memory {
-            override fun getStringOrNull(key: String): String? {
-                if (key.startsWith("wdc1.")) chunkReads++
-                return memory.getStringOrNull(key)
+        val counted =
+            object : Settings by memory {
+                override fun getStringOrNull(key: String): String? {
+                    if (key.startsWith("wdc1.")) chunkReads++
+                    return memory.getStringOrNull(key)
+                }
             }
-        }
         assertFailsWith<BackendContractException> { WorkspaceDraftJournalStore(counted).load(scope) }
         assertEquals(1, chunkReads)
         memory.putString(key, raw)
@@ -96,14 +143,18 @@ class WorkspaceDraftJournalTest {
 
     @Test fun restartPreservesDependentOperationsOriginalIdsAndUnicode() {
         val memory = InMemorySettings()
-        val limited = object : Settings by memory {
-            override fun putString(key: String, value: String) {
-                assertTrue(key.length <= 80)
-                assertTrue(value.length <= 8192)
-                assertFalse(value.lastOrNull()?.let { it in '\uD800'..'\uDBFF' } == true)
-                memory.putString(key, value)
+        val limited =
+            object : Settings by memory {
+                override fun putString(
+                    key: String,
+                    value: String,
+                ) {
+                    assertTrue(key.length <= 80)
+                    assertTrue(value.length <= 8192)
+                    assertFalse(value.lastOrNull()?.let { it in '\uD800'..'\uDBFF' } == true)
+                    memory.putString(key, value)
+                }
             }
-        }
         val first = create("🙂素材".repeat(3000))
         val after = apply(first, baseline)
         val second = edit(first.objects.single().let { (it as TextNode).text })
@@ -135,20 +186,38 @@ class WorkspaceDraftJournalTest {
         val authoritative = session.copy(workspaceVersion = 9, lastServerSeq = 20, workspace = journal.baseWorkspace.copy(version = 9))
         val restored = store.restore(scope, journal.id, authoritative)
         assertEquals(authoritative.workspace, restored.baseWorkspace)
-        assertEquals("Edited", (restored.replay().objects.values.single() as TextNode).text)
+        assertEquals(
+            "Edited",
+            (
+                restored
+                    .replay()
+                    .objects.values
+                    .single() as TextNode
+            ).text,
+        )
     }
 
     @Test fun changedScopeBaselineAndAbandonedWireNeverAutomaticallyRebase() {
         val store = WorkspaceDraftJournalStore(InMemorySettings())
         store.append(scope, session, baseline, create())
         val journal = assertNotNull(store.load(scope))
-        for (changed in listOf(session.copy(userId = "other"), session.copy(clientId = "other"),
-            session.copy(workspaceVersion = 9), session.copy(lastServerSeq = 20),
-            session.copy(workspace = apply(create(), baseline)))) {
+        for (changed in listOf(
+            session.copy(userId = "other"),
+            session.copy(clientId = "other"),
+            session.copy(workspaceVersion = 9),
+            session.copy(lastServerSeq = 20),
+            session.copy(workspace = apply(create(), baseline)),
+        )) {
             assertFailsWith<IllegalStateException> { store.restore(scope, journal.id, changed) }
         }
-        for (other in listOf(scope.copy(apiBase = "https://other.invalid"), scope.copy(userId = "other"),
-            scope.copy(clientId = "other"), scope.copy(workspaceId = "other"))) assertNull(store.load(other))
+        for (other in listOf(
+            scope.copy(apiBase = "https://other.invalid"),
+            scope.copy(userId = "other"),
+            scope.copy(clientId = "other"),
+            scope.copy(workspaceId = "other"),
+        )) {
+            assertNull(store.load(other))
+        }
         store.markSubmitted(scope, "create", "tx")
         assertFailsWith<IllegalStateException> { store.restore(scope, journal.id, session) }
         store.quarantine(scope)
@@ -162,12 +231,16 @@ class WorkspaceDraftJournalTest {
         val store = WorkspaceDraftJournalStore(memory)
         store.append(scope, session, baseline, create())
         val saved = store.load(scope)
-        val interrupted = object : Settings by memory {
-            override fun putString(key: String, value: String) {
-                if (key.startsWith("wdj1.")) error("Storage unavailable before publication")
-                memory.putString(key, value)
+        val interrupted =
+            object : Settings by memory {
+                override fun putString(
+                    key: String,
+                    value: String,
+                ) {
+                    if (key.startsWith("wdj1.")) error("Storage unavailable before publication")
+                    memory.putString(key, value)
+                }
             }
-        }
         assertFailsWith<IllegalStateException> {
             WorkspaceDraftJournalStore(interrupted).append(scope, session, apply(create(), baseline), edit())
         }
@@ -182,11 +255,24 @@ class WorkspaceDraftJournalTest {
     @Test fun materialReferencesGroupsRelationsAndTransactionsRoundTrip() {
         val group = GroupFrame(CanvasObjectId("group"), transform = CanvasTransform(Vec2.Zero, CanvasSize(800f, 400f)))
         val text = (create().objects.single() as TextNode).copy(parentId = group.id, shape = NodeShape.Diamond)
-        val media = MediaNode(CanvasObjectId("gif"), parentId = group.id, transform = text.transform,
-            assetId = "asset", mediaKind = MediaKind.Gif, thumbnailAssetId = "thumbnail")
+        val media =
+            MediaNode(
+                CanvasObjectId("gif"),
+                parentId = group.id,
+                transform = text.transform,
+                assetId = "asset",
+                mediaKind = MediaKind.Gif,
+                thumbnailAssetId = "thumbnail",
+            )
         val relation = Relation(RelationId("relation"), sourceObjectId = text.id, targetObjectId = media.id, intent = "Explains")
-        val transaction = TransactionOperation("transaction", listOf(CreateObjectsOperation("objects", listOf(group, text, media)),
-            CreateRelationsOperation("relations", listOf(relation))))
+        val transaction =
+            TransactionOperation(
+                "transaction",
+                listOf(
+                    CreateObjectsOperation("objects", listOf(group, text, media)),
+                    CreateRelationsOperation("relations", listOf(relation)),
+                ),
+            )
         val store = WorkspaceDraftJournalStore(InMemorySettings())
         store.append(scope, session, baseline, transaction)
         val journal = assertNotNull(store.load(scope))
@@ -203,14 +289,27 @@ class WorkspaceDraftJournalTest {
         val group = GroupFrameAttributes(1, false, "group", "Title")
         val media = MediaNodeAttributes(1, false, "Description")
         val relation = RelationAttributes(RelationDirection.Forward, "Intent", null, "line")
-        val operations = listOf<WorkspaceOperation>(
-            TransformObjectsOperation("transform", listOf(TransformChange(id, 1, transform, transform.copy(rotationDegrees = 45f)))),
-            ReparentObjectsOperation("parent", listOf(ParentChange(id, 1, null, CanvasObjectId("group")))),
-            UpdateTextNodeAttributesOperation("text-attributes", listOf(TextNodeAttributesChange(id, 1, text, text.copy(locked = true)))),
-            UpdateGroupFrameAttributesOperation("group-attributes", listOf(GroupFrameAttributesChange(id, 1, group, group.copy(title = "Updated")))),
-            UpdateMediaNodeAttributesOperation("media-attributes", listOf(MediaNodeAttributesChange(id, 1, media, media.copy(altText = "Updated")))),
-            UpdateRelationAttributesOperation("relation-attributes", listOf(RelationAttributesChange(RelationId("relation"), 1, relation, relation.copy(intent = null, label = "Updated")))),
-        )
+        val operations =
+            listOf<WorkspaceOperation>(
+                TransformObjectsOperation("transform", listOf(TransformChange(id, 1, transform, transform.copy(rotationDegrees = 45f)))),
+                ReparentObjectsOperation("parent", listOf(ParentChange(id, 1, null, CanvasObjectId("group")))),
+                UpdateTextNodeAttributesOperation(
+                    "text-attributes",
+                    listOf(TextNodeAttributesChange(id, 1, text, text.copy(locked = true))),
+                ),
+                UpdateGroupFrameAttributesOperation(
+                    "group-attributes",
+                    listOf(GroupFrameAttributesChange(id, 1, group, group.copy(title = "Updated"))),
+                ),
+                UpdateMediaNodeAttributesOperation(
+                    "media-attributes",
+                    listOf(MediaNodeAttributesChange(id, 1, media, media.copy(altText = "Updated"))),
+                ),
+                UpdateRelationAttributesOperation(
+                    "relation-attributes",
+                    listOf(RelationAttributesChange(RelationId("relation"), 1, relation, relation.copy(intent = null, label = "Updated"))),
+                ),
+            )
         operations.flatMap { listOf(it, it.inverse()) }.forEach { operation ->
             val content = Json.encodeToString(WorkspaceOperation.serializer(), operation)
             assertEquals(operation, Json.decodeFromString(WorkspaceOperation.serializer(), content))

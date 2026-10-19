@@ -1,0 +1,61 @@
+{
+  "contract": "Media reference restore v1（batch F）",
+  "generatedBy": "scripts/generate-media-restore-fixtures.ts",
+  "fixtures": [
+    {
+      "name": "01-create-media-node",
+      "description": "MediaNode 引用 A（ready）",
+      "status": 200
+    },
+    {
+      "name": "02-replace-asset",
+      "description": "換素材 A → B（server 同交易保存 before / after provenance）",
+      "status": 200
+    },
+    {
+      "name": "03-plain-update-to-missing-422",
+      "description": "一般 update_object 換回 missing 的 A：仍要求 Ready（asset_not_ready）",
+      "status": 422
+    },
+    {
+      "name": "04-restore-before",
+      "description": "Undo：restore_media_references targetSide=before（不提交 assetId；由 provenance 取 A），objectVersion +1，素材不復活",
+      "status": 200
+    },
+    {
+      "name": "05-restore-after",
+      "description": "Redo：targetSide=after",
+      "status": 200
+    },
+    {
+      "name": "06-wrong-transaction-422",
+      "description": "originalTransactionId 不符：provenance_not_found",
+      "status": 422
+    },
+    {
+      "name": "07-stale-version-409",
+      "description": "expectedObjectVersion 過期：409 conflict",
+      "status": 409
+    },
+    {
+      "name": "08-not-opposite-side-422",
+      "description": "目前引用不是原交易另一側（已是 after）：media_reference_changed",
+      "status": 422
+    },
+    {
+      "name": "09-foreign-actor-422",
+      "description": "其他使用者引用此原交易：provenance_not_found（不取得他人的 Undo 權限）",
+      "status": 422
+    },
+    {
+      "name": "10-client-asset-id-rejected-422",
+      "description": "payload 不接受 assetId：invalid_operation",
+      "status": 422
+    },
+    {
+      "name": "11-capabilities",
+      "description": "capabilities：mediaReferenceRestore",
+      "status": 200
+    }
+  ]
+}

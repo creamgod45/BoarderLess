@@ -1,7 +1,9 @@
 import { join } from 'node:path'
+import { declaredMatchesVerified } from '../domain/asset-preparation.ts'
 import { inspectMedia, type RejectionReason } from '../media/inspect.ts'
 import { hashFile, streamToFile, withTempDir } from '../media/files.ts'
 import { isAssetMediaType, type Asset } from '../models/asset.ts'
+import type { VerifiedMetadata } from '../models/asset-preparation.ts'
 import { jobKeys } from '../models/job.ts'
 import { enqueueDeleteObject } from '../services/asset.service.ts'
 import { ObjectExistsError } from '../storage/types.ts'
@@ -34,12 +36,23 @@ export const verifyOriginal: JobHandler = async (job, ctx) => {
 
     const result = await inspectMedia(file.path, mediaType, ctx.tools)
     if (!result.ok) return reject(ctx, asset, result.reason)
+    const verified: VerifiedMetadata = { width: result.width, height: result.height, durationMs: result.durationMs }
+
+    // Preparation v2（ASSET-08）：declared 永不改寫；非 null 的宣告值與實際值不符則 rejected，實際值仍保存
+    if (asset.preparationVersion === 2) {
+      const preparation = await ctx.db.repos.preparations.findByAsset(asset.id)
+      if (!preparation) throw new Error(`preparation missing for v2 asset ${asset.id}`)
+      if (!declaredMatchesVerified(preparation.metadata, verified)) {
+        return reject(ctx, asset, 'declared_metadata_mismatch', verified)
+      }
+    }
 
     await promote(ctx, asset, file.path)
 
     await ctx.db.transaction(async (repos) => {
-      const ready = await repos.assets.markReady(asset.id, result)
+      const ready = await repos.assets.markReady(asset.id, verified)
       if (!ready) return
+      if (asset.preparationVersion === 2) await repos.preparations.recordVerified(asset.id, verified)
       if (NEEDS_THUMBNAIL.has(mediaType)) {
         await repos.jobs.enqueue(
           { jobKey: jobKeys.thumbnail(asset.id, THUMBNAIL_VERSION), jobType: 'generate_thumbnail', assetId: asset.id },
@@ -70,9 +83,10 @@ async function promote(ctx: JobContext, asset: Asset, path: string): Promise<voi
   }
 }
 
-async function reject(ctx: JobContext, asset: Asset, reason: RejectionReason): Promise<void> {
+async function reject(ctx: JobContext, asset: Asset, reason: RejectionReason, verified?: VerifiedMetadata): Promise<void> {
   await ctx.db.transaction(async (repos) => {
     if (await repos.assets.markRejected(asset.id, reason)) {
+      if (verified) await repos.preparations.recordVerified(asset.id, verified)
       await enqueueDeleteObject(repos, asset.uploadKey, ctx.jobMaxAttempts)
     }
   })

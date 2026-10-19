@@ -12,16 +12,20 @@ class CanvasPreferences(
         if (!settings.hasKey("$prefix.zoom")) return null
         return runCatching {
             Viewport(
-                pan = Vec2(
-                    x = settings.getFloat("$prefix.panX", 0f),
-                    y = settings.getFloat("$prefix.panY", 0f),
-                ),
+                pan =
+                    Vec2(
+                        x = settings.getFloat("$prefix.panX", 0f),
+                        y = settings.getFloat("$prefix.panY", 0f),
+                    ),
                 zoom = settings.getFloat("$prefix.zoom", 1f),
             )
         }.getOrNull()
     }
 
-    fun saveViewport(workspaceId: String, viewport: Viewport) {
+    fun saveViewport(
+        workspaceId: String,
+        viewport: Viewport,
+    ) {
         val prefix = prefix(workspaceId)
         settings.putFloat("$prefix.panX", viewport.pan.x)
         settings.putFloat("$prefix.panY", viewport.pan.y)
@@ -37,11 +41,15 @@ class CanvasPreferences(
         )
     }
 
-    fun saveDisplaySettings(workspaceId: String, display: CanvasDisplaySettings) {
+    fun saveDisplaySettings(
+        workspaceId: String,
+        display: CanvasDisplaySettings,
+        saveBackground: Boolean = true,
+    ) {
         val prefix = prefix(workspaceId)
         settings.putBoolean("$prefix.showGrid", display.showGrid)
         settings.putBoolean("$prefix.snapToGrid", display.snapToGrid)
-        settings.putString("$prefix.background", display.backgroundToken)
+        if (saveBackground) settings.putString("$prefix.background", display.backgroundToken)
     }
 
     private fun prefix(workspaceId: String): String = "workspace.$workspaceId.viewport"

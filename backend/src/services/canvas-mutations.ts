@@ -1,3 +1,7 @@
+import type { MediaReference } from '../repositories/provenance.repository.ts'
+import { canonicalDiagrams, diagramListErrors, firstInvalidDiagram, sameDiagrams } from '../domain/sequence-diagrams.ts'
+import { relationGeometryIssue } from '../domain/relation-geometry.ts'
+import { canonicalCanvasStyle, canvasStyleIssue } from '../domain/canvas-style.ts'
 import {
   completeTransform,
   OBJECT_SCHEMA_VERSION,
@@ -29,6 +33,26 @@ export interface VersionConflict {
 }
 
 /** 偵測到版本衝突時丟出，使整個 transaction rollback */
+/** update_sequence_diagrams 的 CAS / before 不一致 */
+export class SequenceDiagramsConflictSignal extends Error {
+  constructor(
+    readonly expectedVersion: number,
+    readonly actualVersion: number,
+  ) {
+    super('sequence diagrams conflict')
+  }
+}
+
+/** update_canvas_style 的 CAS 失敗（不放進 expectedObjectVersions 的 conflicts） */
+export class CanvasStyleConflictSignal extends Error {
+  constructor(
+    readonly expectedVersion: number,
+    readonly actualVersion: number,
+  ) {
+    super('canvas style version conflict')
+  }
+}
+
 export class VersionConflictSignal extends Error {
   constructor(readonly conflicts: VersionConflict[]) {
     super('version conflict')
@@ -40,6 +64,7 @@ const rejected = (code: string, message: string, details?: unknown) => unprocess
 const GROUP = 'group'
 const MEDIA = 'media'
 const MEDIA_KEYS = ['assetId', 'mediaKind', 'thumbnailAssetId']
+const MEDIA_REF_KEYS = ['assetId', 'thumbnailAssetId'] as const
 
 /** 以 expectedObjectVersions 偵測同物件的並行修改；不靜默 last-write-wins（§6.4） */
 export async function checkExpectedVersions(
@@ -81,11 +106,24 @@ export async function checkExpectedVersions(
  * 套用 operation 到目前 projection，並回傳要寫入 operation log 的正式 payload。
  * 任何 invariant 不成立都丟出 rejected，整個 transaction rollback。
  */
+/** 原交易身分（provenance 記錄用） */
+export interface OperationContext {
+  transactionId: string
+  operationId: string
+}
+
+const mediaReferenceOf = (properties: JsonObject): MediaReference => ({
+  assetId: properties.assetId as string,
+  thumbnailAssetId: (properties.thumbnailAssetId as string | null | undefined) ?? null,
+})
+const sameReference = (a: MediaReference, b: MediaReference) => a.assetId === b.assetId && a.thumbnailAssetId === b.thumbnailAssetId
+
 export async function applyOperation(
   repos: Repositories,
   workspaceId: string,
   actorId: string,
   op: TypedOperation,
+  context: OperationContext,
 ): Promise<JsonObject> {
   const { canvas } = repos
 
@@ -103,7 +141,7 @@ export async function applyOperation(
       const properties = p.properties ?? {}
       assertValidState(p.objectType, transform, properties)
       if (p.parentId) await assertValidParent(repos, workspaceId, p.objectId, p.parentId)
-      if (p.objectType === MEDIA) await validateMediaReferences(repos, workspaceId, properties)
+      if (p.objectType === MEDIA) await validateMediaReferences(repos, workspaceId, properties, { requireReady: 'all' })
       await canvas.insertObject(workspaceId, actorId, {
         objectId: p.objectId,
         objectType: p.objectType,
@@ -133,7 +171,15 @@ export async function applyOperation(
       assertValidState(obj!.objectType, transform ?? obj!.transform, properties)
       if (p.parentId) await assertValidParent(repos, workspaceId, p.objectId, p.parentId)
       if (obj!.objectType === MEDIA && p.properties && MEDIA_KEYS.some((k) => k in p.properties!)) {
-        await validateMediaReferences(repos, workspaceId, properties)
+        // 替換素材時新引用必須 ready；只改 mediaKind / 其他欄位時沿用既有引用
+        const changed = MEDIA_REF_KEYS.filter((k) => k in p.properties! && p.properties![k] !== obj!.properties[k])
+        await validateMediaReferences(repos, workspaceId, properties, { requireReady: changed })
+        // 批次 F：引用實際改變時，同交易保存完整 before / after（不是只存 patch）
+        const before = mediaReferenceOf(obj!.properties)
+        const after = mediaReferenceOf(properties)
+        if (!sameReference(before, after)) {
+          await repos.provenance.record({ workspaceId, actorId, ...context, objectId: p.objectId, before, after })
+        }
       }
       await canvas.updateObject(workspaceId, p.objectId, actorId, {
         parentId: p.parentId,
@@ -202,15 +248,18 @@ export async function applyOperation(
       for (const obj of restored) {
         assertValidState(obj.objectType, obj.transform, obj.properties)
         if (obj.parentId) await assertValidParent(repos, workspaceId, obj.objectId, obj.parentId)
-        if (obj.objectType === MEDIA) await validateMediaReferences(repos, workspaceId, obj.properties)
+        // 還原原本的引用：不要求 ready（素材可能已 missing / rejected，由 APP 顯示不可用），也不讓素材復活
+        if (obj.objectType === MEDIA) await validateMediaReferences(repos, workspaceId, obj.properties, { requireReady: [] })
       }
       return { ...p, restoredVersions: Object.fromEntries(restored.map((o) => [o.objectId, o.objectVersion])) }
     }
 
     case 'create_relation': {
       const p = op.payload
-      if (p.sourceObjectId === p.targetObjectId) {
-        throw rejected('invalid_relation', 'Relation source and target must differ')
+      const selfLoop = p.sourceObjectId === p.targetObjectId
+      // 批次 D：自循環只在明確 geometry（auto / loop）時允許；不用零長度直線冒充
+      if (selfLoop && p.style?.geometry === undefined) {
+        throw rejected('invalid_relation_geometry', 'Self-loops require an explicit style.geometry (auto or loop route)')
       }
       const [existing] = await canvas.findRelations(workspaceId, [p.relationId])
       if (existing) {
@@ -219,7 +268,7 @@ export async function applyOperation(
           ...(existing.deletedAt ? { restoreWith: 'restore_relations' } : {}),
         })
       }
-      assertValidStyle(p.style ?? {})
+      assertValidStyle(p.style ?? {}, selfLoop)
       await requireActiveObjects(repos, workspaceId, [p.sourceObjectId, p.targetObjectId])
       await canvas.insertRelation(workspaceId, {
         relationId: p.relationId,
@@ -244,7 +293,8 @@ export async function applyOperation(
           field: changedEndpoint,
         })
       }
-      assertValidStyle({ ...relation!.style, ...p.style })
+      // style 淺層 merge：geometry 是整個子物件替換（不 deep merge）；驗證 merge 後的完整 relation
+      assertValidStyle({ ...relation!.style, ...p.style }, relation!.sourceObjectId === relation!.targetObjectId)
       await canvas.updateRelation(workspaceId, p.relationId, p)
       return p
     }
@@ -280,6 +330,134 @@ export async function applyOperation(
       const restored = await canvas.restoreRelations(workspaceId, ids)
       return { ...p, restoredVersions: Object.fromEntries(restored.map((r) => [r.relationId, r.relationVersion])) }
     }
+
+    case 'update_canvas_style': {
+      const p = op.payload
+      // Workspace row 已在 commit 開頭鎖定；同一 transaction 內前一個 style operation 的結果也會讀到
+      const workspace = (await repos.workspaces.findById(workspaceId))!
+      if (workspace.canvasStyleVersion !== p.expectedCanvasStyleVersion) {
+        throw new CanvasStyleConflictSignal(p.expectedCanvasStyleVersion, workspace.canvasStyleVersion)
+      }
+      const issue = canvasStyleIssue(p.canvasStyle)
+      if (issue) throw rejected(issue.code, `canvasStyle.${issue.field} is not supported`, { field: issue.field })
+      if (workspace.canvasStyleVersion >= Number.MAX_SAFE_INTEGER) {
+        throw rejected('canvas_style_version_exhausted', 'canvasStyleVersion reached the safe integer limit')
+      }
+      const canvasStyle = canonicalCanvasStyle(p.canvasStyle)
+      const canvasStyleVersion = workspace.canvasStyleVersion + 1
+      await repos.workspaces.updateCanvasStyle(workspaceId, canvasStyle, canvasStyleVersion)
+      // 正式 payload 帶權威的新版本：replay / fan-out 依此設定，不由 client 自行推算
+      return { expectedCanvasStyleVersion: p.expectedCanvasStyleVersion, canvasStyle, canvasStyleVersion }
+    }
+
+    case 'restore_media_references': {
+      const p = op.payload
+      // 原交易 provenance：同 workspace、目前 actor、已 commit；陌生 actor 或沒有 provenance（含 migration 前的舊變更）一律拒絕
+      const provenance = await repos.provenance.find(workspaceId, actorId, p.originalOperationId)
+      if (!provenance || provenance.transactionId !== p.originalTransactionId) {
+        throw rejected('provenance_not_found', 'No media reference provenance for this original transaction by the current actor')
+      }
+      if (provenance.objectId !== p.objectId) throw rejected('provenance_mismatch', 'The original operation did not change this object')
+      const [obj] = await canvas.findObjects(workspaceId, [p.objectId])
+      if (!obj || obj.deletedAt) throw rejected('object_not_found', 'Some objects do not exist', { objectIds: [p.objectId] })
+      if (obj.objectType !== MEDIA) throw rejected('unsupported_change', 'Only media nodes have media references')
+      if (obj.objectVersion !== p.expectedObjectVersion) {
+        throw new VersionConflictSignal([{ id: p.objectId, expectedVersion: p.expectedObjectVersion, actualVersion: obj.objectVersion }])
+      }
+      if (obj.locked) throw rejected('object_locked', `Object ${p.objectId} is locked`)
+      const target = p.targetSide === 'before' ? provenance.before : provenance.after
+      const opposite = p.targetSide === 'before' ? provenance.after : provenance.before
+      // 目前引用必須恰為原交易的另一側；已被其他變更改寫則拒絕
+      if (!sameReference(mediaReferenceOf(obj.properties), opposite)) {
+        throw rejected('media_reference_changed', 'The current media reference is not the other side of the original transaction')
+      }
+      // 歷史引用可以是 missing / rejected：不要求 ready、不讓素材復活或授予下載；只確認仍屬同一 Workspace
+      const ids = [target.assetId, ...(target.thumbnailAssetId ? [target.thumbnailAssetId] : [])]
+      for (const id of ids) {
+        const asset = await repos.assets.findById(id)
+        if (!asset || asset.workspaceId !== workspaceId) throw rejected('asset_not_found', 'Referenced assets do not exist in this workspace', { assetIds: [id] })
+      }
+      const patch = { assetId: target.assetId, thumbnailAssetId: target.thumbnailAssetId }
+      await canvas.updateObject(workspaceId, p.objectId, actorId, { properties: patch })
+      await repos.provenance.record({ workspaceId, actorId, ...context, objectId: p.objectId, before: opposite, after: target })
+      // 正式 payload 帶還原後的引用，replay / fan-out 依此套用
+      return { ...p, restoredReference: patch, objectVersion: obj.objectVersion + 1 }
+    }
+
+    case 'update_sequence_diagrams': {
+      const p = op.payload
+      const workspace = (await repos.workspaces.findById(workspaceId))!
+      // before 必須與目前完整一致 + version CAS；graph bindings 在整個 transaction 結束時驗證
+      if (workspace.sequenceDiagramsVersion !== p.expectedSequenceDiagramsVersion || !sameDiagrams(p.before, workspace.sequenceDiagrams)) {
+        throw new SequenceDiagramsConflictSignal(p.expectedSequenceDiagramsVersion, workspace.sequenceDiagramsVersion)
+      }
+      const errors = diagramListErrors(p.after)
+      if (errors.length > 0) throw rejected('invalid_sequence_diagram', 'after is not a valid sequence diagram list', errors)
+      if (workspace.sequenceDiagramsVersion >= Number.MAX_SAFE_INTEGER) {
+        throw rejected('sequence_diagrams_version_exhausted', 'sequenceDiagramsVersion reached the safe integer limit')
+      }
+      const after = canonicalDiagrams(p.after)
+      const sequenceDiagramsVersion = workspace.sequenceDiagramsVersion + 1
+      await repos.workspaces.updateSequenceDiagrams(workspaceId, after, sequenceDiagramsVersion)
+      return {
+        expectedSequenceDiagramsVersion: p.expectedSequenceDiagramsVersion,
+        before: canonicalDiagrams(p.before),
+        after,
+        sequenceDiagramsVersion,
+      }
+    }
+  }
+}
+
+/**
+ * Transaction 結束時驗證全部時序圖 bindings（APP hasValidSequenceBindings）：
+ * 刪除 / 修改 participant 節點或訊息 relation 而沒有同交易更新 metadata 時，整個 transaction 拒絕。
+ */
+export async function assertSequenceBindings(repos: Repositories, workspaceId: string): Promise<void> {
+  const workspace = (await repos.workspaces.findById(workspaceId))!
+  const diagrams = workspace.sequenceDiagrams
+  if (diagrams.length === 0) return
+  const objectIds = diagrams.flatMap((d) => [d.containerId.value, ...d.participants.map((x) => x.objectId.value), ...d.blocks.map((x) => x.objectId.value)])
+  const relationIds = diagrams.flatMap((d) => d.messages.map((m) => m.relationId.value))
+  const objects = new Map((await repos.canvas.findObjects(workspaceId, objectIds)).filter((o) => !o.deletedAt).map((o) => [o.objectId, o]))
+  const relations = new Map((await repos.canvas.findRelations(workspaceId, relationIds)).filter((r) => !r.deletedAt).map((r) => [r.relationId, r]))
+  const groupCache = new Map(objects)
+  const loadGroup = async (id: string) => {
+    if (!groupCache.has(id)) {
+      const [o] = await repos.canvas.findObjects(workspaceId, [id])
+      if (o && !o.deletedAt) groupCache.set(id, o)
+    }
+  }
+  // container 的祖先鏈（parent 必須都是 active group）
+  for (const d of diagrams) {
+    const seen = new Set<string>()
+    for (let id: string | null = d.containerId.value; id !== null && !seen.has(id); ) {
+      seen.add(id)
+      await loadGroup(id)
+      id = (groupCache.get(id)?.parentId as string | null | undefined) ?? null
+    }
+  }
+  const size = (o: { transform: JsonObject }) => ({ width: Number(o.transform.width), height: Number(o.transform.height) })
+  const capital = (d: string) => d.charAt(0).toUpperCase() + d.slice(1)
+  const invalid = firstInvalidDiagram(diagrams, {
+    group: (id) => {
+      const o = groupCache.get(id)
+      return o && o.objectType === GROUP ? { parentId: o.parentId, ...size(o) } : null
+    },
+    text: (id) => {
+      const o = objects.get(id)
+      return o && o.objectType === 'text'
+        ? { parentId: o.parentId, text: String(o.properties.text ?? ''), hasVectorPath: o.properties.vectorPath != null, ...size(o) }
+        : null
+    },
+    relation: (id) => {
+      const r = relations.get(id)
+      const route = (r?.style.geometry as { route?: { mode?: string } } | undefined)?.route?.mode ?? null
+      return r ? { sourceId: r.sourceObjectId, targetId: r.targetObjectId, direction: capital(r.direction), label: r.label, routeMode: route } : null
+    },
+  })
+  if (invalid) {
+    throw rejected('invalid_sequence_binding', 'Sequence diagram metadata does not match the graph after this transaction', { containerId: invalid })
   }
 }
 
@@ -296,9 +474,15 @@ function assertValidState(objectType: string, transform: unknown, properties: un
   throw rejected('invalid_object', 'Object state does not match its type schema', result.errors)
 }
 
-function assertValidStyle(style: unknown): void {
+function assertValidStyle(style: Record<string, unknown>, selfLoop: boolean): void {
   const errors = validateRelationStyle(style)
   if (errors.length > 0) throw rejected('invalid_relation', 'Relation style is invalid', errors)
+  if (style.geometry !== undefined) {
+    const issue = relationGeometryIssue(style.geometry, selfLoop)
+    if (issue) throw rejected(issue.code, issue.message, issue.errors)
+  } else if (selfLoop) {
+    throw rejected('invalid_relation_geometry', 'Self-loops require an explicit style.geometry (auto or loop route)')
+  }
 }
 
 /**
@@ -323,9 +507,15 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 /**
  * MediaNode 只能引用同一 Workspace 的 asset（BACKEND_MEDIA_API_SPEC §4.4、§7）。
- * 不要求 ready：undo / 還原既有 Node 時，引用的素材可能已轉為 missing。
+ * ASSET-07：新建 Node 與替換素材的新引用必須 ready；restore_objects 還原原引用不要求 ready
+ * （素材可能已 missing / rejected，還原不是重新授權，也不讓素材復活）。
  */
-async function validateMediaReferences(repos: Repositories, workspaceId: string, properties: JsonObject) {
+async function validateMediaReferences(
+  repos: Repositories,
+  workspaceId: string,
+  properties: JsonObject,
+  options: { requireReady: 'all' | readonly (typeof MEDIA_REF_KEYS)[number][] },
+) {
   const { assetId, mediaKind, thumbnailAssetId } = properties
   if (typeof assetId !== 'string' || !UUID_RE.test(assetId)) {
     throw rejected('invalid_media_reference', 'Media nodes require properties.assetId (UUID)')
@@ -342,6 +532,14 @@ async function validateMediaReferences(repos: Repositories, workspaceId: string,
   }
   if (mediaKind !== mediaKindOf(asset.mediaType)) {
     throw rejected('media_kind_mismatch', `mediaKind must be "${mediaKindOf(asset.mediaType)}" for ${asset.mediaType}`)
+  }
+  const keys = options.requireReady === 'all' ? MEDIA_REF_KEYS : options.requireReady
+  const mustBeReady = keys.map((k) => properties[k]).filter((id): id is string => typeof id === 'string')
+  const notReady = assets.filter((a) => mustBeReady.includes(a.id) && a.status !== 'ready')
+  if (notReady.length > 0) {
+    throw rejected('asset_not_ready', 'New media references must point to ready assets', {
+      assets: notReady.map((a) => ({ assetId: a.id, status: a.status })),
+    })
   }
 }
 

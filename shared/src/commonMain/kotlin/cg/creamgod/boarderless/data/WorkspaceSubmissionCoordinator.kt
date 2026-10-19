@@ -8,6 +8,8 @@ internal sealed interface WorkspaceSubmissionStep {
     data class Accepted(
         val session: WorkspaceSession,
         val acceptedToken: Long,
+        val submittedOperation: cg.creamgod.boarderless.domain.history.WorkspaceOperation? = null,
+        val mediaReferenceOrigins: List<cg.creamgod.boarderless.domain.history.MediaReferenceHistoryOrigin> = emptyList(),
     ) : WorkspaceSubmissionStep
 
     data class Conflict(
@@ -37,19 +39,26 @@ internal suspend fun submitNextWorkspaceChange(
     val pending = queue.first ?: return WorkspaceSubmissionStep.Idle
     return try {
         when (val outcome = repository.submit(session, pending.operation)) {
-            is SubmitOutcome.Accepted -> WorkspaceSubmissionStep.Accepted(
-                session = session.copy(
-                    workspaceVersion = outcome.workspaceVersion,
-                    lastServerSeq = outcome.lastServerSeq,
-                    workspace = pending.workspaceAfter,
-                ),
-                acceptedToken = pending.token,
-            )
+            is SubmitOutcome.Accepted -> {
+                WorkspaceSubmissionStep.Accepted(
+                    session =
+                        session.copy(
+                            workspaceVersion = outcome.workspaceVersion,
+                            lastServerSeq = outcome.lastServerSeq,
+                            workspace = pending.workspaceAfter,
+                        ),
+                    acceptedToken = pending.token,
+                    submittedOperation = pending.operation,
+                    mediaReferenceOrigins = outcome.mediaReferenceOrigins,
+                )
+            }
 
-            is SubmitOutcome.Conflict -> WorkspaceSubmissionStep.Conflict(
-                session = outcome.current,
-                discardedCount = queue.size,
-            )
+            is SubmitOutcome.Conflict -> {
+                WorkspaceSubmissionStep.Conflict(
+                    session = outcome.current,
+                    discardedCount = queue.size,
+                )
+            }
         }
     } catch (error: CancellationException) {
         throw error

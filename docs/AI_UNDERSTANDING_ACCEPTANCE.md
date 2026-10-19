@@ -1,5 +1,39 @@
 # AI 畫布理解驗證（唯讀）
 
+## 2026-10-11：認證提示新版 Desktop 驗收包
+
+本次使用者401報告沒有新preparedAuth／challenge欄位，拒絕層仍未知；10/9的成功log不是本次成功證明。新版401／403主狀態及安全指引已接入理解驗證與工具視窗，詳QA SOP。隔離建置AI診斷15項、Desktop52項皆零failure／error／skip，createDistributable成功22s，log：`/tmp/boarderless-pinned-assets.OHtTZ8/ai-auth-desktop-package.log`。
+
+暫時驗收包：`/tmp/boarderless-pinned-assets.OHtTZ8/build/desktopApp/compose/binaries/main/app/BoarderLess.app`。未恢復根專案build/verified成品，未啟動APP或替使用者結束舊APP。請自行退出舊版後開啟此包；正在執行的視窗不會因打包自動更新。人工GUI、Router根因、Claude及完整工具審核／Apply仍待驗收，不把mock成功當live連線成功。包是本機暫存而非正式發布，後续清理可移除。
+
+## 2026-10-10：本地安全 log 的最新服務證據
+
+直接核對 ~/.boarderless/logs/ai-probe.log：2026-10-09T02:29Z（台灣10:29）多輪 OpenAiChat／Bearer／ChatCompletions／Gpt56Luna 工具請求收到 HTTP200、contentType=Sse，最後一輪 Receiving→Completed。Connecting 欄位 tools=9、stream=true、reasoning=None、temperature=Absent。這更新下方10月8日「尚未取得修正後新請求」的歷史狀態，但只證明這些請求的服務／串流完成；不證明每個工具結果的語意、真人草稿審核→Apply→Undo／Redo／重開或 Claude 路徑已通過。
+
+使用者貼出的無時間戳401仍屬認證拒絕證據，不推定與最新成功請求為同一路由／同一認證設定。僅 contentType=Other 不能得知錯誤本文；不以成功紀錄聲稱所有401皆已排除。此核對未讀 API Key、未代發真實 AI 請求，安全 log 仍不含原始 request／response body。
+
+## 2026-10-08：實際 OpenAI 圖形工具 400 已定位並修正請求
+
+- 新版本機 log，台灣時間 11:15 的兩次實際 OpenAiChat 請求：requestEndpoint=ChatCompletions、requestModel=Gpt56Luna、tools=8、stream=true、reasoning=Default；HTTP 400 Json，errorBody=Parsed、providerType=InvalidRequest、providerParam=ReasoningEffort、rejection=ReasoningToolsInChat。實際拒絕的是 Chat 工具搭配額外推理，不是 endpoint 拼錯或沒有送 Bearer。沒有保存或讀取原始錯誤訊息／API Key。
+- 依官方 GPT-5.6 Luna 文件（medium 預設／支援 none）及 function-calling 的 GPT-5.6 Chat 範例（reasoning_effort=none），圖形工具 serializer 對明確的 gpt-5.6/luna/terra/sol ID 加入 reasoning_effort=none。未知 Router model ID 不按前綴猜測；Claude 和純文字理解保持原有參數。當前工作樹已具有 max tokens／temperature 選填行為，本次保留，不重新加上預設輸出上限。
+- 視窗顯示相容設定；每一輪完整 body 仍先呈現並授權，沒有改 endpoint、HTTP 自動重試／fallback 或直接套用畫布。provider rejection 分類的錯誤提示也改為確切原因。Responses 協定尚未加入 APP，不能只把現有 Chat endpoint 改成 /v1/responses。
+- 驗證：37 項 JVM 全數通過，包含實際類型的 mock 400 拒絕條件、兩輪各自批准的修正 body／隔離草稿、模型與協定範圍、選填參數和安全診斷。Android APK、JS/WasmJS/iOS arm64 共用編譯及 Desktop 打包通過。使用獨立 /tmp/boarderless-ai-reasoning-build 輸出，已更新兩個 verified 成品。
+- 尚未發出修正後的新真實 OpenAI 請求，也未取得成功草稿的使用者證據；修正後的服務驗收待新版 log。這輪未實作 iOS 素材包（開始查看時發現 AI 的新實際失敗證據，因此先處理已確認的阻礙）。完整六主線 goal 仍 active。
+- 官方依據：https://developers.openai.com/api/docs/models/gpt-5.6-luna 、https://developers.openai.com/api/docs/guides/function-calling 。
+
+
+2026-10-08 最新使用者實測：OpenAI 路由文字理解成功，使用者直接提供本次ask／answer作為證據。回覆保留N1..N11全部11節點、E1..E6全部6連線的exact source/target/forward，以及N2／N7的parent N5、其餘null；沒有重複或虛構項目。Traditional Chinese summary正確描述N8分支結構、N3自環僅是圖上的關係、N5 containment及N11未連接媒體；uncertainties不猜圖片內容／執行順序／條件。這是使用者報告的實際OpenAI路由成功證據，覆蓋先前「最後實測只有HTTP401／OpenAI理解仍阻塞」的當前狀態；不將成功歸因於某一修正，也不宣稱其他provider／endpoint已排除401。
+
+目前OpenAI文字理解可用，401不再列為此路徑的現行阻塞。每次授權／嚴格UTF-8／空回應與safe log保護維持；沒有讀key、代送新AI請求或把完整用戶圖表／原回答寫入安全log。Claude Messages的實際成功、AI工具draft loop＋review→Apply→Undo／Redo／durable reopen完整流程尚待實際交付證據；不能由唯讀理解成功推定工具或Claude完成。完整六主線goal保持active，其他製作缺口不變。
+
+2026-10-08 AI 認證輸入與安全診斷：理解／工具草稿視窗共用 aiCredentialHeaders，Bearer 模式接受原始 key 或單一完整 Bearer 值，去除外側空白後僅產生一個前綴；空值／孤立 Bearer／重複前綴／內嵌空白／控制字元／非 ASCII／超過 header 上限均在 HTTP 前以不含輸入的 typed validation error 拒絕。ApiKey 保留 x-api-key 語意，None 不使用輸入。每次 HTTP 的既有批准、UTF-8／空回應保護及停用隱式重送維持。
+
+Connecting 在 request builder 完成後記錄 preparedAuth 閉合列舉，HttpResponse／HttpRejected 與 terminal failure 保留 preparedAuth、authChallenge（WWW-Authenticate 的首個 scheme／多欄位類型）；不記 key、realm、error_description、endpoint、model、prompt 或 response body。preparedAuth 是準備階段的 header 類型，不聲稱已量測 wire 上游／client plugin 改寫；challenge 僅提示，不能單憑它判定 401 根因。Desktop 既有本地 logger 自動寫這些 typed 欄位到 ~/.boarderless/logs/ai-probe.log，仍每檔256KiB＋一backup、私有權限及 bounded queue。
+
+76453 最終 build 成功1m57s：JVM1019（6既有skip）、JS917、Wasm917、Desktop50，全部0 failures/errors；Android main、iOS arm64 compile 及 Desktop distributable 通過。新增 common credentials 3 cases 與 MockEngine 401 case，驗確實準備單一 Bearer、單次請求、Basic challenge 及 private key／realm／body不出現在安全報告。已更新 desktopApp/build/verified/BoarderLess.app，無 QA preferences；diff check 通過。真實使用者安全 log 目前仍不存在，最後實際請求證據仍 HTTP401／Other，沒有讀取真 key、代發付費 AI、或宣稱已解除 401。
+
+畫筆／compact inspector 邏輯核對：brushMode 排除物件及連線屬性面板，close 清 expanded／editing；status 以實際 toolbarHeightPx 上移並在 compact inspector／modal 隱藏。先前獨立 Desktop compact GUI 的避讓／關閉證據保持有效，本輪僅核對程式，未新增 physical GUI 驗收。原始六主線維持 active／完整 scope，正式多人／跨裝置／shared背景／GIPHY provider-node及批准、四端完整GUI仍未交付。未改 backend/env、未提交/push。Bearer 格式核對 OpenAI 官方 API reference：https://developers.openai.com/api/reference/overview#authentication。
+
 2026-10-06 網路引擎交付核對：新版 Desktop／Android 明確指定 Ktor 3.6.0 + OkHttp，AI理解／工具與後端／素材／GIPHY 統一走 platformHttpClient 邊界。維持每次 AI HTTP 授權、停用自動 connection retry／redirect／503 Retry-After:0 隱式重送，嚴格 UTF-8／空回應檢查。31759 全套成功，real-socket PlatformHttpClientTest 通過並核新版 verified bundle 內 platform factory；iOS／Web 保留 Ktor 平台引擎。這不能證明使用者 Router 401 已修復，亦未自動讀 key 或發送新 AI 請求。
 
 
@@ -52,7 +86,7 @@ Apply必須再次明確checkbox，refresh後pure reviewAiDiagramApply核對user/
 - 關係包含 ID／版本／source／target／direction／label／intent。forward=source→target、backward=target→source、both=雙向、none=無向。
 - 世界座標 x 右、y 下、position 為未旋轉 top-left、旋轉繞中心順時針。viewport 與旋轉矩形 footprint 交疊提示不是像素遮擋或 shape-exact 碰撞。
 - 不傳素材像素、assetId、thumbnailAssetId、下載 URL、本機路徑、工作區 ID／名稱。**使用者文字仍可能本身含網址、個資或秘密，必須自行審查。**不宣稱模型看見圖片。
-- 最多 128 節點、256 關係與 48 KiB UTF-8 compact scene；超過拒絕，不靜默截斷。每次 4096 output tokens，複雜答案可能被截斷並判為未完成，請拆分或使用複製流程自行配置。貼入／解析回應最多 128 KiB，拒絕異常 JSON 深度。
+- 最多 128 節點、256 關係與 48 KiB UTF-8 compact scene；超過拒絕，不靜默截斷。最大輸出 Tokens 與 temperature 有選填欄位，預設留空，不再固定傳送4096；有輸入才加入請求，留空／僅空白完全省略該key。貼入／解析回應最多 128 KiB，拒絕異常 JSON 深度。
 
 ## 自動核對 ≠ 理解能力
 

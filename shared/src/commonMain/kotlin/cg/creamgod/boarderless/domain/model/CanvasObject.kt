@@ -3,7 +3,9 @@ package cg.creamgod.boarderless.domain.model
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class CanvasObjectId(val value: String) {
+data class CanvasObjectId(
+    val value: String,
+) {
     init {
         require(value.isNotBlank()) { "Canvas object id must not be blank" }
     }
@@ -20,7 +22,9 @@ sealed interface CanvasObject {
 }
 
 @Serializable
-enum class NodeShape(val token: String) {
+enum class NodeShape(
+    val token: String,
+) {
     RoundedRectangle("rounded"),
     Rectangle("rectangle"),
     Ellipse("ellipse"),
@@ -46,10 +50,39 @@ enum class NodeShape(val token: String) {
     DoubleArrow("double-arrow"),
     Star("star"),
     ManualInput("manual-input"),
+
+    // Expansion v1 (docs/SHAPE_LIBRARY_SPEC.md). The backend NODE_SHAPES list must change in the same commit.
+    Semicircle("semicircle"),
+    Ring("ring"),
+    Heptagon("heptagon"),
+    Heart("heart"),
+    Lightning("lightning"),
+    Crescent("crescent"),
+    PredefinedProcess("predefined-process"),
+    InternalStorage("internal-storage"),
+    Delay("delay"),
+    OrJunction("or-junction"),
+    SummingJunction("summing-junction"),
+    OffPageConnector("off-page-connector"),
+    Display("display"),
+    MultiDocument("multi-document"),
+    CalloutRound("callout-round"),
+    CalloutRect("callout-rect"),
+    Note("note"),
+    BraceLeft("brace-left"),
+    BraceRight("brace-right"),
+    Folder("folder"),
+    Window("window"),
+    Cloud("cloud"),
+    Server("server"),
+    Person("person"),
     ;
 
     companion object {
         fun fromToken(token: String): NodeShape? = entries.firstOrNull { it.token == token }
+
+        /** The 25 shapes every backend has accepted since before the expansion; the default when no list is announced. */
+        val original: Set<NodeShape> by lazy { entries.take(25).toSet() }
     }
 }
 
@@ -64,9 +97,17 @@ data class TextNode(
     val text: String,
     val colorToken: String = "paper",
     val shape: NodeShape = NodeShape.RoundedRectangle,
+    /** Optional structured custom outline; shape is the fallback for ordinary nodes. */
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+    @kotlinx.serialization.EncodeDefault(kotlinx.serialization.EncodeDefault.Mode.NEVER)
+    val vectorPath: VectorPath? = null,
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+    @kotlinx.serialization.EncodeDefault(kotlinx.serialization.EncodeDefault.Mode.NEVER)
+    val textPlacement: TextPlacement? = null,
 ) : CanvasObject {
     init {
         require(version >= 1) { "text node version must be positive" }
+        if (vectorPath != null) require(transform.size.width > 0f && transform.size.height > 0f)
     }
 }
 
@@ -93,7 +134,9 @@ data class GroupFrame(
  * Workspace without leaking a signed URL into the canvas projection.
  */
 @Serializable
-enum class MediaKind(val token: String) {
+enum class MediaKind(
+    val token: String,
+) {
     Image("image"),
     Gif("gif"),
     Video("video"),
@@ -124,26 +167,47 @@ data class MediaNode(
     }
 }
 
+/** Provider identity, never a Workspace asset or a persisted media URL. */
+@Serializable
+data class ExternalMediaNode(
+    override val id: CanvasObjectId,
+    override val version: Long = 1,
+    override val parentId: CanvasObjectId? = null,
+    override val zIndex: Long = 0,
+    override val locked: Boolean = false,
+    override val transform: CanvasTransform,
+    val reference: cg.creamgod.boarderless.domain.media.ExternalMediaReference,
+    val altText: String = "",
+) : CanvasObject {
+    init { require(version >= 1); require(altText.length <= 8192) }
+}
+
 fun CanvasObject.withTransform(
     transform: CanvasTransform,
     version: Long = this.version + 1,
-): CanvasObject = when (this) {
-    is TextNode -> copy(transform = transform, version = version)
-    is GroupFrame -> copy(transform = transform, version = version)
-    is MediaNode -> copy(transform = transform, version = version)
-}
+): CanvasObject =
+    when (this) {
+        is TextNode -> copy(transform = transform, version = version)
+        is GroupFrame -> copy(transform = transform, version = version)
+        is MediaNode -> copy(transform = transform, version = version)
+        is ExternalMediaNode -> copy(transform = transform, version = version)
+    }
 
-fun CanvasObject.withVersion(version: Long): CanvasObject = when (this) {
-    is TextNode -> copy(version = version)
-    is GroupFrame -> copy(version = version)
-    is MediaNode -> copy(version = version)
-}
+fun CanvasObject.withVersion(version: Long): CanvasObject =
+    when (this) {
+        is TextNode -> copy(version = version)
+        is GroupFrame -> copy(version = version)
+        is MediaNode -> copy(version = version)
+        is ExternalMediaNode -> copy(version = version)
+    }
 
 fun CanvasObject.withParentId(
     parentId: CanvasObjectId?,
     version: Long = this.version + 1,
-): CanvasObject = when (this) {
-    is TextNode -> copy(parentId = parentId, version = version)
-    is GroupFrame -> copy(parentId = parentId, version = version)
-    is MediaNode -> copy(parentId = parentId, version = version)
-}
+): CanvasObject =
+    when (this) {
+        is TextNode -> copy(parentId = parentId, version = version)
+        is GroupFrame -> copy(parentId = parentId, version = version)
+        is MediaNode -> copy(parentId = parentId, version = version)
+        is ExternalMediaNode -> copy(parentId = parentId, version = version)
+    }

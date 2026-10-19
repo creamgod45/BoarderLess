@@ -17,7 +17,11 @@ internal data class WorkspaceDraftLegacySnapshot(
 )
 
 internal object WorkspaceDraftLegacyMigration {
-    private val json = Json { encodeDefaults = true; allowStructuredMapKeys = true }
+    private val json =
+        Json {
+            encodeDefaults = true
+            allowStructuredMapKeys = true
+        }
 
     fun prepare(source: WorkspaceDraftLegacySnapshot): WorkspaceDraftScopeBundle {
         // Freeze caller-owned lists; bounds/depth checked before replay/normalization.
@@ -29,8 +33,14 @@ internal object WorkspaceDraftLegacyMigration {
         var journal = frozen.journal
         val pending = frozen.pending
         require(journal != null || pending != null)
-        journal?.let { require(it.scope == frozen.scope); validateWorkspaceDraftJournal(it) }
-        pending?.let { require(it.scope == frozen.scope); validatePendingWorkspaceSubmission(it) }
+        journal?.let {
+            require(it.scope == frozen.scope)
+            validateWorkspaceDraftJournal(it)
+        }
+        pending?.let {
+            require(it.scope == frozen.scope)
+            validatePendingWorkspaceSubmission(it)
+        }
         if (journal != null && pending != null) {
             // Legacy save published wire before markSubmitted. Complete ONLY that matching pair;
             // never infer an ack, drop a wire or rebuild its transaction/operation/clientSeq.
@@ -40,10 +50,17 @@ internal object WorkspaceDraftLegacyMigration {
             require(journal.headTransactionId == null || journal.headTransactionId == pending.request.transactionId)
             journal = journal.copy(headTransactionId = pending.request.transactionId)
         }
-        val fingerprint = SHA256().digest(content.encodeToByteArray())
-            .joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
-        val bundle = WorkspaceDraftScopeBundle(scope = frozen.scope, journal = journal, pending = pending,
-            legacyImportDigest = fingerprint)
+        val fingerprint =
+            SHA256()
+                .digest(content.encodeToByteArray())
+                .joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') }
+        val bundle =
+            WorkspaceDraftScopeBundle(
+                scope = frozen.scope,
+                journal = journal,
+                pending = pending,
+                legacyImportDigest = fingerprint,
+            )
         return WorkspaceDraftScopeBundleCodec.decode(WorkspaceDraftScopeBundleCodec.encode(bundle), frozen.scope)
     }
 }

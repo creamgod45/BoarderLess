@@ -1,0 +1,17 @@
+{
+  "description": "本人 request 但已降為 viewer：每次重新授權，403",
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/assets/preparations/cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+  },
+  "response": {
+    "status": 403,
+    "body": {
+      "error": {
+        "code": "forbidden",
+        "message": "Role \"viewer\" cannot perform assets.upload"
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

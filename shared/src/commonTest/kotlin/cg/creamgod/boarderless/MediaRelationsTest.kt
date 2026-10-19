@@ -7,9 +7,15 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class MediaRelationsTest {
-    private fun media(kind: MediaKind, x: Float = 0f) = MediaNode(
-        id = CanvasObjectId(kind.token), assetId = "asset-${kind.token}", mediaKind = kind,
-        transform = CanvasTransform(Vec2(x, 0f), CanvasSize(100f, 80f)), altText = "My ${kind.token}",
+    private fun media(
+        kind: MediaKind,
+        x: Float = 0f,
+    ) = MediaNode(
+        id = CanvasObjectId(kind.token),
+        assetId = "asset-${kind.token}",
+        mediaKind = kind,
+        transform = CanvasTransform(Vec2(x, 0f), CanvasSize(100f, 80f)),
+        altText = "My ${kind.token}",
     )
 
     @Test fun everyMediaKindCanBeATargetAndCannotTargetItself() {

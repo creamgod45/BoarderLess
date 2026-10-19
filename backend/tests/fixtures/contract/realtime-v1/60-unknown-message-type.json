@@ -1,0 +1,24 @@
+{
+  "description": "未知 type：invalid_message，fail closed",
+  "transport": "websocket",
+  "subprotocol": "boarderless.v1",
+  "exchange": [
+    {
+      "direction": "client",
+      "frame": {
+        "type": "teleport"
+      }
+    },
+    {
+      "direction": "server",
+      "frame": {
+        "type": "protocol_error",
+        "protocolVersion": 1,
+        "workspaceId": null,
+        "connectionEpoch": null,
+        "code": "invalid_message"
+      }
+    }
+  ],
+  "closeCode": 4400
+}

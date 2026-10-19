@@ -1,7 +1,7 @@
 # Backend 開發進度
 
-對照：[`docs/BACKEND_ARCHITECTURE.md`](../docs/BACKEND_ARCHITECTURE.md) §11 交付階段、[`docs/BACKEND_MEDIA_API_SPEC.md`](../docs/BACKEND_MEDIA_API_SPEC.md)（Media v1）
-最後更新：2026-10-05（併入同步評估；完成優先 1 資料正確性）
+對照：[`docs/BACKEND_ARCHITECTURE.md`](../docs/BACKEND_ARCHITECTURE.md) §11 交付階段、[`docs/BACKEND_MEDIA_API_SPEC.md`](../docs/BACKEND_MEDIA_API_SPEC.md)（Media v1）、[`docs/BACKEND_ASSET_PREPARATION_V2_SPEC.md`](../docs/BACKEND_ASSET_PREPARATION_V2_SPEC.md)（preparation v2）
+最後更新：2026-10-12（批次 A–F 源碼；冪等修正；整體仍未完成）
 
 圖例：✅ 完成 · 🟡 部分完成／暫定 · ⬜ 未開始
 
@@ -11,7 +11,7 @@
 |---|---|---|
 | B0 Protocol 與單機資料基線 | 🟡 | 資料表、transaction、冪等、測試基礎完成；protocol 尚未與 KMP 共用定稿 |
 | B1 單實例保存與同步 | 🟡 | REST 版本的 Workspace CRUD / membership / submit / catch-up / state 完成；WebSocket 與正式 auth 未做 |
-| B2 多程序與即時 fan-out | ⬜ | outbox 已同 transaction 寫入，但尚無 publisher、Redis |
+| B2 多程序與即時 fan-out | 🟡 | 批次 A：WebSocket gateway、ticket、catch-up barrier、outbox publisher（PostgreSQL NOTIFY）、Presence、metadataRevision 已交付；正式 auth 未做 |
 | B3 資產與背景工作 | 🟡 | Media v1 後端完成（signed PUT/GET、complete、worker 驗證、縮圖、abandon、GC）；APP 真實端到端與 QA 簽核待做；snapshot compaction 未做 |
 | B4 協作產品化 | ⬜ | — |
 
@@ -20,8 +20,9 @@
 ### 專案基礎
 - ✅ `backend/` Bun + TypeScript 專案，Fastify 5 + TypeBox，MVC + Repository / Service 分層
 - ✅ 環境變數設定（`src/config/env.ts`）、`.env.example`
-- ✅ `docker-compose.yml` 啟動 PostgreSQL 17（port 5433）與 RustFS S3-compatible storage（port 9000）
+- ✅ `docker-compose.yml` 啟動 PostgreSQL 18.6（port 5433）與 RustFS S3-compatible storage（port 9000）
 - ✅ SQL migration runner（advisory lock + 單一 transaction，`bun run migrate`）
+- ✅ 所有 request body 嚴格驗證（TypeBox；不做型別轉換、不接受未知欄位，CORE-02）；querystring / params 依 schema 轉型
 - ✅ 統一 error envelope `{ error: { code, message, details }, requestId }`
 - ✅ OpenAPI / Swagger UI（`/docs`），request / response 皆有 JSON Schema
 - ✅ Structured log（pino），redact `authorization` 與 `x-user-id`；request log 不保留 query string（簽名 URL）
@@ -41,7 +42,55 @@
 - ✅ Members：列表 / 新增或變更角色 / 撤銷（owner 限定；owner 角色不可變更）
 - ✅ Operations：`POST …/operations`（§6.2 envelope）、`GET …/operations?afterSeq=&limit=`（catch-up）
 - ✅ State / Snapshots：`GET …/state`（一致讀取的目前 projection）、`POST …/snapshots`（checksum）、`GET …/snapshots/latest`
-- ✅ Assets（Media v1）：見下節
+- ✅ Assets（Media v1）、Asset preparations（v2）：見下節
+- ✅ `GET /capabilities`：宣告可選協定（目前為 `assetPreparation`）
+
+### 即時協作（批次 A，BACKEND_MISSING_IMPLEMENTATION_SPEC §3）
+- ✅ Migration `006`：`workspaces.metadata_revision`、`realtime_tickets`（只存 SHA-256）、UNLOGGED `presence_rooms` / `presence_peers`
+- ✅ REST：`GET …/realtime-capabilities`、`POST …/realtime-ticket`（一次性、60 秒、no-store）；全域 `/capabilities` 加入 `canvas`（最小可寫 protocol）、`realtime`，未交付能力為 `supported: false`
+- ✅ WS `/api/v1/realtime`（`@fastify/websocket`，subprotocol `boarderless.v1`）：join 驗證 ticket / membership、3 秒逾時、Origin、未驗證連線上限、frame 大小
+- ✅ catch-up / live barrier：先註冊再讀 head、完整 transaction、snapshot_required（非邊界 / 超前 / 過多）、snapshot ahead of barrier、resync（過多 pending / 過大 transaction / 慢 consumer）
+- ✅ WS submit 與 REST 共用 `OperationService`；ack accepted / duplicate / conflict / rejected（含 partial_duplicate）
+- ✅ 跨 process fan-out：outbox publisher（SKIP LOCKED + 同交易 `pg_notify`）、LISTEN 喚醒、輪詢安全網；每次送出前重新檢查 ACL
+- ✅ metadataRevision：改名 / 成員 / 角色 / 刪除同交易 +1 並寫 outbox；`workspace_metadata`、`access_revoked`
+- ✅ Presence：world 座標 cursor、selection（過濾不存在物件）、rate limit、heartbeat TTL、roomEpoch / roomRevision、撤權與離線移除
+- ✅ 15 個整合測試（兩個 gateway、各自連線池）、33 個 fixtures + `schemas.json`；真多 process 預檢 `acceptance:multi-process`
+
+### 雲端快速方案簿（批次 B，MISSING_IMPLEMENTATION_SPEC §4）
+- ✅ Migration `007`：collections（collectionRevision / quota）、quick_schemes（tombstone）、receipts、asset pins
+- ✅ `/users/me/quick-schemes` CRUD：If-None-Match / If-Match（強 ETag）、Idempotency-Key receipt（30 天）、412 / 428 / 409、刪除 tombstone
+- ✅ 穩定快照分頁（collectionRevision 綁定、變更即 410）、collection ETag 304、單頁 bytes 上限
+- ✅ 嚴格 JSON（重複 key / 孤立 surrogate / 深度 / 1 MiB）、selection v1–v9 validator（`src/domain/selection.ts`）
+- ✅ assetBindings 精確覆蓋 + 來源 ACL / ready / derivative 檢查、availability、pins
+- ✅ 15 個整合測試、8 個 selection 單元測試、44 個 fixtures
+- ⬜ 跨 workspace materialization、429 rate limit
+
+### 共用背景（批次 C，MISSING_IMPLEMENTATION_SPEC §5）
+- ✅ Migration `008`：`workspaces.canvas_style` / `canvas_style_version`（default / 0）
+- ✅ `update_canvas_style`：workspace 鎖內 CAS、正式 payload 帶權威版本、409 `canvas_style_version_conflict`、嚴格 token
+- ✅ state / snapshot schema 2 含 style；schema 1 舊 snapshot 原樣
+- ✅ 8 個整合測試、14 個 fixtures
+
+### 連線 geometry 與 vectorPath（批次 D，MISSING_IMPLEMENTATION_SPEC §6）
+- ✅ `style.geometry`（relation-geometry.v1）嚴格 canonical 驗證、整體替換、自循環（auto / loop）、平行線
+- ✅ 插入節點單一 transaction recipe（含 Undo / Redo、CAS race）
+- ✅ TextNode `vectorPath` / `textPlacement`（null 清除）；`src/domain/{relation-geometry,vector-path,node-shapes}.ts`
+- ✅ 8 個整合測試、56 個 fixtures；`bun run fixtures:all` 一次重錄全部 contract fixtures
+
+### 時序圖（批次 E，MISSING_IMPLEMENTATION_SPEC §7）
+- ✅ Migration `009`：`workspaces.sequence_diagrams` / `sequence_diagrams_version`
+- ✅ `update_sequence_diagrams`：before 完整一致 + CAS、409 `sequence_diagrams_conflict`；transaction 結束時驗證全部 graph bindings
+- ✅ state / snapshot schema 3；5 個整合測試、14 個 fixtures
+
+### 素材引用歷史還原（批次 F，MISSING_IMPLEMENTATION_SPEC §8）
+- ✅ Migration `010`：`media_reference_provenance`（update_object 換素材時同交易保存 before / after）
+- ✅ `restore_media_references`：依原交易 provenance 還原，不接受 client assetId；一般 update 的 Ready 規則不放寬
+- ✅ 3 個整合測試、11 個 fixtures
+
+### 容器與 CI
+- ✅ `Dockerfile`：`api`（預設，port 3000、HEALTHCHECK、啟動時自動 migration）與 `worker`（含 ffmpeg）兩個 target；以非 root `bun` 使用者執行；`/data` volume 供 local storage driver
+- ✅ `docker compose --profile app`：以容器跑 API + worker（`API_PORT`、`APP_DB_NAME`、`S3_PUBLIC_ENDPOINT` 可調）
+- ✅ GitHub Actions `backend-image.yml`：`backend/` 變更時型別檢查 + 測試（PostgreSQL、RustFS、ffmpeg）→ 映像啟動檢查 → 打包 amd64 / arm64 並推送 `ghcr.io/creamgod45/boarderless-backend`、`boarderless-worker`
 
 ### 素材系統 Media v1（BACKEND_MEDIA_API_SPEC）
 - ✅ `POST …/assets`：MIME 精確 allowlist（415）、1..200 MiB（413）、`sha256:` checksum 格式（400）→ 201 `{asset, upload}`；不再回傳 `uploadUrl`
@@ -56,6 +105,7 @@
 - ✅ Upload GC：只回收 upload ticket 過期且從未 complete 的資產，不碰 accepted / processing
 - ✅ Storage driver：`s3`（aws4fetch，S3 / RustFS / MinIO / R2）與 `local`（開發 / 測試，HMAC 簽名 URL 由 `/storage/objects` 處理）
 - ✅ MediaNode 引用驗證：`create_object` / `update_object` 的 `assetId` / `thumbnailAssetId` 必須屬於同一 Workspace，`mediaKind` 必須符合 MIME
+- ✅ ASSET-07：新建 MediaNode 與替換素材的新引用必須 ready（422 `asset_not_ready`）；`restore_objects` 還原原引用不要求 ready
 - ✅ Storage 暫時失敗回 503 `storage_unavailable`，不洩漏內部位址
 - ✅ 六種 MIME 真實 binary fixture 與 manifest（`tests/fixtures/media/`，`bun run fixtures:media`）
 - ✅ 26 份 request / response contract fixtures（`tests/fixtures/contract/media-v1/`，`bun run fixtures:contract`），並以 response schema 驗證
@@ -75,6 +125,17 @@
 #### 簽名 URL TTL 與撤銷
 - upload 預設 15 分鐘（`UPLOAD_URL_TTL_SECONDS`）、download 預設 5 分鐘（`DOWNLOAD_URL_TTL_SECONDS`）
 - 撤銷 membership 後立即停止簽發新票券；**已簽出的 S3 presigned URL 在到期前無法撤銷**，最大暴露時間即上述 TTL
+
+### 素材 preparation v2（BACKEND_ASSET_PREPARATION_V2_SPEC）
+- ✅ Migration `004`：`asset_preparations`（PK user + workspace + requestId，永久保留）、`asset_upload_leases`（ticketRequestId 冪等、generation、獨立 staging key）、`assets.preparation_version` / `upload_lease_id`；`duration_ms` 改 BIGINT（上限 JSON safe integer）
+- ✅ `POST …/assets/preparations`：先保留 receipt 再建 asset（並行同 key 只建一份）；201 首次、200 重送、409 `preparation_mismatch`；伺服器計算 `requestDigest`（golden vector 已核對）
+- ✅ `GET …/assets/preparations/:requestId`：每次重新授權；他人 / 他 Workspace / 不存在一律 404 `preparation_not_found`；降權 403
+- ✅ `POST …/:requestId/upload-tickets`：同 ticketRequestId 冪等、過期 409 不自動 renew、新 ticket 取代舊 lease；簽名在 transaction 外，失敗不影響已保存的 lease / reservation
+- ✅ `POST …/:requestId/complete`：只接受當前 lease；同一 transaction 固定 lease + verify job；重送回目前 phase；wrong lease / checksum 409；v1 complete 不能繞過
+- ✅ ASSET-08：envelope 分離 `declared`（永不改寫）與 `verified`（migration `005`）；worker 比對宣告值，不符 rejected `declared_metadata_mismatch` 並保存實際值；duration 容差 max(100ms, 1%)
+- ✅ 尺寸統一為顯示尺寸：解析 JPEG / PNG / WebP EXIF orientation、影片 display matrix rotation（Media v1 同一定義）
+- ✅ GC：過期且未被接受的 lease 回收 staging；v2 reservation 不會被 v1 GC 過期
+- ✅ 21 個整合測試（並行 prepare、回覆遺失、API 重啟、presign 失敗、lease 過期 / 取代、complete 與 renew 競爭、並行 complete、有效舊 PUT 不能改 ready、來源內容變更、missing、abandoned tombstone、撤權、GC）與 36 個 fixtures（`tests/fixtures/contract/asset-preparation-v2/`）
 
 ### 資料正確性（BAI-001 / 007 / 008 / 011 / 012）
 - ✅ 型別化物件 schema：只接受 `text` / `group` / `media`，未知型別回 `unsupported_object_type`（附 `supportedObjectTypes`、`objectSchemaVersion` 供舊 client 提示升級）
@@ -101,7 +162,7 @@
 - ✅ locked 物件只能切換 `locked`，不可移動 / 修改 / 刪除
 - ✅ operation、projection、outbox 在同一 transaction 提交
 
-### 測試（`bun test`，145 個）
+### 測試（`bun test`，464 個）
 - ✅ 單元：operation payload 驗證、touched ids、角色權限矩陣、HTML 跳脫、MIME sniff、本機簽名 URL、contract fixtures schema
 - ✅ 整合（真實 PostgreSQL）：create/move/delete + 冪等重送、20 個並行寫入的 `serverSeq` 連續性、版本衝突、transaction rollback、relation cascade、角色與撤銷、outbox、snapshot
 - ✅ 素材整合（真實 ffmpeg）：六種 MIME 完整流程、驗證失敗分類、complete 冪等 / 衝突、abandon 競爭、GC、lease 過期重領、重複縮圖 job、多 worker、不可覆寫、missing、ACL、MediaNode 引用、storage 503
@@ -131,6 +192,32 @@
 - [ ] 正式型別替換 / relation 端點修改 operation（目前明確不支援；需產品確認語意）
 - [ ] Receipt 依賴 operation log 保留；若日後裁剪歷史，需定義 receipt 保留期與「已裁剪」狀態
 
+### 驗收（[`docs/BACKEND_ACCEPTANCE_SPEC.md`](../docs/BACKEND_ACCEPTANCE_SPEC.md)）
+- 案例狀態與後端預檢證據見 [`ACCEPTANCE.md`](ACCEPTANCE.md)；正式驗收在業務功能完成、版本封存後集中執行
+- [x] CORE-04 多 process 競爭：`acceptance:multi-process` 預檢通過（正式驗收待集中執行）
+- [ ] CORE-08 正式上線前的資料檢查與處置計畫（見「資料政策」）
+- [ ] APP 依更新後 schema / fixtures 對接，並評估「相容性影響」（[`ACCEPTANCE.md`](ACCEPTANCE.md)）
+
+### 尚未完成（不宣告整體交付完成）
+- [ ] 正式認證（目前只有 `x-user-id` 開發替身）
+- [ ] 429 限流（`rate_limited` / `Retry-After`）
+- [ ] 跨 workspace 素材搬移（materialization）
+- [ ] relation 端點改接
+- [ ] 服務部署、正式集中驗收
+
+### 缺少功能實作（[`docs/BACKEND_MISSING_IMPLEMENTATION_SPEC.md`](../docs/BACKEND_MISSING_IMPLEMENTATION_SPEC.md)，交付紀錄見 [`DELIVERY.md`](DELIVERY.md)）
+- [x] A 即時協作（正式 HTTP auth 仍未交付）
+- [x] B 雲端快速方案簿（materialization 未交付）
+- [x] C 共用背景
+- [x] D 連線 geometry 與 vectorPath（端點改接未交付）
+- [x] E 時序圖
+- [x] F 素材引用歷史還原
+
+### 素材 preparation v2——後端已完成，待 APP 對接
+- [ ] APP：durable reservation、v2 HTTP adapter（先檢查 `/capabilities`）、ticket lease、上傳串流、local → server ID 映射發布
+- [ ] 真兩端驗收：offline local import → prepare / upload → ready 驗證 → canvas 審閱 → receipt / fence → 重開 Undo / Redo
+- [x] 真 PostgreSQL 重啟：`bun run acceptance:db-restart` 預檢通過（見 [`ACCEPTANCE.md`](ACCEPTANCE.md)）
+
 ### 需先定稿的契約（§12，阻塞 B0 完成）
 - [ ] 與 KMP `shared` 模組共用 `WorkspaceOperation` 定義（種類、inverse 所需資料、transaction 邊界）；目前 `src/domain/operations.ts` 為 server 暫定版
 - [ ] 產生共用 JSON Schema 並建立 Kotlin / TypeScript contract fixtures 互讀測試（`tests/contract/`）
@@ -157,7 +244,7 @@
 - [ ] Storage 孤兒物件回收：bucket lifecycle rule 清理 `uploads/` 前綴（ready 後仍以有效票券重傳、或 worker 在寫入縮圖與 DB commit 之間當機時會留下物件）
 - [ ] verify job 進入 dead-letter 時資產維持 pending：需要告警與人工重試工具
 - [ ] 驗證強度：目前解碼第一個影格；評估完整解碼 / 影片 codec allowlist / 音訊檢查
-- [ ] Worker container image（含 ffmpeg）與資源限制（CPU / 記憶體 / 同時 job 數）
+- [ ] Worker 部署的資源限制（CPU / 記憶體 / 同時 job 數）；worker 映像約 900 MB（Debian ffmpeg），可評估精簡版 ffmpeg
 - [ ] 正式環境 storage：bucket、CORS、lifecycle 由 IaC 管理（`S3_ENSURE_BUCKET` 只限開發），`STORAGE_SIGNING_SECRET` 必填
 - [ ] Snapshot compaction worker（依 operation 數量 / 時間自動觸發）
 - [ ] Workspace 刪除後 assets / snapshots / 衍生檔清理排程
@@ -175,11 +262,13 @@
 - [ ] OpenTelemetry traces、metrics（commit latency、lock wait、outbox backlog、event-loop lag）
 - [ ] Load scenario（大量 idle socket、熱點 Workspace、平行寫入）
 - [ ] 大型 snapshot 改存 object storage（`storage_key`）
-- [ ] CI：typecheck + test（含 PostgreSQL service）
+- [ ] 部署：映像已自動推送到 GHCR，但尚未設定部署目標（主機 / 平台、環境變數、secret、DB migration 策略）
 - [ ] Workspace 狀態 inspector page view（需先有正式 auth）
 
 ## 資料政策
-- 目前所有資料（開發與測試 DB、object storage）皆為測試資料：schema 變更不需要資料搬移或相容處理，必要時可直接重建。
+- 目前所有資料（開發與測試 DB、object storage）皆為測試資料：不做內容搬移或舊資料相容處理。
+- schema 變更一律以 migration 交付；清除或重建使用者的 DB 需另行明確授權。
+- 這不是永久免驗條件：正式上線前仍須資料檢查與處置計畫（CORE-08）。
 
 ## 與架構文件的差異
 - 目錄使用 `backend/`（文件 §7 建議 `server/`），目前為單一 package 的 MVC 結構；待 WebSocket gateway / worker 加入時再評估拆成 `apps/` + `packages/`。

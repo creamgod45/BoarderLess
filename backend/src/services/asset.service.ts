@@ -102,6 +102,10 @@ export class AssetService {
     await requireWorkspaceAccess(this.db.repos, workspaceId, userId, 'assets.upload')
     const current = await this.db.repos.assets.findById(assetId)
     if (!current || current.workspaceId !== workspaceId) throw notFound('Asset')
+    if (current.preparationVersion === 2) {
+      // v2 資產只能經 lease complete，避免繞過 lease generation
+      throw conflict('preparation_v2_required', 'This asset was prepared with preparation v2; complete it through its preparation')
+    }
     assertSameTicket(current, input)
 
     // 網路呼叫放在 transaction 之外，不在持有 row lock 時等待 storage

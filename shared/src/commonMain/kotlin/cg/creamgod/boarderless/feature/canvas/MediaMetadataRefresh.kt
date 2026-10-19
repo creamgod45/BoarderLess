@@ -14,9 +14,13 @@ internal fun needsMediaMetadataFollowUp(
 ): Boolean {
     val referenced = nodes.map { it.assetId }.toSet()
     return assets.any { asset ->
-        asset.workspaceId == workspaceId && (asset.status == AssetStatus.Pending ||
-            (asset.status == AssetStatus.Ready && asset.id in referenced &&
-                (asset.thumbnailAssetId == null || asset.thumbnailAssetId == asset.id)))
+        asset.workspaceId == workspaceId && (
+            asset.status == AssetStatus.Pending ||
+                (
+                    asset.status == AssetStatus.Ready && asset.id in referenced &&
+                        (asset.thumbnailAssetId == null || asset.thumbnailAssetId == asset.id)
+                )
+        )
     }
 }
 

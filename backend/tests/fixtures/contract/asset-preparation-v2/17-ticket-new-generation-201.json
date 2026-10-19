@@ -1,0 +1,60 @@
+{
+  "description": "另一個先保存的 ticketRequestId：generation 2",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/assets/preparations/ffffffff-ffff-4fff-8fff-ffffffffffff/upload-tickets",
+    "body": {
+      "ticketRequestId": "00000000-0000-4000-8000-000000000017"
+    }
+  },
+  "response": {
+    "status": 201,
+    "body": {
+      "schema": "boarderless.asset-preparation.v1",
+      "requestId": "ffffffff-ffff-4fff-8fff-ffffffffffff",
+      "requestDigest": "fa35865eed3c9ab0d0507cccd247475ca6c6eb541fe0ae9b4fb3dda1f333298b",
+      "phase": "prepared",
+      "declared": {
+        "byteSize": 442,
+        "checksum": "sha256:15b8da68f777d7caaab816ede7dc7364cc979cc9bffaab4e93d39e24b624d49d",
+        "durationMs": null,
+        "height": null,
+        "mediaType": "image/png",
+        "width": null
+      },
+      "verified": null,
+      "asset": {
+        "id": "00000000-0000-4000-8000-000000000018",
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "ownerId": "11111111-1111-4111-8111-111111111111",
+        "storageKey": "workspaces/22222222-2222-4222-8222-222222222222/assets/00000000-0000-4000-8000-000000000018.png",
+        "mediaType": "image/png",
+        "byteSize": 442,
+        "checksum": "sha256:15b8da68f777d7caaab816ede7dc7364cc979cc9bffaab4e93d39e24b624d49d",
+        "status": "pending",
+        "createdAt": "2026-10-02T00:00:00.000Z",
+        "updatedAt": "2026-10-02T00:00:00.000Z",
+        "width": null,
+        "height": null,
+        "durationMs": null,
+        "thumbnailAssetId": null,
+        "rejectionReason": null
+      },
+      "lease": {
+        "leaseId": "00000000-0000-4000-8000-000000000019",
+        "ticketRequestId": "00000000-0000-4000-8000-000000000017",
+        "generation": 2,
+        "expiresAt": "2026-10-02T00:15:00.000Z"
+      },
+      "upload": {
+        "method": "PUT",
+        "url": "https://storage.example.invalid/signed-upload",
+        "headers": {
+          "Content-Type": "image/png"
+        },
+        "expiresAt": "2026-10-02T00:15:00.000Z",
+        "leaseId": "00000000-0000-4000-8000-000000000019"
+      }
+    }
+  }
+}

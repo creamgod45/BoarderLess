@@ -28,6 +28,7 @@ class WorkspaceMenuBridge {
 
 /** Menu commands that have a keyboard shortcut but no command palette entry. */
 object WorkspaceMenuCommands {
+    const val Search = "canvas-search"
     const val CommandPalette = "command-palette"
     const val Cut = "cut"
     const val Copy = "copy"

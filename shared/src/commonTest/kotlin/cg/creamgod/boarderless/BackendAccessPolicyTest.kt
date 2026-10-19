@@ -31,8 +31,9 @@ class BackendAccessPolicyTest {
             assertTrue(requiresWorkspaceReconnectAfterFailedSubmission(transient, denied))
         }
         assertTrue(requiresWorkspaceReconnectAfterFailedSubmission(IllegalStateException("offline"), transient))
-        assertFalse(requiresWorkspaceReconnectAfterFailedSubmission(
-            BackendHttpException(HttpStatusCode.UnprocessableEntity, ""), transient))
+        assertFalse(
+            requiresWorkspaceReconnectAfterFailedSubmission(BackendHttpException(HttpStatusCode.UnprocessableEntity, ""), transient),
+        )
         assertFalse(requiresWorkspaceReconnectAfterFailedSubmission(transient, transient))
     }
 }

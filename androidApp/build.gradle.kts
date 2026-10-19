@@ -21,13 +21,27 @@ dependencies {
 
 android {
     namespace = "cg.creamgod.boarderless"
-    compileSdk = libs.versions.android.compileSdk.get().toInt()
+    compileSdk =
+        libs.versions.android.compileSdk
+            .get()
+            .toInt()
 
     defaultConfig {
         applicationId = "cg.creamgod.boarderless"
-        minSdk = libs.versions.android.minSdk.get().toInt()
-        targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = providers.gradleProperty("appVersionCode").orElse("1").get().toInt()
+        minSdk =
+            libs.versions.android.minSdk
+                .get()
+                .toInt()
+        targetSdk =
+            libs.versions.android.targetSdk
+                .get()
+                .toInt()
+        versionCode =
+            providers
+                .gradleProperty("appVersionCode")
+                .orElse("1")
+                .get()
+                .toInt()
         versionName = providers.gradleProperty("appVersion").orElse("1.0.0").get()
     }
     packaging {
@@ -37,11 +51,21 @@ android {
     }
     val keystorePath = providers.environmentVariable("ANDROID_KEYSTORE_PATH").orNull
     if (!keystorePath.isNullOrBlank()) {
+        val releaseStorePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD").orNull
+            ?.takeIf { it.isNotEmpty() }
+            ?: throw GradleException("ANDROID_KEYSTORE_PASSWORD is required when signing Android releases")
+        val releaseKeyAlias = providers.environmentVariable("ANDROID_KEY_ALIAS").orNull
+            ?.takeIf { it.isNotBlank() }
+            ?: throw GradleException("ANDROID_KEY_ALIAS is required when signing Android releases")
+        // GitHub exposes an unset Secret as an empty string, so orElse alone is insufficient.
+        val releaseKeyPassword = providers.environmentVariable("ANDROID_KEY_PASSWORD").orNull
+            ?.takeIf { it.isNotEmpty() }
+            ?: releaseStorePassword
         signingConfigs.create("release") {
             storeFile = file(keystorePath)
-            storePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD").get()
-            keyAlias = providers.environmentVariable("ANDROID_KEY_ALIAS").get()
-            keyPassword = providers.environmentVariable("ANDROID_KEY_PASSWORD").get()
+            storePassword = releaseStorePassword
+            keyAlias = releaseKeyAlias
+            keyPassword = releaseKeyPassword
         }
     }
     buildTypes {
@@ -50,7 +74,7 @@ android {
             if (!keystorePath.isNullOrBlank()) signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                "proguard-rules.pro",
             )
         }
     }

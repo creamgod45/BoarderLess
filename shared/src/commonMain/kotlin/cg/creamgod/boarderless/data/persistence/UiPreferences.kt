@@ -1,12 +1,17 @@
 package cg.creamgod.boarderless.data.persistence
 
 import cg.creamgod.boarderless.designsystem.color.ColorModel
+import cg.creamgod.boarderless.data.WorkspaceStorageMode
 import cg.creamgod.boarderless.i18n.LanguagePreference
 import com.russhwolf.settings.Settings
 
 class UiPreferences(
     private val settings: Settings = Settings(),
 ) {
+    var workspaceStorageMode: WorkspaceStorageMode?
+        get() = WorkspaceStorageMode.fromToken(settings.getStringOrNull(WorkspaceStorageModeKey))
+        set(value) { if (value == null) settings.remove(WorkspaceStorageModeKey) else settings.putString(WorkspaceStorageModeKey, value.token) }
+
     var reduceTransparency: Boolean
         get() = settings.getBoolean(ReduceTransparencyKey, false)
         set(value) = settings.putBoolean(ReduceTransparencyKey, value)
@@ -20,36 +25,62 @@ class UiPreferences(
         set(value) = settings.putString(LanguageKey, value.token)
 
     var colorPickerModel: ColorModel
-        get() = settings.getStringOrNull(ColorPickerModelKey)
-            ?.let { name -> ColorModel.entries.firstOrNull { it.name == name } }
-            ?: ColorModel.Hsb
+        get() =
+            settings
+                .getStringOrNull(ColorPickerModelKey)
+                ?.let { name -> ColorModel.entries.firstOrNull { it.name == name } }
+                ?: ColorModel.Hsb
         set(value) = settings.putString(ColorPickerModelKey, value.name)
 
     var collapsedInspectorSections: Set<String>
-        get() = settings.getStringOrNull(CollapsedInspectorSectionsKey)
-            .orEmpty()
-            .split(',')
-            .map(String::trim)
-            .filter(String::isNotEmpty)
-            .toSet()
-        set(value) = settings.putString(
-            CollapsedInspectorSectionsKey,
-            value.asSequence().map(String::trim).filter(String::isNotEmpty).sorted().joinToString(","),
-        )
+        get() =
+            settings
+                .getStringOrNull(CollapsedInspectorSectionsKey)
+                .orEmpty()
+                .split(',')
+                .map(String::trim)
+                .filter(String::isNotEmpty)
+                .toSet()
+        set(value) =
+            settings.putString(
+                CollapsedInspectorSectionsKey,
+                value
+                    .asSequence()
+                    .map(String::trim)
+                    .filter(String::isNotEmpty)
+                    .sorted()
+                    .joinToString(","),
+            )
 
     var collapsedPanelSections: Set<String>
-        get() = settings.getStringOrNull(CollapsedPanelSectionsKey)
-            .orEmpty()
-            .split(',')
-            .map(String::trim)
-            .filter(String::isNotEmpty)
-            .toSet()
-        set(value) = settings.putString(
-            CollapsedPanelSectionsKey,
-            value.asSequence().map(String::trim).filter(String::isNotEmpty).sorted().joinToString(","),
-        )
+        get() =
+            settings
+                .getStringOrNull(CollapsedPanelSectionsKey)
+                .orEmpty()
+                .split(',')
+                .map(String::trim)
+                .filter(String::isNotEmpty)
+                .toSet()
+        set(value) =
+            settings.putString(
+                CollapsedPanelSectionsKey,
+                value
+                    .asSequence()
+                    .map(String::trim)
+                    .filter(String::isNotEmpty)
+                    .sorted()
+                    .joinToString(","),
+            )
+
+    /** Import presentation only; never stores an upload identity or hides recovery evidence. */
+    var collapsedMediaImportSections: Set<String>
+        get() = settings.getStringOrNull("ui.media-import.collapsed-sections").orEmpty()
+            .split(',').filter { it in setOf("catalog", "advanced") }.toSet()
+        set(value) = settings.putString("ui.media-import.collapsed-sections",
+            value.filter { it in setOf("catalog", "advanced") }.sorted().joinToString(","))
 
     private companion object {
+        const val WorkspaceStorageModeKey = "ui.workspace.storageMode"
         const val ReduceTransparencyKey = "ui.accessibility.reduceTransparency"
         const val ReduceMotionKey = "ui.accessibility.reduceMotion"
         const val LanguageKey = "ui.language"

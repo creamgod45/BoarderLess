@@ -19,9 +19,10 @@ internal fun layerZIndexUpdates(
     selectedIds: Set<CanvasObjectId>,
     move: LayerMove,
 ): Map<CanvasObjectId, Long> {
-    val ordered = objects
-        .sortedWith(compareBy<CanvasObject>({ it.zIndex }, { it.id.value }))
-        .map { it.id }
+    val ordered =
+        objects
+            .sortedWith(compareBy<CanvasObject>({ it.zIndex }, { it.id.value }))
+            .map { it.id }
     val selected = selectedIds.intersect(ordered.toSet())
     if (selected.isEmpty()) return emptyMap()
 
@@ -63,8 +64,9 @@ internal fun layerZIndexUpdates(
     if (reordered == ordered) return emptyMap()
 
     val currentById = objects.associateBy(CanvasObject::id)
-    return reordered.mapIndexedNotNull { index, id ->
-        val nextZIndex = index.toLong()
-        if (currentById.getValue(id).zIndex == nextZIndex) null else id to nextZIndex
-    }.toMap()
+    return reordered
+        .mapIndexedNotNull { index, id ->
+            val nextZIndex = index.toLong()
+            if (currentById.getValue(id).zIndex == nextZIndex) null else id to nextZIndex
+        }.toMap()
 }

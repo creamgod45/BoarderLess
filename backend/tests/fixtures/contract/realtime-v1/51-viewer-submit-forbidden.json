@@ -1,0 +1,72 @@
+{
+  "description": "viewer 可讀與 presence，不能 mutation：rejected forbidden",
+  "transport": "websocket",
+  "subprotocol": "boarderless.v1",
+  "exchange": [
+    {
+      "direction": "client",
+      "frame": {
+        "type": "submit_operations",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000467",
+        "clientId": "00000000-0000-4000-8000-000000000468",
+        "transactionId": "00000000-0000-4000-8000-000000000469",
+        "baseVersion": 0,
+        "operations": [
+          {
+            "operationId": "00000000-0000-4000-8000-000000000470",
+            "clientSeq": 1,
+            "kind": "create_object",
+            "payload": {
+              "objectId": "00000000-0000-4000-8000-000000000471",
+              "objectType": "text",
+              "properties": {
+                "text": "Idea"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "direction": "server",
+      "frame": {
+        "type": "presence_delta",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000467",
+        "roomEpoch": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "roomRevision": 19,
+        "upserts": [
+          {
+            "connectionId": "00000000-0000-4000-8000-000000000472",
+            "userId": "44444444-4444-4444-8444-444444444444",
+            "clientId": "00000000-0000-4000-8000-000000000468",
+            "displayName": "Viewer",
+            "role": "viewer",
+            "cursor": null,
+            "selectedObjectIds": [],
+            "presenceSeq": 0
+          }
+        ],
+        "removedConnectionIds": []
+      }
+    },
+    {
+      "direction": "server",
+      "frame": {
+        "type": "operation_ack",
+        "protocolVersion": 1,
+        "workspaceId": "22222222-2222-4222-8222-222222222222",
+        "connectionEpoch": "00000000-0000-4000-8000-000000000467",
+        "transactionId": "00000000-0000-4000-8000-000000000469",
+        "operationIds": [
+          "00000000-0000-4000-8000-000000000470"
+        ],
+        "status": "rejected",
+        "code": "forbidden"
+      }
+    }
+  ]
+}

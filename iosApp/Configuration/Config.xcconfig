@@ -15,5 +15,5 @@ OTHER_LDFLAGS=$(inherited) -framework Shared
 // Override these build settings for another development network or a production HTTPS service.
 BOARDERLESS_BACKEND_SCHEME=http
 BOARDERLESS_BACKEND_HOST=127.0.0.1
-BOARDERLESS_BACKEND_HOST[sdk=iphoneos*]=192.168.68.67
+BOARDERLESS_BACKEND_HOST[sdk=iphoneos*]=192.168.68.65
 BOARDERLESS_BACKEND_PORT=3000

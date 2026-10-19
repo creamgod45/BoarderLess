@@ -5,7 +5,9 @@ internal fun interface VideoAudioRouteSource {
 }
 
 /** Main-thread owned subscription. Old receiver callbacks cannot affect a later playback lease. */
-internal class VideoAudioRouteMonitor(private val source: VideoAudioRouteSource) {
+internal class VideoAudioRouteMonitor(
+    private val source: VideoAudioRouteSource,
+) {
     private var subscription: AutoCloseable? = null
     private var epoch = 0L
 

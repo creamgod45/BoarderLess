@@ -21,11 +21,12 @@ class ConnectorTargetingTest {
     @Test
     fun rotatedTargetUsesItsVisibleShape() {
         val source = node("source", 0, CanvasTransform(Vec2(-200f, 0f), CanvasSize(100f, 80f)))
-        val target = node(
-            "target",
-            1,
-            CanvasTransform(Vec2(100f, 100f), CanvasSize(200f, 100f), rotationDegrees = 90f),
-        )
+        val target =
+            node(
+                "target",
+                1,
+                CanvasTransform(Vec2(100f, 100f), CanvasSize(200f, 100f), rotationDegrees = 90f),
+            )
 
         assertEquals(
             target.id,
@@ -47,7 +48,11 @@ class ConnectorTargetingTest {
         )
     }
 
-    private fun node(id: String, zIndex: Long, transform: CanvasTransform) = TextNode(
+    private fun node(
+        id: String,
+        zIndex: Long,
+        transform: CanvasTransform,
+    ) = TextNode(
         id = CanvasObjectId(id),
         zIndex = zIndex,
         transform = transform,

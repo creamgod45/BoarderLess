@@ -8,14 +8,29 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class AssetPreviewPolicyTest {
-    private val session = WorkspaceSession(
-        "viewer", "client", WorkspaceMemberRole.Viewer, 0, 0,
-        Workspace(WorkspaceId("workspace-1"), "Preview"),
-    )
-    private val asset = WorkspaceAsset(
-        "asset-1", session.workspace.id, "owner", "image/png", 100, "sha256:abc",
-        2, 3, null, AssetStatus.Ready, "2026-10-01",
-    )
+    private val session =
+        WorkspaceSession(
+            "viewer",
+            "client",
+            WorkspaceMemberRole.Viewer,
+            0,
+            0,
+            Workspace(WorkspaceId("workspace-1"), "Preview"),
+        )
+    private val asset =
+        WorkspaceAsset(
+            "asset-1",
+            session.workspace.id,
+            "owner",
+            "image/png",
+            100,
+            "sha256:abc",
+            2,
+            3,
+            null,
+            AssetStatus.Ready,
+            "2026-10-01",
+        )
 
     @Test
     fun viewerCanPreviewEverySupportedImageType() {

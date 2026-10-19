@@ -1,0 +1,170 @@
+{
+  "description": "vectorPath 整個替換（properties 淺層 merge 的單一 key）",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "00000000-0000-4000-8000-000000000243",
+      "transactionId": "00000000-0000-4000-8000-000000000244",
+      "baseVersion": 33,
+      "operations": [
+        {
+          "operationId": "00000000-0000-4000-8000-000000000245",
+          "clientSeq": 1,
+          "kind": "update_object",
+          "payload": {
+            "objectId": "00000000-0000-4000-8000-000000000242",
+            "properties": {
+              "vectorPath": {
+                "viewBox": {
+                  "width": 100,
+                  "height": 100
+                },
+                "commands": [
+                  {
+                    "type": "move",
+                    "point": {
+                      "x": 0,
+                      "y": 0
+                    }
+                  },
+                  {
+                    "type": "line",
+                    "point": {
+                      "x": 100,
+                      "y": 0
+                    }
+                  },
+                  {
+                    "type": "quadratic",
+                    "control": {
+                      "x": 120,
+                      "y": 50
+                    },
+                    "point": {
+                      "x": 100,
+                      "y": 100
+                    }
+                  },
+                  {
+                    "type": "cubic",
+                    "control1": {
+                      "x": 60,
+                      "y": 120
+                    },
+                    "control2": {
+                      "x": 40,
+                      "y": 120
+                    },
+                    "point": {
+                      "x": 0,
+                      "y": 100
+                    }
+                  },
+                  {
+                    "type": "close"
+                  }
+                ],
+                "style": {
+                  "fillColorToken": "paper",
+                  "strokeColorToken": "ink",
+                  "strokeWidth": 2,
+                  "fillRule": "NonZero"
+                },
+                "schemaVersion": 1
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "status": "accepted",
+      "fromServerSeq": 81,
+      "toServerSeq": 81,
+      "workspaceVersion": 34,
+      "operations": [
+        {
+          "serverSeq": 81,
+          "operationId": "00000000-0000-4000-8000-000000000245",
+          "transactionId": "00000000-0000-4000-8000-000000000244",
+          "actorId": "11111111-1111-4111-8111-111111111111",
+          "clientId": "00000000-0000-4000-8000-000000000243",
+          "clientSeq": 1,
+          "baseVersion": 33,
+          "workspaceVersion": 34,
+          "operationType": "update_object",
+          "payload": {
+            "objectId": "00000000-0000-4000-8000-000000000242",
+            "properties": {
+              "vectorPath": {
+                "style": {
+                  "fillRule": "NonZero",
+                  "strokeWidth": 2,
+                  "fillColorToken": "paper",
+                  "strokeColorToken": "ink"
+                },
+                "viewBox": {
+                  "width": 100,
+                  "height": 100
+                },
+                "commands": [
+                  {
+                    "type": "move",
+                    "point": {
+                      "x": 0,
+                      "y": 0
+                    }
+                  },
+                  {
+                    "type": "line",
+                    "point": {
+                      "x": 100,
+                      "y": 0
+                    }
+                  },
+                  {
+                    "type": "quadratic",
+                    "point": {
+                      "x": 100,
+                      "y": 100
+                    },
+                    "control": {
+                      "x": 120,
+                      "y": 50
+                    }
+                  },
+                  {
+                    "type": "cubic",
+                    "point": {
+                      "x": 0,
+                      "y": 100
+                    },
+                    "control1": {
+                      "x": 60,
+                      "y": 120
+                    },
+                    "control2": {
+                      "x": 40,
+                      "y": 120
+                    }
+                  },
+                  {
+                    "type": "close"
+                  }
+                ],
+                "schemaVersion": 1
+              }
+            }
+          },
+          "schemaVersion": 1,
+          "committedAt": "2026-10-02T00:00:00.000Z"
+        }
+      ]
+    }
+  }
+}

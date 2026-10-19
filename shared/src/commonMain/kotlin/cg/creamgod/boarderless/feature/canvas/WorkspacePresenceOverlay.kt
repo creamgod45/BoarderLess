@@ -20,36 +20,54 @@ import cg.creamgod.boarderless.domain.model.Viewport
 import cg.creamgod.boarderless.domain.model.Workspace
 
 /** Draw-only overlay; no pointer handlers, focus request or changes to local selection. */
-@Composable internal fun WorkspacePresenceOverlay(peers: List<WorkspacePresencePeer>, viewport: Viewport, workspace: Workspace) {
+@Composable internal fun WorkspacePresenceOverlay(
+    peers: List<WorkspacePresencePeer>,
+    viewport: Viewport,
+    workspace: Workspace,
+) {
     if (peers.isEmpty()) return
     val colors = BoarderLessTheme.colors
     val textMeasurer = rememberTextMeasurer()
     Canvas(Modifier.fillMaxSize().clipToBounds()) {
-        peers.forEach peerLoop@ { peer ->
-            peer.selectedIds.forEach selectionLoop@ { id ->
+        peers.forEach peerLoop@{ peer ->
+            peer.selectedIds.forEach selectionLoop@{ id ->
                 val node = workspace.objectById(id) ?: return@selectionLoop
-                val points = runCatching { rotatedTransformCorners(node.transform).map(viewport::worldToScreen) }
-                    .getOrNull() ?: return@selectionLoop
-                val outline = Path().apply {
-                    moveTo(points.first().x, points.first().y)
-                    points.drop(1).forEach { lineTo(it.x, it.y) }
-                    close()
-                }
-                drawPath(outline, colors.accent.copy(alpha = 0.55f), style = Stroke(2.dp.toPx(),
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx()))))
+                val points =
+                    runCatching { rotatedTransformCorners(node.transform).map(viewport::worldToScreen) }
+                        .getOrNull() ?: return@selectionLoop
+                val outline =
+                    Path().apply {
+                        moveTo(points.first().x, points.first().y)
+                        points.drop(1).forEach { lineTo(it.x, it.y) }
+                        close()
+                    }
+                drawPath(
+                    outline,
+                    colors.accent.copy(alpha = 0.55f),
+                    style =
+                        Stroke(
+                            2.dp.toPx(),
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx())),
+                        ),
+                )
             }
             val cursor = peer.cursor ?: return@peerLoop
             val point = runCatching { viewport.worldToScreen(cursor) }.getOrNull() ?: return@peerLoop
             if (point.x !in 0f..size.width || point.y !in 0f..size.height) return@peerLoop
-            val marker = Path().apply {
-                moveTo(point.x, point.y)
-                lineTo(point.x + 10.dp.toPx(), point.y + 14.dp.toPx())
-                lineTo(point.x + 2.dp.toPx(), point.y + 11.dp.toPx())
-                close()
-            }
+            val marker =
+                Path().apply {
+                    moveTo(point.x, point.y)
+                    lineTo(point.x + 10.dp.toPx(), point.y + 14.dp.toPx())
+                    lineTo(point.x + 2.dp.toPx(), point.y + 11.dp.toPx())
+                    close()
+                }
             drawPath(marker, colors.accent)
-            drawText(textMeasurer, peer.displayName, topLeft = Offset(point.x + 12.dp.toPx(), point.y + 8.dp.toPx()),
-                style = TextStyle(color = colors.contentText, fontSize = 11.sp))
+            drawText(
+                textMeasurer,
+                peer.displayName,
+                topLeft = Offset(point.x + 12.dp.toPx(), point.y + 8.dp.toPx()),
+                style = TextStyle(color = colors.contentText, fontSize = 11.sp),
+            )
         }
     }
 }

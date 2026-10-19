@@ -39,6 +39,7 @@ WORK="$(mktemp -d "$ROOT/build/ios-package/run.XXXXXX")"
 KEYCHAIN=""
 PROFILE_DEST=""
 ORIGINAL_KEYCHAINS=()
+TAIL_PID=""
 while IFS= read -r entry; do
   entry="${entry#*\"}"
   entry="${entry%\"*}"
@@ -56,10 +57,17 @@ cleanup() {
       rm -f "$PROFILE_DEST"
     fi
   fi
+  if [ -n "${TAIL_PID:-}" ]; then kill "$TAIL_PID" 2>/dev/null || true; fi
   # Remove signing material; retain Xcode products/logs for diagnosis.
   rm -f "$WORK/certificate.p12" "$WORK/profile.mobileprovision" "$WORK/profile.plist" "$WORK/previous.mobileprovision"
 }
 trap cleanup EXIT
+
+# Xcode buffers Run Script output until the phase ends; stream the Gradle/Kotlin build log live instead.
+export BOARDERLESS_GRADLE_LOG="$WORK/gradle.log"
+: > "$BOARDERLESS_GRADLE_LOG"
+tail -n +1 -F "$BOARDERLESS_GRADLE_LOG" 2>/dev/null &
+TAIL_PID=$!
 
 SIGNING=(CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO)
 SIGNED=false

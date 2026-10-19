@@ -1,7 +1,13 @@
 package cg.creamgod.boarderless.data
 
-internal actual fun browserDispatchDraftDownload(filename: String, json: String, canWrite: () -> Boolean) {
-    val dispatch = js("""((filename, json, canWrite) => {
+internal actual fun browserDispatchDraftDownload(
+    filename: String,
+    json: String,
+    canWrite: () -> Boolean,
+) {
+    val dispatch =
+        js(
+            """((filename, json, canWrite) => {
     if (!canWrite() || document.hidden || !document.body) throw new Error('Download unavailable');
     let url = null, timer = null, anchor = null;
     try {
@@ -23,6 +29,7 @@ internal actual fun browserDispatchDraftDownload(filename: String, json: String,
     } finally {
         if (anchor) anchor.remove();
     }
-})""")
+})""",
+        )
     dispatch(filename, json, canWrite)
 }

@@ -1,0 +1,72 @@
+{
+  "cases": [
+    "CORE-04",
+    "RT-04"
+  ],
+  "kind": "兩個真實 API process（bun src/server.ts）+ 同一 PostgreSQL；kill -9 其中一個",
+  "startedAt": "2026-10-11T16:08:28.381Z",
+  "finishedAt": "2026-10-11T16:08:30.017Z",
+  "environment": {
+    "backendCommit": "89a85a34b2c237f1488d6c157e1cc819e1a3f47c",
+    "uncommittedChanges": 115,
+    "bun": "1.4.2"
+  },
+  "checks": [
+    {
+      "name": "40 個並行 transaction（分散兩個 process）全部 accepted",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "serverSeq 連續 1..80、無重複",
+      "pass": true
+    },
+    {
+      "name": "workspaceVersion 連續 1..40",
+      "pass": true
+    },
+    {
+      "name": "operation log 與兩個 process 回覆一致",
+      "pass": true
+    },
+    {
+      "name": "P2 的 WS 提交以完整 transaction fan-out 到 P1",
+      "pass": true
+    },
+    {
+      "name": "kill -9 後 P1 的 socket 中斷",
+      "pass": true,
+      "detail": 1006
+    },
+    {
+      "name": "P1 停止期間 P2 持續 accepted",
+      "pass": true
+    },
+    {
+      "name": "重新 join：補齊 P1 停止期間的 5 筆完整 transaction，無遺失、無重複",
+      "pass": true,
+      "detail": {
+        "recovered": 5
+      }
+    },
+    {
+      "name": "checkpoint 前移到 head，無跳號",
+      "pass": true,
+      "detail": 86
+    },
+    {
+      "name": "Workspace head 與所有 accepted 結果一致",
+      "pass": true,
+      "detail": {
+        "lastServerSeq": 86,
+        "currentVersion": 46
+      }
+    },
+    {
+      "name": "outbox 全部由存活 process 發布（含 P1 被殺時未發布者）",
+      "pass": true,
+      "detail": 0
+    }
+  ],
+  "status": "passed"
+}

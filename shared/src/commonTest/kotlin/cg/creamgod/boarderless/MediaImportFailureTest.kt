@@ -19,12 +19,13 @@ class MediaImportFailureTest {
 
     @Test fun typedFileFailuresOverrideStageAndDoNotDependOnErrorText() {
         AssetImportIssue.entries.forEach { issue ->
-            val expected = when (issue) {
-                AssetImportIssue.UnsupportedMediaType -> MediaImportFailure.UnsupportedFormat
-                AssetImportIssue.AssetTooLarge -> MediaImportFailure.TooLarge
-                AssetImportIssue.Rejected, AssetImportIssue.Missing, AssetImportIssue.NotReady -> MediaImportFailure.Processing
-                else -> MediaImportFailure.InvalidFile
-            }
+            val expected =
+                when (issue) {
+                    AssetImportIssue.UnsupportedMediaType -> MediaImportFailure.UnsupportedFormat
+                    AssetImportIssue.AssetTooLarge -> MediaImportFailure.TooLarge
+                    AssetImportIssue.Rejected, AssetImportIssue.Missing, AssetImportIssue.NotReady -> MediaImportFailure.Processing
+                    else -> MediaImportFailure.InvalidFile
+                }
             assertEquals(expected, mediaImportFailure(AssetImportException(issue, "secret"), null))
             assertEquals(expected, mediaImportFailure(AssetImportException(issue, "different"), AssetImportStage.Preparing))
         }

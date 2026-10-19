@@ -12,12 +12,13 @@ import kotlin.test.assertFailsWith
 class BackendMemberContractTest {
     @Test
     fun memberDtoPreservesIdentityRoleAndJoinTime() {
-        val member = WorkspaceMemberDto(
-            userId = "00000000-0000-0000-0000-000000000001",
-            displayName = "Diagram partner",
-            role = "editor",
-            joinedAt = "2026-09-29T02:00:00.000Z",
-        ).toDomain()
+        val member =
+            WorkspaceMemberDto(
+                userId = "00000000-0000-0000-0000-000000000001",
+                displayName = "Diagram partner",
+                role = "editor",
+                joinedAt = "2026-09-29T02:00:00.000Z",
+            ).toDomain()
 
         assertEquals("Diagram partner", member.displayName)
         assertEquals(WorkspaceMemberRole.Editor, member.role)

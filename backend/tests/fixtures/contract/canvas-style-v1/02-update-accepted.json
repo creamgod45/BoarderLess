@@ -1,0 +1,67 @@
+{
+  "description": "update_canvas_style：CAS 成功 +1；正式 payload 帶權威 canvasStyleVersion",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "33333333-3333-4333-8333-333333333333",
+      "transactionId": "44444444-4444-4444-8444-444444444444",
+      "baseVersion": 0,
+      "operations": [
+        {
+          "operationId": "55555555-5555-4555-8555-555555555555",
+          "clientSeq": 1,
+          "kind": "update_canvas_style",
+          "payload": {
+            "expectedCanvasStyleVersion": 0,
+            "canvasStyle": {
+              "schemaVersion": 1,
+              "backgroundToken": "#204060",
+              "gridStyle": {
+                "pattern": "dots",
+                "colorToken": "auto"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "status": "accepted",
+      "fromServerSeq": 1,
+      "toServerSeq": 1,
+      "workspaceVersion": 1,
+      "operations": [
+        {
+          "serverSeq": 1,
+          "operationId": "55555555-5555-4555-8555-555555555555",
+          "transactionId": "44444444-4444-4444-8444-444444444444",
+          "actorId": "11111111-1111-4111-8111-111111111111",
+          "clientId": "33333333-3333-4333-8333-333333333333",
+          "clientSeq": 1,
+          "baseVersion": 0,
+          "workspaceVersion": 1,
+          "operationType": "update_canvas_style",
+          "payload": {
+            "canvasStyle": {
+              "gridStyle": {
+                "pattern": "dots",
+                "colorToken": "auto"
+              },
+              "schemaVersion": 1,
+              "backgroundToken": "#204060"
+            },
+            "canvasStyleVersion": 1,
+            "expectedCanvasStyleVersion": 0
+          },
+          "schemaVersion": 1,
+          "committedAt": "2026-10-02T00:00:00.000Z"
+        }
+      ]
+    }
+  }
+}

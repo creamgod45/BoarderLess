@@ -20,7 +20,10 @@ import platform.Foundation.*
 import platform.posix.memcpy
 import kotlin.coroutines.coroutineContext
 
-class IosGifAnimation private constructor(private val data: Data, private val codec: Codec) : GifAnimation {
+class IosGifAnimation private constructor(
+    private val data: Data,
+    private val codec: Codec,
+) : GifAnimation {
     private val guard = Mutex()
     private var released = false
     override val frameCount = codec.frameCount
@@ -29,26 +32,34 @@ class IosGifAnimation private constructor(private val data: Data, private val co
 
     override fun durationMs(frameIndex: Int) = delays[frameIndex]
 
-    override suspend fun frame(frameIndex: Int): ImageBitmap = withContext(Dispatchers.Default) {
-        guard.withLock {
-            check(!released) { "GIF decoder is released" }
-            require(frameIndex in 0 until frameCount)
-            coroutineContext.ensureActive()
-            val bitmap = Bitmap()
-            try {
-                bitmap.allocPixels(codec.imageInfo)
-                codec.readPixels(bitmap, frameIndex)
+    override suspend fun frame(frameIndex: Int): ImageBitmap =
+        withContext(Dispatchers.Default) {
+            guard.withLock {
+                check(!released) { "GIF decoder is released" }
+                require(frameIndex in 0 until frameCount)
                 coroutineContext.ensureActive()
-                Image.makeFromBitmap(bitmap).toComposeImageBitmap()
-            } finally { bitmap.close() }
+                val bitmap = Bitmap()
+                try {
+                    bitmap.allocPixels(codec.imageInfo)
+                    codec.readPixels(bitmap, frameIndex)
+                    coroutineContext.ensureActive()
+                    Image.makeFromBitmap(bitmap).toComposeImageBitmap()
+                } finally {
+                    bitmap.close()
+                }
+            }
         }
-    }
 
-    override suspend fun release() = withContext(NonCancellable + Dispatchers.Default) {
-        guard.withLock {
-            if (!released) { released = true; codec.close(); data.close() }
+    override suspend fun release() =
+        withContext(NonCancellable + Dispatchers.Default) {
+            guard.withLock {
+                if (!released) {
+                    released = true
+                    codec.close()
+                    data.close()
+                }
+            }
         }
-    }
 
     companion object {
         internal fun decode(bytes: ByteArray): IosGifAnimation {
@@ -61,12 +72,20 @@ class IosGifAnimation private constructor(private val data: Data, private val co
                 AssetPreviewPolicy.validateDimensions(codec.size.x, codec.size.y)
                 require(codec.frameCount in 1..10_000)
                 return IosGifAnimation(data, codec)
-            } catch (error: Throwable) { codec?.close(); data.close(); throw error }
+            } catch (error: Throwable) {
+                codec?.close()
+                data.close()
+                throw error
+            }
         }
     }
 }
 
-suspend fun loadIosGif(gateway: AssetDownloadGateway, session: WorkspaceSession, assetId: String): GifAnimation {
+suspend fun loadIosGif(
+    gateway: AssetDownloadGateway,
+    session: WorkspaceSession,
+    assetId: String,
+): GifAnimation {
     val ticket = gateway.authorize(session, assetId)
     AssetPreviewPolicy.validate(ticket, session, assetId)
     require(ticket.asset.mediaType == "image/gif")
@@ -75,32 +94,50 @@ suspend fun loadIosGif(gateway: AssetDownloadGateway, session: WorkspaceSession,
     try {
         return withContext(Dispatchers.Default) {
             val destination = IosFileAssetDownloadSink.create("image/gif").also { sink = it }
-            val authorized = object : AssetDownloadGateway {
-                override suspend fun authorize(session: WorkspaceSession, assetId: String) = ticket
-                override suspend fun download(ticket: AssetDownloadTicket, onChunk: suspend (ByteArray) -> Unit) = gateway.download(ticket, onChunk)
-            }
+            val authorized =
+                object : AssetDownloadGateway {
+                    override suspend fun authorize(
+                        session: WorkspaceSession,
+                        assetId: String,
+                    ) = ticket
+
+                    override suspend fun download(
+                        ticket: AssetDownloadTicket,
+                        onChunk: suspend (ByteArray) -> Unit,
+                    ) = gateway.download(ticket, onChunk)
+                }
             val local = AssetDownloadCoordinator(authorized).download(session, assetId, destination)
             coroutineContext.ensureActive()
             val input = NSFileHandle.fileHandleForReadingAtPath(local.token) ?: error("Verified GIF is unavailable")
-            val bytes = try {
-                autoreleasepool {
-                    val data = input.readDataOfLength(ticket.asset.byteSize.toULong())
-                    check(data.length.toLong() == ticket.asset.byteSize)
-                    ByteArray(data.length.toInt()).also { bytes ->
-                        bytes.usePinned { memcpy(it.addressOf(0), data.bytes, data.length) }
+            val bytes =
+                try {
+                    autoreleasepool {
+                        val data = input.readDataOfLength(ticket.asset.byteSize.toULong())
+                        check(data.length.toLong() == ticket.asset.byteSize)
+                        ByteArray(data.length.toInt()).also { bytes ->
+                            bytes.usePinned { memcpy(it.addressOf(0), data.bytes, data.length) }
+                        }
                     }
+                } finally {
+                    input.closeFile()
                 }
-            } finally { input.closeFile() }
             coroutineContext.ensureActive()
-            IosGifAnimation.decode(bytes).also { opened = it; coroutineContext.ensureActive() }
+            IosGifAnimation.decode(bytes).also {
+                opened = it
+                coroutineContext.ensureActive()
+            }
         }
     } catch (error: Throwable) {
         opened?.release()
         throw error
     } finally {
         withContext(NonCancellable) {
-            try { sink?.release() }
-            catch (error: Throwable) { opened?.release(); throw error }
+            try {
+                sink?.release()
+            } catch (error: Throwable) {
+                opened?.release()
+                throw error
+            }
         }
     }
 }

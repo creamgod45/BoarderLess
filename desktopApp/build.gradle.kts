@@ -24,17 +24,19 @@ dependencies {
     implementation("org.bytedeco:javacv:1.5.14") { isTransitive = false }
     implementation("org.bytedeco:javacpp:1.5.14")
     implementation("org.bytedeco:ffmpeg:8.1.2-1.5.14")
-    val nativeOs = when {
-        System.getProperty("os.name").startsWith("Mac") -> "macosx"
-        System.getProperty("os.name").startsWith("Windows") -> "windows"
-        System.getProperty("os.name").startsWith("Linux") -> "linux"
-        else -> error("Unsupported desktop video OS")
-    }
-    val nativeArch = when (System.getProperty("os.arch")) {
-        "aarch64", "arm64" -> "arm64"
-        "amd64", "x86_64" -> "x86_64"
-        else -> error("Unsupported desktop video architecture")
-    }
+    val nativeOs =
+        when {
+            System.getProperty("os.name").startsWith("Mac") -> "macosx"
+            System.getProperty("os.name").startsWith("Windows") -> "windows"
+            System.getProperty("os.name").startsWith("Linux") -> "linux"
+            else -> error("Unsupported desktop video OS")
+        }
+    val nativeArch =
+        when (System.getProperty("os.arch")) {
+            "aarch64", "arm64" -> "arm64"
+            "amd64", "x86_64" -> "x86_64"
+            else -> error("Unsupported desktop video architecture")
+        }
     runtimeOnly("org.bytedeco:javacpp:1.5.14:$nativeOs-$nativeArch")
     runtimeOnly("org.bytedeco:ffmpeg:8.1.2-1.5.14:$nativeOs-$nativeArch")
 }
@@ -52,13 +54,14 @@ compose.desktop {
                 iconFile.set(project.file("icons/app.icns"))
                 infoPlist {
                     // Declared languages decide the language of macOS's own menu items (Window > Fill, Center, …).
-                    extraKeysRawXml = """
+                    extraKeysRawXml =
+                        """
                         <key>CFBundleLocalizations</key>
                         <array>
                             <string>en</string>
                             <string>zh-Hant</string>
                         </array>
-                    """.trimIndent()
+                        """.trimIndent()
                 }
             }
             windows {
@@ -73,7 +76,8 @@ compose.desktop {
 
 // Localized Finder/Dock names. jpackage cannot add Contents/Resources/*.lproj, so they are copied into
 // the app image, which packageDmg then packages.
-tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageTask>()
+tasks
+    .withType<org.jetbrains.compose.desktop.application.tasks.AbstractJPackageTask>()
     .matching { it.name.startsWith("create") && it.name.endsWith("Distributable") }
     .configureEach {
         val macLocalizations = project.file("macos/localizations")

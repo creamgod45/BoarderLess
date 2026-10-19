@@ -1,0 +1,44 @@
+{
+  "description": "未知 style schemaVersion fail closed：422 unsupported_canvas_style_schema",
+  "request": {
+    "method": "POST",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/operations",
+    "body": {
+      "protocolVersion": 1,
+      "clientId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      "transactionId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      "baseVersion": 1,
+      "operations": [
+        {
+          "operationId": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+          "clientSeq": 1,
+          "kind": "update_canvas_style",
+          "payload": {
+            "expectedCanvasStyleVersion": 1,
+            "canvasStyle": {
+              "schemaVersion": 2,
+              "backgroundToken": "default",
+              "gridStyle": {
+                "pattern": "lines",
+                "colorToken": "auto"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 422,
+    "body": {
+      "error": {
+        "code": "unsupported_canvas_style_schema",
+        "message": "canvasStyle.schemaVersion is not supported",
+        "details": {
+          "field": "schemaVersion"
+        }
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

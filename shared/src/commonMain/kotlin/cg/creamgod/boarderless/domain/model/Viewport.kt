@@ -42,12 +42,14 @@ data class Viewport(
         val contentHeight = (worldBottomRight.y - worldTopLeft.y).coerceAtLeast(1f)
         val availableWidth = (screenSize.width - padding * 2f).coerceAtLeast(1f)
         val availableHeight = (screenSize.height - padding * 2f).coerceAtLeast(1f)
-        val nextZoom = min(availableWidth / contentWidth, availableHeight / contentHeight)
-            .coerceIn(minimumZoom, maximumZoom)
-        val worldCenter = Vec2(
-            x = (worldTopLeft.x + worldBottomRight.x) / 2f,
-            y = (worldTopLeft.y + worldBottomRight.y) / 2f,
-        )
+        val nextZoom =
+            min(availableWidth / contentWidth, availableHeight / contentHeight)
+                .coerceIn(minimumZoom, maximumZoom)
+        val worldCenter =
+            Vec2(
+                x = (worldTopLeft.x + worldBottomRight.x) / 2f,
+                y = (worldTopLeft.y + worldBottomRight.y) / 2f,
+            )
         val screenCenter = Vec2(screenSize.width / 2f, screenSize.height / 2f)
         return Viewport(
             pan = screenCenter - worldCenter * nextZoom,

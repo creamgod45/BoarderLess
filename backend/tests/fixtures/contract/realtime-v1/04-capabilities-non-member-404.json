@@ -1,0 +1,18 @@
+{
+  "description": "非成員：404（不洩漏 Workspace 是否存在）",
+  "request": {
+    "method": "GET",
+    "path": "/api/v1/workspaces/22222222-2222-4222-8222-222222222222/realtime-capabilities"
+  },
+  "response": {
+    "status": 404,
+    "headers": {},
+    "body": {
+      "error": {
+        "code": "not_found",
+        "message": "Workspace not found"
+      },
+      "requestId": "00000000-0000-4000-8000-000000000000"
+    }
+  }
+}

@@ -23,7 +23,10 @@ internal suspend fun collectCommittedCatchUp(
     repeat(8) { pageIndex ->
         currentCoroutineContext().ensureActive()
         if (page.lastServerSeq !in knownHead..maxSafe || page.operations.size > 1000 ||
-            collected.size + page.operations.size > MaxCatchUpReplayRecords) return null
+            collected.size + page.operations.size > MaxCatchUpReplayRecords
+        ) {
+            return null
+        }
         knownHead = page.lastServerSeq
         for (record in page.operations) {
             if (cursor == maxSafe || record.serverSeq != cursor + 1 || record.serverSeq > knownHead) return null
