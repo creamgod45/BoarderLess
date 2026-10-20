@@ -27,6 +27,7 @@ import cg.creamgod.boarderless.feature.canvas.WorkspaceScreen
 import cg.creamgod.boarderless.feature.qa.QaRuntime
 import cg.creamgod.boarderless.feature.qa.QaWorkbenchHost
 import cg.creamgod.boarderless.i18n.Localization
+import cg.creamgod.boarderless.i18n.Strings
 import cg.creamgod.boarderless.i18n.activateLanguage
 import cg.creamgod.boarderless.i18n.loadAvailableLanguages
 import cg.creamgod.boarderless.i18n.resolveLanguage
@@ -201,7 +202,7 @@ fun App(
             }
             if (retiredRepositories.isNotEmpty()) {
                 cg.creamgod.boarderless.designsystem.ShellButton(
-                    cg.creamgod.boarderless.i18n.Strings.workspaceStorage.writerRecoveryTitle(),
+                    Strings.workspaceStorage.writerRecoveryTitle(),
                     modifier = Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.safeDrawing),
                     onClick = { showWriterRecovery = true })
                 if (showWriterRecovery) {

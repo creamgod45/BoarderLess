@@ -40,6 +40,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.LaunchedEffect
@@ -188,6 +189,9 @@ import cg.creamgod.boarderless.designsystem.BoarderLessColors
 import cg.creamgod.boarderless.designsystem.BoarderLessTheme
 import cg.creamgod.boarderless.designsystem.ButtonGap
 import cg.creamgod.boarderless.designsystem.GlassSurface
+import cg.creamgod.boarderless.designsystem.LocalGlassHazeState
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 import cg.creamgod.boarderless.designsystem.ShellButton
 import cg.creamgod.boarderless.designsystem.ShellIcon
 import cg.creamgod.boarderless.designsystem.color.ColorPickerWindow
@@ -4553,11 +4557,12 @@ fun WorkspaceScreen(
         canvasFocusRequester.requestFocus()
     }
 
+    val glassHazeState = remember { HazeState() }
+    CompositionLocalProvider(LocalGlassHazeState provides glassHazeState) {
     WorkspaceCanvasSurface(
         modifier =
             Modifier
                 .fillMaxSize()
-                .background(canvasBackgroundColor(canvasBackgroundPreview ?: canvasBackgroundToken, colors))
                 .onSizeChanged { canvasSize = it }
                 .onKeyEvent { event ->
                     val command = event.isMetaPressed || event.isCtrlPressed
@@ -4730,7 +4735,11 @@ fun WorkspaceScreen(
                 .focusable(),
     ) {
         Box(
-            Modifier.fillMaxSize().presenceCursorObserver(
+            Modifier.fillMaxSize()
+                // The blur source: background and canvas content only, never the glass panels (siblings below).
+                .background(canvasBackgroundColor(canvasBackgroundPreview ?: canvasBackgroundToken, colors))
+                .hazeSource(glassHazeState)
+                .presenceCursorObserver(
                 enabled =
                     sharePresence && presencePublisherReady && visiblePresence.connected &&
                         presenceActivity.available && !draftReviewVisible && !workspaceSwitchInProgress,
@@ -9543,6 +9552,7 @@ fun WorkspaceScreen(
             )
         }
     }
+    } // CompositionLocalProvider(LocalGlassHazeState)
 }
 
 @Composable
